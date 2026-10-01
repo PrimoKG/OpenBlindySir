@@ -1,0 +1,127 @@
+# OpenBlindySir - files that must never be committed.
+# Safety net only: tools/check_repo_hygiene.py re-checks the tracked files (locally, and in
+# CI once it exists).
+# Bracket patterns such as *.[mM][pP]3 make a rule case-insensitive on every OS
+# (git only ignores case on its own when core.ignorecase=true, e.g. on Windows).
+
+# --- Secrets and local environment --------------------------------------------------------
+# Real configuration lives in .env, next to compose.yaml. Only the fictional example is tracked.
+.[eE][nN][vV]
+.[eE][nN][vV].*
+*.[eE][nN][vV]
+.[eE][nN][vV][rR][cC]
+!.env.example
+
+# --- Certificates and private keys ---------------------------------------------------------
+*.[pP][eE][mM]
+*.[kK][eE][yY]
+*.[cC][rR][tT]
+*.[pP]12
+*.[pP][fF][xX]
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+
+# --- Audio: no music and no real clip ever enters the repository ---------------------------
+# Tests generate their sounds at runtime (lavfi sine waves, clicks, silence).
+*.[mM][pP]3
+*.[fF][lL][aA][cC]
+*.[wW][aA][vV]
+*.[mM]4[aA]
+*.[mM]4[bB]
+*.[aA][aA][cC]
+*.[oO][gG][gG]
+*.[oO][pP][uU][sS]
+*.[oO][gG][aA]
+*.[wW][mM][aA]
+*.[aA][iI][fF][fF]
+*.[aA][iI][fF]
+*.[wW][eE][bB][mM]
+*.[mM][kK][aA]
+*.[aA][pP][eE]
+*.[wW][vV]
+*.[dD][sS][fF]
+*.[dD][fF][fF]
+*.[mM][pP]2
+*.[mM][pP][aA]
+*.[cC][aA][fF]
+*.[aA][cC]3
+*.[aA][mM][rR]
+*.[aA][uU]
+*.[sS][nN][dD]
+# Video containers often carry music (clips, music videos).
+*.[mM][pP]4
+*.[mM]4[vV]
+*.[mM][oO][vV]
+*.3[gG][pP]
+
+# --- Audio sync test recordings (microphone captures analysed by tools/sync_analyze.py) -----
+recordings/
+*.rec.*
+
+# --- Spike outputs (spikes live on spike/* branches; only their conclusions reach main) -----
+spike-output/
+spike-results/
+
+# --- OpenBlindySir Bridge: personal configuration and temporary job folders ----------------
+# The real config.toml lives in the user profile (%APPDATA%\OpenBlindySir\bridge\ or
+# ~/.config/openblindysir/bridge/), never in the repository.
+bridge/**/config.toml
+bridge/**/config.local.toml
+!bridge/**/config.example.toml
+**/openblindysir-bridge-*/
+
+# --- Caddy data (TLS certificates and ACME account keys) -----------------------------------
+caddy_data/
+caddy_config/
+/data/
+/deploy/data/
+
+# --- Python --------------------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# --- Node / web ----------------------------------------------------------------------------
+node_modules/
+*.tsbuildinfo
+.vite/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# --- Build outputs -------------------------------------------------------------------------
+dist/
+build/
+
+# --- Logs (may contain secrets or track names) ---------------------------------------------
+*.log
+logs/
+
+# --- OS files ------------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editors and IDEs ----------------------------------------------------------------------
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# --- Local AI assistant settings (personal) ------------------------------------------------
+.claude/settings.local.json

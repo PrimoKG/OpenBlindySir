@@ -1,0 +1,64 @@
+# OpenBlindySir - line endings and file classification.
+# Development happens partly on Windows: every text file is stored and checked out with LF,
+# whatever the local core.autocrlf setting is.
+
+# --- Default: auto-detect text, normalise to LF --------------------------------------------
+* text=auto eol=lf
+
+# --- Windows-only scripts keep CRLF --------------------------------------------------------
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# --- Explicit text files (LF everywhere, including shell scripts run in Linux containers) -
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.svg text eol=lf
+
+# --- Images --------------------------------------------------------------------------------
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.avif binary
+*.bmp binary
+
+# --- Fonts ---------------------------------------------------------------------------------
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+
+# --- Audio (never committed - see .gitignore - but never mangled either) -------------------
+*.mp3 binary
+*.flac binary
+*.wav binary
+*.m4a binary
+*.aac binary
+*.ogg binary
+*.opus binary
+*.oga binary
+*.wma binary
+*.aiff binary
+*.aif binary
+*.webm binary
+*.mka binary
+
+# --- Archives and documents ----------------------------------------------------------------
+*.zip binary
+*.gz binary
+*.tgz binary
+*.7z binary
+*.pdf binary
+
+# --- Generated files -----------------------------------------------------------------------
+# TypeScript types generated from protocol/ by tools/gen_ts_types.py (drift checked in CI).
+web/src/protocol/** linguist-generated=true
+
+# Lockfiles: collapsed in GitHub pull requests but kept diffable (no -diff on purpose),
+# so dependency changes can still be reviewed.
+uv.lock linguist-generated=true
+web/package-lock.json linguist-generated=true
