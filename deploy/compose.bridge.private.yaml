@@ -1,0 +1,11 @@
+services:
+  bridge:
+    environment:
+      SSL_CERT_FILE: /trust/root.crt
+    volumes:
+      - type: bind
+        source: ${BRIDGE_CA_FILE:?Set the host root.crt path}
+        target: /trust/root.crt
+        read_only: true
+        bind:
+          create_host_path: false

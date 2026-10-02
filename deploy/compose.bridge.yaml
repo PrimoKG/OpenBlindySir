@@ -1,0 +1,29 @@
+# Standalone Docker Bridge, for music stored on a different PC from the server.
+name: openblindysir-bridge
+services:
+  bridge:
+    image: openblindysir-bridge:local
+    build:
+      context: ..
+      target: bridge
+    environment:
+      OPENBLINDYSIR_BRIDGE_SERVER: "${BRIDGE_SERVER:?Set the server HTTPS URL}"
+      OPENBLINDYSIR_BRIDGE_SECRET: "${BRIDGE_SECRET:?Set the Bridge secret}"
+      OPENBLINDYSIR_BRIDGE_NAME: ${BRIDGE_NAME:-Docker Bridge}
+    volumes:
+      - type: bind
+        source: ${MUSIC_DIR:?Set the music folder}
+        target: /music
+        read_only: true
+        bind:
+          create_host_path: false
+      - bridge_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    init: true
+volumes:
+  bridge_data:
