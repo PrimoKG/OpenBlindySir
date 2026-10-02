@@ -68,6 +68,11 @@ def test_join_rate_limited(harness: Harness) -> None:
     assert codes[5] == 429
 
 
+def test_successful_joins_from_one_ip_are_not_limited(harness: Harness) -> None:
+    for index in range(12):  # friends behind the same home router
+        harness.join(f"Ami{index}")
+
+
 def test_nickname_taken_and_invalid(harness: Harness) -> None:
     harness.join("Ayoub")
     body = {"password": BLIND, "nickname": "AYOUB"}

@@ -18,14 +18,22 @@ class SlidingWindowLimiter:
         while events and events[0] <= now_ms - self.window_ms:
             events.popleft()
 
-    def allow(self, key: str, now_ms: int) -> bool:
+    def blocked(self, key: str, now_ms: int) -> bool:
+        """True once ``limit`` events of this key (or the global cap) fall in the window."""
         events = self._per_key[key]
         self._trim(events, now_ms)
         self._trim(self._global, now_ms)
-        if len(events) >= self.limit or len(self._global) >= self.global_limit:
-            return False
-        events.append(now_ms)
+        return len(events) >= self.limit or len(self._global) >= self.global_limit
+
+    def record(self, key: str, now_ms: int) -> None:
+        self._per_key[key].append(now_ms)
         self._global.append(now_ms)
+
+    def allow(self, key: str, now_ms: int) -> bool:
+        """Check and count in one step."""
+        if self.blocked(key, now_ms):
+            return False
+        self.record(key, now_ms)
         return True
 
 

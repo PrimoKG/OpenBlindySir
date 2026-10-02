@@ -59,7 +59,7 @@ async def join(request: Request) -> Response:
         return error(403, ErrorCode.FORBIDDEN_ORIGIN)
     ip = client_ip(request)
     now = state.runtime.clock.now().mono_ms
-    if not state.join_limiter.allow(ip, now):
+    if state.join_limiter.blocked(ip, now):  # counts failed password attempts only
         return error(429, ErrorCode.RATE_LIMITED)
     body = await read_json_body(request)
     if isinstance(body, Response):
@@ -71,6 +71,7 @@ async def join(request: Request) -> Response:
     if current_player(request, state) is not None:
         return error(409, ErrorCode.ALREADY_JOINED)
     if not verify_password(payload.password, state.settings.blind_password):
+        state.join_limiter.record(ip, now)
         log_event(LOG, "login_failed", kind="join", ip=truncate_ip(ip))
         return error(401, ErrorCode.BAD_PASSWORD)
     try:
@@ -113,7 +114,8 @@ async def elevate(request: Request) -> Response:
     if player_id is None:
         return error(401, ErrorCode.UNAUTHENTICATED)
     ip = client_ip(request)
-    if not state.host_limiter.allow(ip, state.runtime.clock.now().mono_ms):
+    now = state.runtime.clock.now().mono_ms
+    if state.host_limiter.blocked(ip, now):  # counts failed password attempts only
         return error(429, ErrorCode.RATE_LIMITED)
     body = await read_json_body(request)
     if isinstance(body, Response):
@@ -123,6 +125,7 @@ async def elevate(request: Request) -> Response:
     except ValidationError as exc:
         return invalid_body(exc, "host")
     if not verify_password(payload.host_password, state.settings.host_password):
+        state.host_limiter.record(ip, now)
         log_event(LOG, "login_failed", kind="host", ip=truncate_ip(ip))
         return error(401, ErrorCode.BAD_PASSWORD)
     state.runtime.dispatch(c.ElevateHost(player_id))
