@@ -13,6 +13,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv sync --locked
+      - name: Initialize with Docker only (PowerShell launcher)
+        shell: pwsh
+        run: ./tools/docker-host.ps1 init -Address 127.0.0.1:8443 -Demo
+      - name: Start all services without host FFmpeg or Node
+        shell: pwsh
+        run: ./tools/docker-host.ps1 start -NoBrowser
+      - run: uv run python tools/docker_smoke.py
+      - name: Inspect isolation and codecs
+        run: |
+          docker compose --env-file .local/docker/hosting.env exec -T app python -c "import os, shutil; assert os.getuid() == 10001; assert shutil.which('ffmpeg') is None"
+          docker compose --env-file .local/docker/hosting.env exec -T bridge python /opt/tools/docker_bridge.py check-ffmpeg
+          docker inspect "$(docker compose --env-file .local/docker/hosting.env ps -q bridge)" | python3 -c "import json,sys; assert next(m for m in json.load(sys.stdin)[0]['Mounts'] if m['Destination']=='/music')['RW'] is False"
+      - name: Stop using Unix launcher
+        if: always()
+        run: sh tools/docker-host.sh stop
+
   hygiene:
     runs-on: ubuntu-latest
     steps:
