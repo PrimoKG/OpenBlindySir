@@ -1,0 +1,10 @@
+# Used by tools/host_pc.py. DNS and forwarded TCP ports 80/443 must reach this PC.
+{
+	admin off
+	persist_config off
+	storage file_system "{$OPENBLINDYSIR_CADDY_DATA}"
+}
+
+{$DOMAIN} {
+	reverse_proxy 127.0.0.1:{$PORT}
+}

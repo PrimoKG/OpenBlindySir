@@ -73,6 +73,7 @@ bridge/**/config.local.toml
 **/openblindysir-bridge-*/
 
 # --- Caddy data (TLS certificates and ACME account keys) -----------------------------------
+.local/
 caddy_data/
 caddy_config/
 /data/
