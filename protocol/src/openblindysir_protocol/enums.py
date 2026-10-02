@@ -32,6 +32,7 @@ class AssetState(StrEnum):
 
 
 class AssetFailureCode(StrEnum):
+    SILENT_AUDIO = "silent_audio"
     NOT_FOUND = "NOT_FOUND"
     DECODE_ERROR = "DECODE_ERROR"
     TOO_SHORT = "TOO_SHORT"
@@ -42,6 +43,7 @@ class AssetFailureCode(StrEnum):
 
 
 class JobFailureCode(StrEnum):
+    SILENT_AUDIO = "silent_audio"
     """Failure codes a Bridge may report; never a path (spec §8.3)."""
 
     NOT_FOUND = "NOT_FOUND"

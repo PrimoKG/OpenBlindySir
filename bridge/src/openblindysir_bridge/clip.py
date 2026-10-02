@@ -24,6 +24,8 @@ class ClipRequest:
     bitrate_kbps: int
     max_bytes: int
     clip_format: ClipFormat
+    normalize_audio: bool = True
+    avoid_silence: bool = True
 
 
 def clamp_request(prepare: Prepare, welcome: Welcome) -> ClipRequest:
@@ -35,7 +37,15 @@ def clamp_request(prepare: Prepare, welcome: Welcome) -> ClipRequest:
     eligible = [b for b in ALLOWED_BITRATES if b <= welcome.bitrate]
     bitrate = max(eligible) if eligible else ALLOWED_BITRATES[0]
     max_bytes = min(BRIDGE_MAX_CLIP_BYTES, welcome.limits.max_clip_bytes)
-    return ClipRequest(duration, fraction, bitrate, max_bytes, welcome.clip_format)
+    return ClipRequest(
+        duration,
+        fraction,
+        bitrate,
+        max_bytes,
+        welcome.clip_format,
+        prepare.normalize_audio,
+        prepare.avoid_silence,
+    )
 
 
 def compute_start(track_s: float, clip_s: float, fraction: float) -> tuple[float, float]:

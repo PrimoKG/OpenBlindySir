@@ -18,6 +18,9 @@ services:
       STATIC_DIR: /opt/openblindysir/web
       LOG_TRACK_NAMES: "false"
       CLIP_FORMAT: ${CLIP_FORMAT:-aac}
+      STATE_DIR: /data/state
+    volumes:
+      - app_data:/data
     # Caddy and the Bridge share this network namespace. Port 8000 stays loopback-only.
     ports:
       - target: 443
@@ -91,6 +94,7 @@ services:
     init: true
 
 volumes:
+  app_data:
   caddy_data:
   caddy_config:
   bridge_data:

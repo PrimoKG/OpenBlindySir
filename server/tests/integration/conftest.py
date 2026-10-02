@@ -111,6 +111,7 @@ def bare_stack(tmp_path: Path) -> Iterator[Stack]:
         "HOST_PASSWORD": HOST,
         "BRIDGE_SECRET": SECRET,
         "PORT": str(port),
+        "STATE_DIR": str(tmp_path / "state"),
         "READY_TIMEOUT_S": "5",
         # Assertions inspect key=value events, regardless of the caller's logging preference.
         "LOG_FORMAT": "text",

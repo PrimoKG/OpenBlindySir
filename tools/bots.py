@@ -23,7 +23,9 @@ from typing import Any
 import httpx
 import websockets
 
-PROTOCOL = 1
+from openblindysir_protocol.version import PROTOCOL_VERSION
+
+PROTOCOL = PROTOCOL_VERSION
 CLOCK = {"offset": 0.0, "rtt_min": 5.0}
 Predicate = Callable[[dict[str, Any]], bool]
 
@@ -334,7 +336,7 @@ async def play_game(
                     or not any(r["status"] == "LOCKED" for r in v["round"]["answers"])
                 )
             )
-            await host.on_round("publish")
+            await host.on_round("publish", {"confirm_unreviewed": True})
             await host.wait_for(lambda v: round_state(v) == "REVEALED")
             if number < rounds:
                 await host.on_round("next")

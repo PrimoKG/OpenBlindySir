@@ -153,3 +153,6 @@ class ScoreJournal:
 
     def is_frozen(self, game_id: str) -> bool:
         return game_id in self._frozen
+
+    def frozen_games(self) -> frozenset[str]:
+        return frozenset(self._frozen)

@@ -75,6 +75,21 @@ class RenameArgs(InboundModel):
     nickname: Annotated[str, StringConstraints(min_length=1, max_length=64)]
 
 
+class ParticipationArgs(InboundModel):
+    player_id: PlayerId
+    spectator: bool = False
+    team: Annotated[str, StringConstraints(max_length=40)] | None = None
+
+
+class PublishArgs(InboundModel):
+    confirm_unreviewed: bool = False
+
+
+class TrackMetadataArgs(InboundModel):
+    title: Annotated[str, StringConstraints(max_length=256)]
+    artist: Annotated[str, StringConstraints(max_length=256)]
+
+
 class _Host(InboundModel):
     t: Literal["HOST"]
 
@@ -83,6 +98,7 @@ class HostConfigure(_Host):
     cmd: Literal["configure"]
     expected_phase: Literal[GamePhase.LOBBY, GamePhase.IN_GAME, GamePhase.FINAL_RESULTS]
     args: SettingsPatch
+    start_game: bool = False
 
 
 class HostSetMode(_Host):
@@ -139,6 +155,18 @@ class HostStop(_Host):
     args: PlayIdArgs
 
 
+class HostPause(_Host):
+    cmd: Literal["pause"]
+    round_id: RoundId
+    args: EmptyArgs
+
+
+class HostResume(_Host):
+    cmd: Literal["resume"]
+    round_id: RoundId
+    args: EmptyArgs
+
+
 class HostSkip(_Host):
     cmd: Literal["skip"]
     round_id: RoundId
@@ -166,7 +194,13 @@ class HostScoreDraft(_Host):
 class HostPublish(_Host):
     cmd: Literal["publish"]
     round_id: RoundId
-    args: EmptyArgs
+    args: PublishArgs
+
+
+class HostTrackMetadata(_Host):
+    cmd: Literal["track_metadata"]
+    round_id: RoundId
+    args: TrackMetadataArgs
 
 
 class HostUndoPublish(_Host):
@@ -222,6 +256,12 @@ class HostRename(_Host):
     args: RenameArgs
 
 
+class HostParticipation(_Host):
+    cmd: Literal["participation"]
+    expected_phase: Literal[GamePhase.LOBBY]
+    args: ParticipationArgs
+
+
 HostCommandVariant = (
     HostConfigure
     | HostSetMode
@@ -233,11 +273,14 @@ HostCommandVariant = (
     | HostForceStart
     | HostReplay
     | HostStop
+    | HostPause
+    | HostResume
     | HostSkip
     | HostAddTime
     | HostClose
     | HostScoreDraft
     | HostPublish
+    | HostTrackMetadata
     | HostUndoPublish
     | HostAdjust
     | HostToFinalReview
@@ -246,6 +289,7 @@ HostCommandVariant = (
     | HostFinalValidate
     | HostKick
     | HostRename
+    | HostParticipation
 )
 HostCommand = Annotated[HostCommandVariant, Field(discriminator="cmd")]
 
@@ -269,11 +313,14 @@ HOST_COMMAND_EXAMPLES: Final[Mapping[str, dict[str, Any]]] = {
     "force_start": {"round_id": _ROUND, "args": {}},
     "replay": {"round_id": _ROUND, "args": {"play_id": _PLAY}},
     "stop": {"round_id": _ROUND, "args": {"play_id": _PLAY}},
+    "pause": {"round_id": _ROUND, "args": {}},
+    "resume": {"round_id": _ROUND, "args": {}},
     "skip": {"round_id": _ROUND, "args": {}},
     "add_time": {"round_id": _ROUND, "args": {"expected_deadline": 1000}},
     "close": {"round_id": _ROUND, "args": {}},
     "score_draft": {"round_id": _ROUND, "args": {"player_id": _PLAYER, "points": 2}},
     "publish": {"round_id": _ROUND, "args": {}},
+    "track_metadata": {"round_id": _ROUND, "args": {"title": "Example", "artist": "Example"}},
     "undo_publish": {"round_id": _ROUND, "args": {}},
     "adjust": {
         "expected_phase": "IN_GAME",
@@ -288,4 +335,5 @@ HOST_COMMAND_EXAMPLES: Final[Mapping[str, dict[str, Any]]] = {
     "final_validate": {"expected_phase": "FINAL_SCORE_REVIEW", "args": {}},
     "kick": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER}},
     "rename": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER, "nickname": "Yo"}},
+    "participation": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER}},
 }

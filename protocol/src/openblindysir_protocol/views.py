@@ -6,6 +6,8 @@ see has no field to live in. Names such as ``relpath``, ``track_id`` or
 ``draft_last_changed_at`` exist in no view model.
 """
 
+from __future__ import annotations
+
 from typing import Annotated, Literal
 
 from pydantic import Field
@@ -33,6 +35,8 @@ class SessionInfo(OutboundModel):
     epoch: str  # 16 hex; changes on end_session and on process restart
     protocol: int
     server_version: str
+    recovered: bool = False
+    persistence_status: str = "disabled"
 
 
 class Me(OutboundModel):
@@ -51,6 +55,30 @@ class ViewPlayer(OutboundModel):
     online: bool
     is_host: bool
     is_me: bool
+    spectator: bool = False
+    team: str | None = None
+
+
+class TeamStanding(OutboundModel):
+    team: str
+    score: int
+    rank: int
+    members: list[PlayerId]
+
+
+class GameRules(OutboundModel):
+    answer_mode: str
+    title_points: int
+    artist_points: int
+    instructions: str
+    captured_policy: str
+
+
+class PauseInfo(OutboundModel):
+    paused_at: int
+    remaining_ms: int
+    clip_offset_s: float | None
+    resume_at: int | None = None
 
 
 class StandingRow(OutboundModel):
@@ -125,6 +153,7 @@ class RoundPending(OutboundModel):
     state: Literal["QUEUED", "PREPARING", "LOADING"]
     round_id: RoundId
     number: int
+    wait_reason: Literal["pool_exhausted", "bridge_offline"] | None = None
 
 
 class RoundCountdown(OutboundModel):
@@ -186,6 +215,8 @@ class ReviewRow(OutboundModel):
     near_tie: bool
     late_start_ms: int | None  # None = no READY received
     points_draft: int
+    reviewed: bool = False
+    score_before: int = 0
 
 
 class RoundHostReview(OutboundModel):
@@ -195,6 +226,8 @@ class RoundHostReview(OutboundModel):
     official_start_at: int
     answers: list[ReviewRow]  # LOCKED by order, then CAPTURED, then no answer
     ending: bool  # end_game{score} requested: publish then final review
+    track: RevealTrack | None = None
+    recovery_interrupted: bool = False
 
 
 PlayerRound = Annotated[
@@ -244,6 +277,10 @@ class PoolStatus(OutboundModel):
     size: int
     remaining: int
     exhausted: bool
+    fresh: int = 0
+    played: int = 0
+    unavailable: int = 0
+    reserved: int = 0
 
 
 class HistoryEntry(OutboundModel):
@@ -255,6 +292,7 @@ class HistoryEntry(OutboundModel):
     order: int | None
     near_tie: bool
     points: int
+    track: RevealTrack | None = None
 
 
 class AdjustmentEntry(OutboundModel):
@@ -285,6 +323,7 @@ class HostPanel(OutboundModel):
     last_play_id: PlayId | None
     final_review: list[FinalReviewRow] | None
     warnings: list[HostWarning]
+    history: list[GameRecord] = Field(default_factory=list)
 
 
 class McTrackInfo(OutboundModel):
@@ -312,6 +351,16 @@ class FinalResults(OutboundModel):
     podium: list[StandingRow]  # rank <= 3 (may exceed 3 rows on ties)
     rounds_played: int
     final_adjustments: list[FinalAdjustmentShown]
+    recap: list[FinalReviewRow] = Field(default_factory=list)
+    finished_at: int | None = None
+
+
+class GameRecord(OutboundModel):
+    game_id: GameId
+    finished_at: int
+    players: list[ViewPlayer]
+    results: FinalResults
+    teams: list[TeamStanding] = Field(default_factory=list)
 
 
 # --- root views --------------------------------------------------------------------------
@@ -327,6 +376,9 @@ class _ViewBase(OutboundModel):
     audio: AudioSlots
     play: PlayInfo | None
     final_results: FinalResults | None
+    rules: GameRules | None = None
+    paused: PauseInfo | None = None
+    team_standings: list[TeamStanding] = Field(default_factory=list)
 
 
 class PlayerView(_ViewBase):

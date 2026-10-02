@@ -1,7 +1,7 @@
 """Game settings, server limits and shared size constants."""
 
 import unicodedata
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 
 from pydantic import Field, StringConstraints, field_validator
 
@@ -58,6 +58,13 @@ class GameSettings(OutboundModel):
     auto_start: bool
     prefetch_depth: int
     allow_repeats: bool
+    answer_mode: str = "both"
+    title_points: int = 1
+    artist_points: int = 1
+    instructions: str = ""
+    captured_policy: str = "manual"
+    normalize_audio: bool = True
+    avoid_silence: bool = True
 
 
 class SettingsPatch(InboundModel):
@@ -71,6 +78,13 @@ class SettingsPatch(InboundModel):
     auto_start: bool | None = None
     prefetch_depth: Annotated[int, Field(ge=1, le=2)] | None = None
     allow_repeats: bool | None = None
+    answer_mode: Literal["title", "artist", "both", "custom"] | None = None
+    title_points: Annotated[int, Field(ge=0, le=1000)] | None = None
+    artist_points: Annotated[int, Field(ge=0, le=1000)] | None = None
+    instructions: Annotated[str, StringConstraints(max_length=500)] | None = None
+    captured_policy: Literal["manual", "zero"] | None = None
+    normalize_audio: bool | None = None
+    avoid_silence: bool | None = None
 
 
 class ServerLimits(OutboundModel):

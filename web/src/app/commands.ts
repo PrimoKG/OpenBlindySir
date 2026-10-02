@@ -3,15 +3,45 @@
 import type { AnyView, ClientMessage, HostView, SettingsPatch } from "../protocol";
 
 type Host = Extract<ClientMessage, { t: "HOST" }>;
-type RoundCmd = "next" | "force_start" | "skip" | "close" | "publish" | "to_final_review";
+type RoundCmd =
+  | "next"
+  | "force_start"
+  | "skip"
+  | "close"
+  | "publish"
+  | "to_final_review"
+  | "pause"
+  | "resume";
 
 function roundId(view: AnyView): string {
   return view.round?.round_id ?? "";
 }
 
-export function configure(view: AnyView, patch: SettingsPatch): Host {
+export function configure(view: AnyView, patch: SettingsPatch, start = false): Host {
   const phase = view.phase === "FINAL_SCORE_REVIEW" ? "LOBBY" : view.phase;
-  return { t: "HOST", cmd: "configure", expected_phase: phase, args: patch };
+  return { t: "HOST", cmd: "configure", expected_phase: phase, args: patch, start_game: start };
+}
+
+export function publish(view: AnyView, confirm = false): Host {
+  return {
+    t: "HOST",
+    cmd: "publish",
+    round_id: roundId(view),
+    args: { confirm_unreviewed: confirm },
+  };
+}
+
+export function trackMetadata(view: AnyView, title: string, artist: string): Host {
+  return { t: "HOST", cmd: "track_metadata", round_id: roundId(view), args: { title, artist } };
+}
+
+export function participation(playerId: string, spectator: boolean, team: string | null): Host {
+  return {
+    t: "HOST",
+    cmd: "participation",
+    expected_phase: "LOBBY",
+    args: { player_id: playerId, spectator, team },
+  };
 }
 
 export function setMode(view: AnyView, mode: "player" | "mc"): Host {

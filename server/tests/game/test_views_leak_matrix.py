@@ -116,7 +116,15 @@ def test_players_entries_have_only_public_keys() -> None:
     for pid in sc.s.players:
         data = json.loads(dump(sc, pid))
         for entry in data["players"]:
-            assert set(entry) == {"id", "nickname", "online", "is_host", "is_me"}
+            assert set(entry) == {
+                "id",
+                "nickname",
+                "online",
+                "is_host",
+                "is_me",
+                "spectator",
+                "team",
+            }
 
 
 def test_progress_hidden_below_three_expected() -> None:
@@ -166,7 +174,7 @@ def test_review_player_sees_nothing_of_others() -> None:
     assert_never(text)
 
 
-def test_review_host_sees_all_answers_and_timing_but_no_metadata() -> None:
+def test_review_host_sees_current_metadata_privately_after_answers_close() -> None:
     sc = Scenario()
     sc.to_open()
     all_answer(sc, except_last=True)
@@ -174,8 +182,9 @@ def test_review_host_sees_all_answers_and_timing_but_no_metadata() -> None:
     text = sc.host_view().model_dump_json()
     assert answer_text(sc.player_ids[0]) in text
     assert keys_of(json.loads(text)) >= TIMING_KEYS
-    for canary in TRACK_CANARIES:
-        assert canary not in text
+    assert CANARY_TITLE in text
+    assert CANARY_ARTIST in text
+    assert CANARY_TITLE not in dump(sc, sc.player_ids[0])
     assert_never(text)
 
 

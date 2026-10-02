@@ -166,6 +166,7 @@ def sweep_once(runtime: Runtime) -> list[str]:
             log_event(LOG, "player_heartbeat_lost", player_id=conn.player_id)
             swept.append(conn.player_id)
     runtime.sessions.expire_idle(now)
+    runtime.save_snapshot()
     return swept
 
 

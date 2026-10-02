@@ -176,6 +176,13 @@ export class AudioEngine {
     if (!this.unlocked) {
       return;
     }
+    if (view.paused && !view.paused.resume_at && this.scheduledPlayId) {
+      this.stop(this.scheduledPlayId, view.paused.paused_at);
+    }
+    if (!view.play && !view.paused && this.playing) {
+      this.stopSource();
+      this.playing = false;
+    }
     const keep = new Set<string>();
     for (const ref of [view.audio.current, view.audio.next]) {
       if (ref) {
@@ -297,8 +304,35 @@ export class AudioEngine {
     return plan;
   }
 
-  stop(playId: string): void {
+  stop(playId: string, at?: number | null): void {
     if (playId === this.scheduledPlayId) {
+      if (at != null && (!this.source || !this.ctx)) return;
+      if (at != null && this.source && this.ctx) {
+        const local = serverToLocal(at, this.clock.estimate()?.offset ?? 0);
+        const timestamp =
+          typeof this.ctx.getOutputTimestamp === "function" ? this.ctx.getOutputTimestamp() : null;
+        const when = Math.max(
+          this.ctx.currentTime,
+          contextTimeForLocal(local, {
+            ts:
+              timestamp &&
+              timestamp.contextTime !== undefined &&
+              timestamp.performanceTime !== undefined
+                ? { contextTime: timestamp.contextTime, performanceTime: timestamp.performanceTime }
+                : null,
+            currentTime: this.ctx.currentTime,
+            perfNow: performance.now(),
+            outputLatency: this.ctx.outputLatency,
+            baseLatency: this.ctx.baseLatency,
+          }),
+        );
+        try {
+          this.source.stop(when);
+        } catch {
+          /* already stopped */
+        }
+        return;
+      }
       this.stopSource();
       this.playing = false;
       this.setState(this.unlocked ? "IDLE" : "LOCKED", null);

@@ -1,4 +1,4 @@
-"""HOST commands: exactly the 23 commands of spec §8.2, each with one idempotency key."""
+"""HOST commands: canonical command set, each with one idempotency key."""
 
 import json
 
@@ -34,6 +34,10 @@ SPEC_COMMANDS = {
     "final_validate",
     "kick",
     "rename",
+    "pause",
+    "resume",
+    "track_metadata",
+    "participation",
 }
 
 
@@ -41,8 +45,8 @@ def host(cmd: str, **fields: object) -> object:
     return CLIENT.validate_json(json.dumps({"t": "HOST", "cmd": cmd, **fields}))
 
 
-def test_union_has_exactly_the_23_spec_commands() -> None:
-    assert len(HOST_COMMAND_NAMES) == 23
+def test_union_has_exactly_the_27_spec_commands() -> None:
+    assert len(HOST_COMMAND_NAMES) == 27
     assert set(HOST_COMMAND_NAMES) == SPEC_COMMANDS
 
 

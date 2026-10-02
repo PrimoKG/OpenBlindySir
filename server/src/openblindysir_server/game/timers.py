@@ -24,6 +24,8 @@ class DueKind(IntEnum):
     ANSWER_DEADLINE = 2
     PLAY_END = 3
     JOB_TIMEOUT = 4
+    RESUME_END = 5
+    PAUSE_START = 6
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -41,8 +43,12 @@ def pending(s: SessionState) -> list[Due]:
             dues.append(Due(r.official_start_at, DueKind.COUNTDOWN_END, r.id))
         if r.state is RoundState.LOADING and r.ready_deadline is not None:
             dues.append(Due(r.ready_deadline, DueKind.READY_TIMEOUT, r.id))
-        if r.state is RoundState.OPEN and r.deadline is not None:
+        if r.state is RoundState.OPEN and r.deadline is not None and r.paused_at is None:
             dues.append(Due(r.deadline, DueKind.ANSWER_DEADLINE, r.id))
+        if r.resume_at is not None:
+            dues.append(Due(r.resume_at, DueKind.RESUME_END, r.id))
+        if r.paused_at is not None and not r.pause_ready:
+            dues.append(Due(r.paused_at, DueKind.PAUSE_START, r.id))
         play = active_play(r)
         if play is not None:
             dues.append(Due(play.ends_at, DueKind.PLAY_END, play.play_id))
@@ -68,6 +74,14 @@ def apply(s: SessionState, due: Due, at: Instant, fx: EffectSink) -> None:
         rounds.close_round(s, r, at, CloseReason.DEADLINE, fx)
     elif due.kind is DueKind.PLAY_END and r is not None:
         r.ended_play_ids.add(due.ref)
+        s.touched = True
+    elif due.kind is DueKind.RESUME_END and r is not None:
+        r.paused_at = None
+        r.resume_at = None
+        r.pause_offset_s = None
+        s.touched = True
+    elif due.kind is DueKind.PAUSE_START and r is not None:
+        r.pause_ready = True
         s.touched = True
     elif due.kind is DueKind.JOB_TIMEOUT:
         asset = s.assets.get(due.ref)

@@ -57,6 +57,7 @@ class Settings:
     host: str = "0.0.0.0"  # noqa: S104 - listens inside the container, behind the proxy
     port: int = 8000
     warnings: tuple[tuple[str, str], ...] = ()
+    state_dir: Path | None = None
 
     @property
     def secrets(self) -> tuple[str, ...]:
@@ -211,6 +212,7 @@ def load_settings(
         host=r.text("BIND_HOST") or "0.0.0.0",  # noqa: S104
         port=r.integer("PORT", 8000, 1, 65535),
         warnings=tuple(r.warnings),
+        state_dir=Path(r.text("STATE_DIR") or ".local/state"),
     )
     if r.problems:
         raise ConfigError(r.problems)

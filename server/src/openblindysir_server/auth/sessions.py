@@ -75,3 +75,23 @@ class SessionRegistry:
         ]
         for key in stale:
             del self._by_hash[key]
+
+    def snapshot(self, now_ms: int) -> list[dict[str, str | int]]:
+        return [
+            dict(token_hash=key, player_id=r.player_id, idle_ms=max(0, now_ms - r.last_seen_mono))
+            for key, r in self._by_hash.items()
+        ]
+
+    def restore(
+        self, records: list[dict], now_ms: int, downtime_ms: int, players: set[str]
+    ) -> None:
+        self._by_hash.clear()
+        for row in records:
+            key, pid, age = row["token_hash"], row["player_id"], row["idle_ms"] + downtime_ms
+            if (
+                len(key) == 64
+                and all(c in "0123456789abcdef" for c in key)
+                and pid in players
+                and 0 <= age <= self.idle_ttl_ms
+            ):
+                self._by_hash[key] = SessionRecord(pid, now_ms - age, now_ms - age)

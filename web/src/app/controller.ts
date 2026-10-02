@@ -74,7 +74,7 @@ export class GameController {
         this.engine.play(msg);
         return;
       case "STOP":
-        this.engine.stop(msg.play_id);
+        this.engine.stop(msg.play_id, msg.stop_at);
         return;
       case "ANSWER_ACK":
         if (msg.status === "accepted" || msg.reason === "already_locked") {

@@ -190,7 +190,7 @@ class GameMachine(RuleBasedStateMachine):
                 sc.on_round(
                     "score_draft", {"player_id": pid, "points": data.draw(st.integers(-2, 3))}
                 )
-                sc.on_round("publish")
+                sc.on_round("publish", {"confirm_unreviewed": True})
             elif r.state is RoundState.REVEALED:
                 if data.draw(st.booleans()) and sc.on_round("next").error is None:
                     return
@@ -263,14 +263,26 @@ class GameMachine(RuleBasedStateMachine):
             assert '"track_id"' not in text
             assert "draft_last_changed_at" not in text
             for entry in data["players"]:
-                assert set(entry) == {"id", "nickname", "online", "is_host", "is_me"}
+                assert set(entry) == {
+                    "id",
+                    "nickname",
+                    "online",
+                    "is_host",
+                    "is_me",
+                    "spectator",
+                    "team",
+                }
             if view.audio.next is not None:
                 assert r is not None
                 assert r.state in (RoundState.REVIEW, RoundState.REVEALED)
             if view.kind == "host_mc":
                 continue
             revealed = r is not None and r.state is RoundState.REVEALED
-            if not revealed:
+            if (
+                view.phase is not GamePhase.FINAL_RESULTS
+                and not revealed
+                and not (view.kind == "host_player" and (r is None or r.state is RoundState.REVIEW))
+            ):
                 for canary in (CANARY_TITLE, CANARY_ARTIST, CANARY_FOLDER):
                     assert canary not in text, (view.kind, r.state if r else None)
             if view.kind == "player" and not revealed and r is not None:

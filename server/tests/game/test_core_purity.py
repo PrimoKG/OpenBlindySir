@@ -33,7 +33,7 @@ def test_no_io_nor_async(path: Path) -> None:
 
 def test_only_reveal_and_mc_builders_read_track_data() -> None:
     tree = ast.parse((GAME / "views.py").read_text(encoding="utf-8"))
-    allowed = {"_reveal_track", "_mc_panel", "_mc_track_info"}
+    allowed = {"_reveal_track", "_mc_panel", "_mc_track_info", "_track_info"}
     for func in (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)):
         if func.name in allowed:
             continue

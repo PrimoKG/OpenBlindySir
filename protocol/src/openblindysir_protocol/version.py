@@ -2,4 +2,4 @@
 
 from typing import Final
 
-PROTOCOL_VERSION: Final[int] = 1
+PROTOCOL_VERSION: Final[int] = 2

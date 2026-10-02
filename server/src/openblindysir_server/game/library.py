@@ -4,8 +4,8 @@ import posixpath
 import unicodedata
 
 from openblindysir_protocol.enums import BridgeState
-from openblindysir_protocol.http import FolderNode, LibraryBridge, LibraryResponse
-from openblindysir_server.game.state import Catalog, CatalogEntryData, SessionState
+from openblindysir_protocol.http import FolderNode, LibraryBridge, LibraryIssue, LibraryResponse
+from openblindysir_server.game.state import Catalog, CatalogEntryData, SessionState, TrackRef
 
 
 def file_display_name(entry: CatalogEntryData) -> str:
@@ -19,14 +19,21 @@ def file_name(entry: CatalogEntryData) -> str:
     return posixpath.basename(entry.relpath)
 
 
-def folder_tree(catalog: Catalog) -> FolderNode:
+def folder_tree(catalog: Catalog, s: SessionState | None = None) -> FolderNode:
     """Recursive folder tree with recursive track counts; folders only, never file names."""
     counts: dict[str, int] = {"": 0}
     children: dict[str, set[str]] = {"": set()}
-    for entry in catalog.entries.values():
+    fresh: dict[str, int] = {}
+    available: dict[str, int] = {}
+    for track_id, entry in catalog.entries.items():
         folder = entry.folder
         segments = folder.split("/") if folder else []
         counts[""] += 1
+        ref = TrackRef(catalog.bridge_id, track_id)
+        usable = s is None or ref not in s.game.unavailable
+        new = usable and (s is None or ref not in s.played)
+        available[""] = available.get("", 0) + int(usable)
+        fresh[""] = fresh.get("", 0) + int(new)
         prefix = ""
         for segment in segments:
             parent = prefix
@@ -34,6 +41,8 @@ def folder_tree(catalog: Catalog) -> FolderNode:
             children.setdefault(parent, set()).add(prefix)
             children.setdefault(prefix, set())
             counts[prefix] = counts.get(prefix, 0) + 1
+            available[prefix] = available.get(prefix, 0) + int(usable)
+            fresh[prefix] = fresh.get(prefix, 0) + int(new)
 
     def build(prefix: str) -> FolderNode:
         name = prefix.rsplit("/", 1)[-1] if prefix else catalog.bridge_name
@@ -42,6 +51,8 @@ def folder_tree(catalog: Catalog) -> FolderNode:
             prefix=prefix,
             track_count=counts.get(prefix, 0),
             children=[build(child) for child in sorted(children.get(prefix, ()))],
+            fresh_count=fresh.get(prefix, 0),
+            available_count=available.get(prefix, 0),
         )
 
     return build("")
@@ -58,7 +69,28 @@ def library_response(s: SessionState) -> LibraryResponse:
                 name=catalog.bridge_name,
                 online=info is not None and info.state is BridgeState.ONLINE,
                 track_count=len(catalog.entries),
-                root=folder_tree(catalog),
+                root=folder_tree(catalog, s),
             )
         )
-    return LibraryResponse(bridges=bridges)
+    issues: list[LibraryIssue] = []
+    for ref in sorted(s.game.unavailable):
+        catalog = s.catalogs.get(ref.bridge_id)
+        entry = catalog.entries.get(ref.track_id) if catalog else None
+        failed = next(
+            (
+                asset
+                for asset in reversed(list(s.assets.values()))
+                if asset.track_ref == ref and asset.error is not None
+            ),
+            None,
+        )
+        if entry:
+            issues.append(
+                LibraryIssue(
+                    bridge_id=ref.bridge_id,
+                    filename=file_name(entry),
+                    folder=entry.folder,
+                    code=failed.error.value if failed and failed.error else "decode_error",
+                )
+            )
+    return LibraryResponse(bridges=bridges, issues=issues)

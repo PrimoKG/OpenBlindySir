@@ -6,6 +6,7 @@ No secret nor secret-derived value lives here: tokens and passwords stay in the 
 import random
 from collections import deque
 from dataclasses import dataclass, field
+from typing import Any
 
 from openblindysir_protocol.enums import (
     AnswerStatus,
@@ -108,6 +109,8 @@ class Player:
     client_version: str | None = None
     joined_at_mono: int = 0
     ever_connected: bool = False
+    spectator: bool = False
+    team: str | None = None
 
 
 @dataclass(slots=True)
@@ -180,6 +183,14 @@ class Round:
     published_at: int | None = None
     published_event_ids: tuple[int, ...] = ()
     reveal: RevealInfo | None = None  # None unless state == REVEALED
+    score_reviewed: set[str] = field(default_factory=set)
+    paused_at: int | None = None
+    pause_offset_s: float | None = None
+    paused_total_ms: int = 0
+    resume_at: int | None = None
+    recovery_interrupted: bool = False
+    pause_ready: bool = False
+    previously_played: bool = False
 
 
 @dataclass(slots=True)
@@ -216,6 +227,13 @@ class Settings:
     auto_start: bool = True
     prefetch_depth: int = 1
     allow_repeats: bool = False
+    answer_mode: str = "both"
+    title_points: int = 1
+    artist_points: int = 1
+    instructions: str = ""
+    captured_policy: str = "manual"
+    normalize_audio: bool = True
+    avoid_silence: bool = True
 
     def copy(self) -> "Settings":
         return Settings(
@@ -226,6 +244,13 @@ class Settings:
             auto_start=self.auto_start,
             prefetch_depth=self.prefetch_depth,
             allow_repeats=self.allow_repeats,
+            answer_mode=self.answer_mode,
+            title_points=self.title_points,
+            artist_points=self.artist_points,
+            instructions=self.instructions,
+            captured_policy=self.captured_policy,
+            normalize_audio=self.normalize_audio,
+            avoid_silence=self.avoid_silence,
         )
 
 
@@ -242,6 +267,7 @@ class GameState:
     ending: EndGameMode | None = None
     final_draft: dict[str, int] = field(default_factory=dict)
     finalized_at: int | None = None
+    finalized_wall_ms: int | None = None
     applied_op_ids: set[str] = field(default_factory=set)
     cache_full_round: str | None = None
 
@@ -266,6 +292,10 @@ class SessionState:
     last_at: int = 0
     join_seq: int = 0
     touched: bool = False
+    recovered: bool = False
+    archives: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[TrackRef, tuple[str, str]] = field(default_factory=dict)
+    persistence_status: str = "disabled"
 
 
 # --- derived helpers ---------------------------------------------------------------------
@@ -297,7 +327,7 @@ def undo_target(g: GameState) -> Round | None:
 
 def is_participant(p: Player) -> bool:
     """Answers rounds: not removed and not an MC host."""
-    if p.connection is ConnectionState.REMOVED:
+    if p.connection is ConnectionState.REMOVED or p.spectator:
         return False
     return p.role is Role.PLAYER or p.host_mode is HostMode.PLAYER
 

@@ -23,7 +23,7 @@ from openblindysir_protocol.enums import ClipFormat
 DEMUXER_WHITELIST = "mp3,flac,wav,mov,ogg,aiff,asf,aac"
 PROBE_TIMEOUT_S = 10.0
 ENCODE_TIMEOUT_S = 30.0
-STDERR_LIMIT = 2048
+STDERR_LIMIT = 8192
 TAG_MAX = 200
 MIN_VERSION = (4, 4)
 INSTALL_HINT = (
@@ -155,9 +155,12 @@ def encode_argv(
     duration: float,
     bitrate_kbps: int,
     clip_format: ClipFormat,
+    normalize_audio: bool = True,
 ) -> list[str]:
     """The fixed §10 template: ``-ss`` before ``-i``, ``-t`` after, no metadata nor cover."""
     fade_out = max(0.0, duration - 1.5)
+    filters = "loudnorm=I=-16:TP=-1.5:LRA=11," if normalize_audio else ""
+    filters += f"afade=t=in:st=0:d=0.3,afade=t=out:st={fade_out:.3f}:d=1.5"
     argv = [
         tools.ffmpeg,
         "-nostdin", "-hide_banner", "-loglevel", "error", "-threads", "1",
@@ -169,7 +172,7 @@ def encode_argv(
         "-map", "0:a:0", "-vn", "-sn", "-dn",
         "-map_metadata", "-1", "-map_chapters", "-1",
         "-ac", "2", "-ar", "48000",
-        "-af", f"afade=t=in:st=0:d=0.3,afade=t=out:st={fade_out:.3f}:d=1.5",
+        "-af", filters,
     ]  # fmt: skip
     if clip_format is ClipFormat.OPUS:
         argv += ["-c:a", "libopus", "-b:a", f"{bitrate_kbps}k", "-f", "webm"]
@@ -177,6 +180,50 @@ def encode_argv(
         argv += ["-c:a", "aac", "-b:a", f"{bitrate_kbps}k", "-movflags", "+faststart", "-f", "mp4"]
     argv += ["-y", "file:" + out_path]
     return argv
+
+
+def analysis_argv(tools: FfmpegTools, real_path: str, start: float, duration: float) -> list[str]:
+    return [
+        tools.ffmpeg,
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "info",
+        "-threads",
+        "1",
+        "-protocol_whitelist",
+        "file",
+        "-format_whitelist",
+        DEMUXER_WHITELIST,
+        "-ss",
+        f"{start:.3f}",
+        "-i",
+        "file:" + real_path,
+        "-t",
+        f"{duration:.3f}",
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-sn",
+        "-dn",
+        "-af",
+        "silencedetect=n=-45dB:d=0.4,volumedetect",
+        "-f",
+        "null",
+        "-",
+    ]
+
+
+def analyze_silence(stderr: str, duration: float | None = None) -> tuple[bool, float]:
+    maximum = re.search(r"max_volume:\s*(-?inf|[-\d.]+)\s*dB", stderr)
+    # Quiet recordings can be made audible by loudnorm; reject only near-zero signals.
+    silent = maximum is None or float(maximum.group(1)) <= -80
+    start = re.search(r"silence_start:\s*([-\d.]+)", stderr)
+    end = re.search(r"silence_end:\s*([-\d.]+)", stderr)
+    leading = float(end.group(1)) if start and end and float(start.group(1)) < 0.1 else 0.0
+    if duration is not None and leading >= duration - 0.1:
+        leading = 0.0
+    return silent, leading
 
 
 async def run_bounded(argv: list[str], timeout_s: float) -> CompletedRun:
@@ -200,7 +247,7 @@ async def run_bounded(argv: list[str], timeout_s: float) -> CompletedRun:
             process.kill()
         await process.wait()
         raise
-    text = stderr.decode("utf-8", errors="replace")[:STDERR_LIMIT]
+    text = stderr.decode("utf-8", errors="replace")[-STDERR_LIMIT:]
     return CompletedRun(process.returncode, stdout, text)
 
 

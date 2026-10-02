@@ -86,6 +86,7 @@ async def join(request: Request) -> Response:
     player_id = outcome.value
     assert isinstance(player_id, str)
     token = state.runtime.sessions.issue(player_id, now)
+    state.runtime.save_snapshot()
     p = state.runtime.engine.state.players[player_id]
     response = _json(JoinResponse(player_id=p.id, nickname=p.nickname, role=p.role))
     set_session_cookie(response, token, state.settings)

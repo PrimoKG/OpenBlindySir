@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import StringConstraints
+from pydantic import Field, StringConstraints
 
 from openblindysir_protocol.base import BridgeId, InboundModel, OutboundModel, PlayerId
 from openblindysir_protocol.enums import BridgeState, HostMode, Role
@@ -56,6 +56,15 @@ class FolderNode(OutboundModel):
     prefix: str  # value for SourceSelection.folder_prefix ("" = root)
     track_count: int  # recursive, from the catalogue only
     children: list["FolderNode"]
+    fresh_count: int | None = None
+    available_count: int | None = None
+
+
+class LibraryIssue(OutboundModel):
+    bridge_id: BridgeId
+    filename: str
+    folder: str
+    code: str
 
 
 class LibraryBridge(OutboundModel):
@@ -68,6 +77,7 @@ class LibraryBridge(OutboundModel):
 
 class LibraryResponse(OutboundModel):
     bridges: list[LibraryBridge]
+    issues: list[LibraryIssue] = Field(default_factory=list)
 
 
 class HealthResponse(OutboundModel):

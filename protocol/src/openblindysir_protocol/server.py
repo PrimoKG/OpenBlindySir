@@ -39,6 +39,7 @@ class PlayMsg(OutboundModel):
 class StopMsg(OutboundModel):
     t: Literal["STOP"]
     play_id: PlayId
+    stop_at: int | None = None
 
 
 class AnswerAck(OutboundModel):

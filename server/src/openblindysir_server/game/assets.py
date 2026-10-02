@@ -32,6 +32,7 @@ TRACK_FAILURES = frozenset(
         AssetFailureCode.NOT_FOUND,
         AssetFailureCode.DECODE_ERROR,
         AssetFailureCode.TOO_SHORT,
+        AssetFailureCode.SILENT_AUDIO,
         AssetFailureCode.TIMEOUT,
     }
 )
@@ -84,6 +85,8 @@ def request_asset(s: SessionState, slot: Slot, at: Instant, fx: EffectSink) -> N
             track_id=track.track_id,
             start_fraction=s.rng.random(),
             duration_s=float(s.game.settings.clip_seconds),
+            normalize_audio=s.game.settings.normalize_audio,
+            avoid_silence=s.game.settings.avoid_silence,
         )
     )
     fx.log("job_requested", track_id=track.track_id, job_id=job_id)

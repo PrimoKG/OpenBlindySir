@@ -15,6 +15,7 @@ from openblindysir_protocol.enums import (
 )
 from openblindysir_protocol.errors import CloseCode, ErrorCode
 from openblindysir_protocol.host_commands import (
+    EmptyArgs,
     HostAdjust,
     HostConfigure,
     HostEndGame,
@@ -59,6 +60,7 @@ BLOCKER_CODES = {
     "no_sources": ErrorCode.NO_SOURCES,
     "bridge_offline": ErrorCode.BRIDGE_OFFLINE,
     "no_competitors": ErrorCode.NO_COMPETITORS,
+    "pool_exhausted": ErrorCode.POOL_EXHAUSTED,
 }
 
 
@@ -91,12 +93,12 @@ def h_start_game(
 def h_configure(
     s: SessionState, issuer: Player, msg: HostConfigure, at: Instant, fx: EffectSink
 ) -> None:
-    del at
     require_phase(s, msg.expected_phase)
     require_rule("configure", s, issuer)
     patch = msg.args
     given = {name for name in type(patch).model_fields if getattr(patch, name) is not None}
     g = s.game
+    require(not msg.start_game or g.phase is GamePhase.LOBBY, ErrorCode.INVALID_STATE)
     if g.phase is GamePhase.IN_GAME:
         require(given <= IN_GAME_CONFIGURABLE, ErrorCode.INVALID_STATE)
     if patch.clip_seconds is not None:
@@ -107,7 +109,8 @@ def h_configure(
     if patch.sources is not None:
         known = set(s.catalogs) | set(s.bridges)
         require(all(src.bridge_id in known for src in patch.sources), ErrorCode.INVALID_ARGS)
-    settings = g.settings
+    previous = g.settings
+    settings = g.settings.copy()
     if patch.rounds is not None:
         settings.rounds = patch.rounds
     if patch.clip_seconds is not None:
@@ -121,14 +124,43 @@ def h_configure(
     if patch.prefetch_depth is not None:
         settings.prefetch_depth = patch.prefetch_depth
     if patch.allow_repeats is not None:
-        changed = patch.allow_repeats != settings.allow_repeats
         settings.allow_repeats = patch.allow_repeats
+    for name in (
+        "answer_mode",
+        "title_points",
+        "artist_points",
+        "instructions",
+        "captured_policy",
+        "normalize_audio",
+        "avoid_silence",
+    ):
+        value = getattr(patch, name)
+        if value is not None:
+            setattr(settings, name, value)
+    g.settings = settings
+    if msg.start_game:
+        blockers = start_blockers(s)
+        if blockers:
+            g.settings = previous
+            require(False, BLOCKER_CODES[blockers[0].value])
+    if patch.allow_repeats is not None:
+        changed = previous.allow_repeats != settings.allow_repeats
         if changed and g.phase is GamePhase.IN_GAME:
             g.queue = selection.build_queue(s, include_played=patch.allow_repeats)
             if not patch.allow_repeats:
                 selection.drop_played_from_idle_slots(s)
     s.touched = True
     fx.log("game_configured", fields=",".join(sorted(given)))
+    if msg.start_game:
+        h_start_game(
+            s,
+            issuer,
+            HostStartGame(
+                t="HOST", cmd="start_game", expected_phase=GamePhase.LOBBY, args=EmptyArgs()
+            ),
+            at,
+            fx,
+        )
 
 
 # --- end of game ----------------------------------------------------------------------------
@@ -231,7 +263,12 @@ def h_final_validate(
     s.journal.freeze(g.game_id)
     g.final_draft = {}
     g.finalized_at = at.mono_ms
+    g.finalized_wall_ms = at.wall_ms
     g.phase = GamePhase.FINAL_RESULTS
+    from openblindysir_server.game import views  # noqa: PLC0415 - build the final snapshot
+
+    s.archives.append(views.game_record(s, at.wall_ms).model_dump(mode="json"))
+    s.archives = s.archives[-50:]
     s.touched = True
     fx.log("final_validated", corrections=corrections)
 

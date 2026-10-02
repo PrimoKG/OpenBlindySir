@@ -148,7 +148,7 @@ def test_next_is_idempotent() -> None:
 def test_publish_twice_is_stale_or_invalid() -> None:
     sc = Scenario()
     r = sc.to_review()
-    assert sc.on_round("publish").error is None
+    assert sc.on_round("publish", {"confirm_unreviewed": True}).error is None
     assert sc.host("publish", round_id=r.id, args={}).error is ErrorCode.INVALID_STATE
     assert len(sc.s.journal.events()) == 0
 

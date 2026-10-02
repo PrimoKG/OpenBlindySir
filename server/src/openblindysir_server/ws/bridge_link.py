@@ -111,6 +111,8 @@ class BridgeLink:
                 duration=eff.duration_s,
                 upload_url=f"/api/bridge/assets/{eff.asset_id}",
                 upload_token=token,
+                normalize_audio=eff.normalize_audio,
+                avoid_silence=eff.avoid_silence,
             )
         )
         return True

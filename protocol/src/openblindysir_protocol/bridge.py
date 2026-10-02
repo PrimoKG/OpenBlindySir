@@ -87,6 +87,8 @@ class Prepare(InboundModel):
         str, StringConstraints(pattern=r"^/api/bridge/assets/a_[A-Za-z0-9_-]{22}$")
     ]
     upload_token: UploadToken
+    normalize_audio: bool = True
+    avoid_silence: bool = True
 
 
 class Cancel(InboundModel):

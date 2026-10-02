@@ -1,7 +1,7 @@
 // Deterministic UI states supplement the real-game tests; no server/game rule is mocked
 // into production. These fixtures contain synthetic names and answers only.
 import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
-import type { AnyView, HostView, PlayerView, StandingRow } from "../src/protocol";
+import type { AnyView, HostView, LibraryResponse, PlayerView, StandingRow } from "../src/protocol";
 
 const players = [
   {
@@ -10,9 +10,27 @@ const players = [
     online: true,
     is_host: true,
     is_me: true,
+    spectator: false,
+    team: null,
   },
-  { id: "p_example2", nickname: "Exemple Alice", online: true, is_host: false, is_me: false },
-  { id: "p_example3", nickname: "Exemple Bob", online: false, is_host: false, is_me: false },
+  {
+    id: "p_example2",
+    nickname: "Exemple Alice",
+    online: true,
+    is_host: false,
+    is_me: false,
+    spectator: false,
+    team: null,
+  },
+  {
+    id: "p_example3",
+    nickname: "Exemple Bob",
+    online: false,
+    is_host: false,
+    is_me: false,
+    spectator: false,
+    team: null,
+  },
 ] as const;
 const standings: StandingRow[] = players.map((p, i) => ({
   player_id: p.id,
@@ -25,7 +43,13 @@ const roundId = "r_example1";
 function playerView(): PlayerView {
   return {
     kind: "player",
-    session: { epoch: "example-epoch", protocol: 1, server_version: "0.1.0" },
+    session: {
+      epoch: "example-epoch",
+      protocol: 2,
+      server_version: "0.1.0",
+      recovered: false,
+      persistence_status: "disabled",
+    },
     me: {
       player_id: players[0].id,
       nickname: players[0].nickname,
@@ -41,6 +65,9 @@ function playerView(): PlayerView {
     play: null,
     final_results: null,
     round: null,
+    rules: null,
+    paused: null,
+    team_standings: [],
   };
 }
 
@@ -65,6 +92,13 @@ function hostView(mc = false): HostView {
         auto_start: true,
         prefetch_depth: 1,
         allow_repeats: false,
+        answer_mode: "both",
+        title_points: 1,
+        artist_points: 1,
+        instructions: "",
+        captured_policy: "manual",
+        normalize_audio: true,
+        avoid_silence: true,
       },
       limits: {
         max_players: 15,
@@ -84,6 +118,7 @@ function hostView(mc = false): HostView {
       last_play_id: null,
       final_review: null,
       warnings: [],
+      history: [],
     },
     ...(mc
       ? {
@@ -102,13 +137,17 @@ function hostView(mc = false): HostView {
   } as HostView;
 }
 
-async function harness(page: Page, initial: AnyView) {
+async function harness(
+  page: Page,
+  initial: AnyView,
+  library: LibraryResponse = { bridges: [], issues: [] },
+) {
   let view = initial;
   let version = 0;
   let socket: WebSocketRoute | undefined;
   const sent: string[] = [];
   await page.route("**/api/session", (route) => route.fulfill({ json: { role: initial.me.role } }));
-  await page.route("**/api/host/library", (route) => route.fulfill({ json: { bridges: [] } }));
+  await page.route("**/api/host/library", (route) => route.fulfill({ json: library }));
   await page.route("**/api/host/diagnostics", (route) =>
     route.fulfill({ json: { example: true } }),
   );
@@ -137,9 +176,26 @@ async function harness(page: Page, initial: AnyView) {
 }
 
 async function layout(page: Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
-    true,
-  );
+  const overflow = await page.evaluate(() => ({
+    width: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+    elements: [...document.querySelectorAll("body *")]
+      .filter(
+        (element) =>
+          element.getBoundingClientRect().right > window.innerWidth + 1 ||
+          element.scrollWidth > element.clientWidth + 1,
+      )
+      .slice(-24)
+      .map((element) => ({
+        tag: element.tagName,
+        class: element.className,
+        right: element.getBoundingClientRect().right,
+        width: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        text: element.textContent?.slice(0, 160),
+      })),
+  }));
+  expect(overflow.scrollWidth, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.width);
   for (const button of await page.getByRole("button").all()) {
     if (!(await button.isVisible())) continue;
     const box = await button.boundingBox();
@@ -147,6 +203,145 @@ async function layout(page: Page) {
     expect(box?.width).toBeGreaterThanOrEqual(44);
   }
 }
+
+test("local score editing waits for acknowledgement and confirms unchecked answers", async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 850 });
+  const base = hostView();
+  const ui = await harness(page, base);
+  const review = {
+    ...base,
+    phase: "IN_GAME" as const,
+    round: {
+      state: "REVIEW" as const,
+      round_id: roundId,
+      number: 1,
+      official_start_at: 1,
+      ending: false,
+      recovery_interrupted: false,
+      track: {
+        title: "Titre privé exemple",
+        artist: "Artiste exemple",
+        display_name: "Exemple",
+        folder: "Exemple",
+      },
+      answers: players.map((p) => ({
+        player_id: p.id,
+        text: "Exemple",
+        status: "LOCKED" as const,
+        elapsed_ms: 1000,
+        order: 1,
+        near_tie: false,
+        late_start_ms: 0,
+        points_draft: 0,
+        reviewed: false,
+        score_before: 4,
+      })),
+    },
+    host: {
+      ...base.host,
+      start_blockers: [],
+      commands: ["score_draft", "publish", "track_metadata"],
+    },
+  };
+  ui.show(review);
+  await expect(
+    page.getByRole("heading", { name: "Titre privé exemple", exact: true }),
+  ).toBeVisible();
+  const input = page.getByLabel(`Points pour ${players[0].nickname}`, { exact: true });
+  await input.fill("-");
+  ui.show(review); // unrelated STATE must preserve incomplete local typing
+  await expect(input).toHaveValue("-");
+  expect(ui.sent.some((raw) => JSON.parse(raw).cmd === "score_draft")).toBe(false);
+  await expect(page.getByRole("button", { name: "Publier", exact: true })).toBeDisabled();
+  await input.fill("12");
+  await input.press("Enter");
+  await expect(input).toBeDisabled();
+  await expect.poll(() => ui.sent.some((raw) => JSON.parse(raw).args?.points === 12)).toBe(true);
+  ui.show({
+    ...review,
+    round: {
+      ...review.round,
+      answers: review.round.answers.map((row, i) =>
+        i === 0 ? { ...row, points_draft: 12, reviewed: true } : row,
+      ),
+    },
+  });
+  await expect(input).toBeEnabled();
+  await expect(page.locator(".review")).toContainText("Total publié 4 · +12 cette manche → 16");
+  await page.getByRole("button", { name: "Publier", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("2 réponses restent à vérifier");
+  await dialog.getByRole("button", { name: "Confirmer", exact: true }).click();
+  await expect
+    .poll(() =>
+      ui.sent.some(
+        (raw) =>
+          JSON.parse(raw).cmd === "publish" && JSON.parse(raw).args.confirm_unreviewed === true,
+      ),
+    )
+    .toBe(true);
+  await layout(page);
+  await page.screenshot({ path: info.outputPath("review-ack.png"), fullPage: true });
+});
+
+test("preflight reduces the requested rounds and saves before starting atomically", async ({
+  page,
+}) => {
+  const base = hostView();
+  const ui = await harness(page, base, {
+    issues: [],
+    bridges: [
+      {
+        bridge_id: "example",
+        name: "Exemple",
+        track_count: 4,
+        online: true,
+        root: {
+          name: "Exemple",
+          prefix: "",
+          track_count: 4,
+          fresh_count: 2,
+          available_count: 3,
+          children: [],
+        },
+      },
+    ],
+  });
+  await page.locator(".tree input").first().check();
+  await expect(page.getByRole("button", { name: "Enregistrer et lancer" })).toBeDisabled();
+  await expect(page.getByText("2 morceaux neufs pour 20 manches", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Prévoir 2 manches", exact: true }).click();
+  await page.getByRole("button", { name: "Enregistrer et lancer", exact: true }).click();
+  await expect
+    .poll(() =>
+      ui.sent.some((raw) => {
+        const message = JSON.parse(raw);
+        return (
+          message.cmd === "configure" &&
+          message.start_game &&
+          message.args.rounds === 2 &&
+          message.args.sources.length === 1
+        );
+      }),
+    )
+    .toBe(true);
+});
+
+test("invitation draws a QR code without embedding the password", async ({ page }) => {
+  await harness(page, hostView());
+  await page.getByText("Inviter les joueurs", { exact: true }).click();
+  const address = page.getByLabel("Adresse accessible depuis les téléphones", { exact: true });
+  await address.fill("https://example.org/path?password=example-private#fragment");
+  const canvas = page.getByRole("img", { name: "QR code pour rejoindre la partie" });
+  await expect(canvas).toBeVisible();
+  await expect
+    .poll(async () => canvas.evaluate((element) => (element as HTMLCanvasElement).width))
+    .toBe(192);
+  await address.fill("invalid");
+  await expect(page.getByRole("button", { name: "Copier le lien d’invitation" })).toBeDisabled();
+});
 
 for (const width of [320, 390, 1280]) {
   test(`player phase hierarchy and mobile layout (${width}px)`, async ({ page }, info) => {
@@ -159,7 +354,12 @@ for (const width of [320, 390, 1280]) {
 
     const game = { game_id: "g_example", rounds_total: 20, round_number: 1, clip_seconds: 25 };
     for (const state of ["PREPARING", "LOADING"] as const) {
-      ui.show({ ...base, phase: "IN_GAME", game, round: { state, round_id: roundId, number: 1 } });
+      ui.show({
+        ...base,
+        phase: "IN_GAME",
+        game,
+        round: { state, round_id: roundId, number: 1, wait_reason: null },
+      });
       await expect(
         page.getByRole("heading", {
           name: state === "PREPARING" ? "Préparation de l'extrait…" : "Chargement de l'extrait…",
@@ -286,6 +486,8 @@ for (const width of [320, 390, 1280]) {
         standings,
         podium: standings,
         rounds_played: 20,
+        recap: [],
+        finished_at: 0,
         final_adjustments: [{ player_id: players[1].id, delta: -1 }],
       },
     });
@@ -304,7 +506,7 @@ for (const width of [320, 390, 1280]) {
     ui.show({
       ...base,
       phase: "IN_GAME",
-      round: { state: "LOADING", round_id: roundId, number: 1 },
+      round: { state: "LOADING", round_id: roundId, number: 1, wait_reason: null },
       host: {
         ...base.host,
         start_blockers: [],
@@ -327,6 +529,8 @@ for (const width of [320, 390, 1280]) {
       near_tie: i === 1,
       late_start_ms: i === 1 ? 2300 : 0,
       points_draft: 0,
+      reviewed: false,
+      score_before: 0,
     }));
     ui.show({
       ...base,
@@ -338,6 +542,8 @@ for (const width of [320, 390, 1280]) {
         official_start_at: 1,
         answers,
         ending: false,
+        track: null,
+        recovery_interrupted: false,
       },
       host: {
         ...base.host,
@@ -348,6 +554,7 @@ for (const width of [320, 390, 1280]) {
     await expect(page.getByRole("heading", { name: "À toi de noter." })).toBeVisible();
     await expect(page.locator(".review")).toContainText("⚠ audio +2,3 s");
     await page.getByLabel(`Points pour ${players[0].nickname}`, { exact: true }).fill("-2");
+    await page.getByLabel(`Points pour ${players[0].nickname}`, { exact: true }).press("Enter");
     await expect
       .poll(() =>
         ui.sent.some(
@@ -383,7 +590,7 @@ for (const width of [320, 390, 1280]) {
       .getByRole("button", { name: "VALIDER LES SCORES ET AFFICHER LES RÉSULTATS" })
       .click();
     const dialog = page.getByRole("dialog", { name: "On confirme ?" });
-    await expect(dialog).toContainText("3 corrections");
+    await expect(dialog).toContainText("3 correction(s)");
     await expect(dialog.getByRole("button", { name: "Annuler" })).toBeFocused();
     await dialog.press("Escape");
     await expect(dialog).not.toBeVisible();
@@ -488,7 +695,7 @@ test("library and diagnostic requests expose loading, errors and retry", async (
   );
   // A new catalogue causes the existing UI to reload the folder tree.
   await page.reload();
-  await expect(page.locator(".setup").getByRole("alert")).toHaveText("Serveur injoignable");
+  await expect(page.locator(".setup").getByRole("alert")).toContainText("Serveur injoignable");
   fail = false;
   await page.locator(".setup").getByRole("button", { name: "Réessayer" }).click();
   await expect(page.getByText("Aucun Bridge connecté")).toBeVisible();
@@ -507,9 +714,16 @@ test("library and diagnostic requests expose loading, errors and retry", async (
   await expect(diagnostics.locator("pre")).toContainText('"example": true');
 });
 
-test("clip download errors can be retried without hiding the answer form", async ({ page }) => {
+test("clip download errors can be retried without hiding the answer form", async ({
+  page,
+  browserName,
+}) => {
   const base = playerView();
   const ui = await harness(page, base);
+  test.skip(
+    browserName === "webkit" && (await page.evaluate(() => typeof AudioContext === "undefined")),
+    "This WebKit build has no Web Audio support; verify audio on Safari separately.",
+  );
   await page.getByRole("button", { name: "Tester mon audio", exact: true }).click();
   let requests = 0;
   await page.route("**/api/audio/a_example", (route) => {

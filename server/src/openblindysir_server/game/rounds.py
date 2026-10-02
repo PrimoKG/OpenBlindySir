@@ -16,17 +16,21 @@ from openblindysir_protocol.host_commands import (
     HostClose,
     HostForceStart,
     HostNext,
+    HostPause,
     HostPublish,
     HostReplay,
+    HostResume,
     HostScoreDraft,
     HostSkip,
     HostStop,
+    HostTrackMetadata,
     HostUndoPublish,
 )
 from openblindysir_server.game import assets, library, selection
 from openblindysir_server.game.answers import capture_drafts
 from openblindysir_server.game.clock import Instant
 from openblindysir_server.game.effects import EffectSink, Play, SendPlay, SendStop
+from openblindysir_server.game.metadata import clean_metadata
 from openblindysir_server.game.permissions import rule_ok
 from openblindysir_server.game.readiness import expected_ready, ready_ids
 from openblindysir_server.game.rejections import require
@@ -134,6 +138,7 @@ def begin_countdown(s: SessionState, r: Round, at: Instant, fx: EffectSink) -> N
     r.plays.append(play)
     r.deadline = start_at + duration + s.game.settings.answer_grace_s * 1000
     r.state = RoundState.COUNTDOWN
+    r.previously_played = r.slot.track_ref in s.played
     s.played.add(r.slot.track_ref)
     ready = s.asset_ready.get(asset.asset_id, {})
     for p in active_players(s):
@@ -200,7 +205,7 @@ def close_round(
 def auto_close(s: SessionState, at: Instant, fx: EffectSink) -> bool:
     """R12: close as soon as every online participant has validated."""
     r = current_round(s.game)
-    if r is None or r.state is not RoundState.OPEN:
+    if r is None or r.state is not RoundState.OPEN or r.paused_at is not None:
         return False
     locked = {pid for pid, a in r.answers.items() if a.status is AnswerStatus.LOCKED}
     online = {
@@ -238,12 +243,14 @@ def decode_failure(s: SessionState, r: Round, fx: EffectSink) -> None:
 
 
 def build_reveal(s: SessionState, r: Round) -> RevealInfo:
-    """Track information for the reveal; called only by ``publish``."""
+    """Current track metadata, visible privately at review and publicly after publication."""
     ref = r.slot.track_ref
     assert ref is not None
     asset = s.assets.get(r.slot.asset_id or "")
     title = asset.title if asset is not None else None
     artist = asset.artist if asset is not None else None
+    if ref in s.metadata:
+        title, artist = s.metadata[ref]
     catalog = s.catalogs.get(ref.bridge_id)
     entry = catalog.entries.get(ref.track_id) if catalog is not None else None
     bridge_name = catalog.bridge_name if catalog is not None else ""
@@ -255,6 +262,9 @@ def build_reveal(s: SessionState, r: Round) -> RevealInfo:
         display = library.file_display_name(entry)
     else:
         display = "?"
+    if ref not in s.metadata:
+        title, artist = clean_metadata(title, artist, display)
+    display = " — ".join(part for part in (artist, title) if part) or display
     folder = bridge_name
     if entry is not None and entry.folder:
         folder = f"{bridge_name}/{entry.folder}"
@@ -315,6 +325,62 @@ def h_stop(s: SessionState, issuer: Player, msg: HostStop, at: Instant, fx: Effe
     s.touched = True
 
 
+def h_pause(s: SessionState, issuer: Player, msg: HostPause, at: Instant, fx: EffectSink) -> None:
+    r = current_by_key(s, msg.round_id)
+    require_rule("pause", s, issuer)
+    assert r.deadline is not None
+    r.paused_at = min(at.mono_ms + 300, r.deadline - 1)
+    r.pause_ready = False
+    play = active_play(r)
+    r.pause_offset_s = None
+    if play is not None:
+        offset = play.clip_offset_s + max(0, r.paused_at - play.start_at) / 1000
+        if offset * 1000 < clip_ms(s, r):
+            r.pause_offset_s = offset
+        r.stopped_play_ids.add(play.play_id)
+        fx.add(SendStop(play.play_id, r.paused_at))
+    s.touched = True
+    fx.log("round_paused", round_id=r.id)
+
+
+def h_resume(s: SessionState, issuer: Player, msg: HostResume, at: Instant, fx: EffectSink) -> None:
+    r = current_by_key(s, msg.round_id)
+    require_rule("resume", s, issuer)
+    assert r.paused_at is not None
+    assert r.deadline is not None
+    require(r.resume_at is None and at.mono_ms >= r.paused_at, ErrorCode.STALE_COMMAND)
+    start_at = at.mono_ms + s.config.replay_lead_ms
+    paused_ms = start_at - r.paused_at
+    r.deadline += paused_ms
+    r.paused_total_ms += paused_ms
+    r.resume_at = start_at
+    if r.pause_offset_s is not None and r.slot.asset_id is not None:
+        play = Play(
+            s.ids.play_id(),
+            r.slot.asset_id,
+            start_at,
+            r.pause_offset_s,
+            start_at + clip_ms(s, r) - round(r.pause_offset_s * 1000),
+        )
+        r.plays.append(play)
+        fx.add(SendPlay(play))
+    s.touched = True
+    fx.log("round_resumed", round_id=r.id)
+
+
+def h_track_metadata(
+    s: SessionState, issuer: Player, msg: HostTrackMetadata, at: Instant, fx: EffectSink
+) -> None:
+    del at, fx
+    r = current_by_key(s, msg.round_id)
+    require_rule("track_metadata", s, issuer)
+    assert r.slot.track_ref is not None
+    title, artist = msg.args.title.strip(), msg.args.artist.strip()
+    require(bool(title or artist), ErrorCode.INVALID_ARGS)
+    s.metadata[r.slot.track_ref] = (title, artist)
+    s.touched = True
+
+
 def h_skip(s: SessionState, issuer: Player, msg: HostSkip, at: Instant, fx: EffectSink) -> None:
     """R18: the round is cancelled; its track is not marked as played unless it was heard."""
     r = current_by_key(s, msg.round_id)
@@ -358,6 +424,17 @@ def h_score_draft(
     r = current_by_key(s, msg.round_id)
     require_rule("score_draft", s, issuer)
     require(msg.args.player_id in review_player_ids(s, r), ErrorCode.UNKNOWN_PLAYER)
+    answer = r.answers.get(msg.args.player_id)
+    require(
+        not (
+            s.game.settings.captured_policy == "zero"
+            and answer is not None
+            and answer.status is AnswerStatus.CAPTURED
+            and msg.args.points != 0
+        ),
+        ErrorCode.INVALID_ARGS,
+    )
+    r.score_reviewed.add(msg.args.player_id)
     if msg.args.points == 0:
         r.score_draft.pop(msg.args.player_id, None)
     else:
@@ -371,6 +448,10 @@ def h_publish(
     """R20: one ``round`` event per non-zero draft, then the reveal."""
     r = current_by_key(s, msg.round_id)
     require_rule("publish", s, issuer)
+    require(
+        set(review_player_ids(s, r)) <= r.score_reviewed or msg.args.confirm_unreviewed,
+        ErrorCode.UNREVIEWED_SCORES,
+    )
     events: list[int] = []
     for p in active_players(s):
         points = r.score_draft.get(p.id, 0)

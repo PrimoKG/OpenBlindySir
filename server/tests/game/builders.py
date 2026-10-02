@@ -251,7 +251,7 @@ class Scenario:
         r = self.current()
         for pid, pts in (points or {}).items():
             assert self.on_round("score_draft", {"player_id": pid, "points": pts}).error is None
-        assert self.on_round("publish").error is None
+        assert self.on_round("publish", {"confirm_unreviewed": True}).error is None
         return r
 
     def view(self, pid: str) -> AnyView:

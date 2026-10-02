@@ -32,7 +32,9 @@ export default defineConfig({
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
   webServer: {
-    command: "uv run python ../tools/e2e_stack.py",
+    command: env.E2E_PYTHON
+      ? `"${env.E2E_PYTHON}" ../tools/e2e_stack.py`
+      : "uv run python ../tools/e2e_stack.py",
     url: `http://localhost:${port}/healthz`,
     reuseExistingServer: !env.CI,
     timeout: 120_000,

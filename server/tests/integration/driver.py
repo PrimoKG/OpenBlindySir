@@ -77,7 +77,7 @@ class Table:
                     for pid, pts in points.items()
                 )
             )
-        await self.host.on_round("publish")
+        await self.host.on_round("publish", {"confirm_unreviewed": True})
         await self.wait_host(lambda v: round_state(v) == "REVEALED")
 
     async def finish(self, final: dict[str, int] | None = None) -> View:

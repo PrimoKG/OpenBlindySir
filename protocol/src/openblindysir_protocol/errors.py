@@ -17,6 +17,8 @@ class ErrorCode(StrEnum):
     NO_SOURCES = "no_sources"
     BRIDGE_OFFLINE = "bridge_offline"
     NO_COMPETITORS = "no_competitors"
+    POOL_EXHAUSTED = "pool_exhausted"
+    UNREVIEWED_SCORES = "unreviewed_scores"
     SCORES_FROZEN = "scores_frozen"
     RATE_LIMITED = "rate_limited"
     MESSAGE_TOO_LARGE = "message_too_large"
@@ -57,3 +59,4 @@ class StartBlocker(StrEnum):
     NO_SOURCES = "no_sources"
     BRIDGE_OFFLINE = "bridge_offline"
     NO_COMPETITORS = "no_competitors"
+    POOL_EXHAUSTED = "pool_exhausted"

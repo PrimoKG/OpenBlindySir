@@ -4,18 +4,23 @@ from openblindysir_protocol.enums import (
     AudioErrorCode,
     AudioState,
     ConnectionState,
-    GamePhase,
     HostMode,
     Role,
     RoundState,
 )
 from openblindysir_protocol.errors import CloseCode, ErrorCode
-from openblindysir_protocol.host_commands import HostKick, HostRename, HostSetMode
+from openblindysir_protocol.host_commands import (
+    HostKick,
+    HostParticipation,
+    HostRename,
+    HostSetMode,
+)
 from openblindysir_protocol.text import nickname_key, normalize_nickname
 from openblindysir_server.game import commands as c
 from openblindysir_server.game import rounds
 from openblindysir_server.game.clock import Instant
 from openblindysir_server.game.effects import CloseConnection, EffectSink, RevokeTokens
+from openblindysir_server.game.permissions import rule_ok
 from openblindysir_server.game.rejections import Rejected, require
 from openblindysir_server.game.state import (
     Listen,
@@ -223,16 +228,22 @@ def h_set_mode(
     mode = msg.args.mode
     if mode is issuer.host_mode:
         return
-    in_game = s.game.phase is GamePhase.IN_GAME
-    if mode is HostMode.MC:
-        r = current_round(s.game)
-        playing = r is not None and r.state in LISTENING_STATES
-        require(not (in_game and playing), ErrorCode.INVALID_STATE)
-    else:
-        require(not in_game, ErrorCode.INVALID_STATE)
+    require(rule_ok("set_mode", s, issuer), ErrorCode.INVALID_STATE)
     issuer.host_mode = mode
     s.touched = True
     fx.log("host_mode_changed", player_id=issuer.id, mode=mode.value)
+
+
+def h_participation(
+    s: SessionState, issuer: Player, msg: HostParticipation, at: Instant, fx: EffectSink
+) -> None:
+    del at, fx
+    require(msg.expected_phase == s.game.phase, ErrorCode.STALE_COMMAND)
+    require(rule_ok("participation", s, issuer), ErrorCode.INVALID_STATE)
+    target = get_active(s, msg.args.player_id)
+    target.spectator = msg.args.spectator
+    target.team = msg.args.team.strip() or None if msg.args.team else None
+    s.touched = True
 
 
 def h_kick(s: SessionState, issuer: Player, msg: HostKick, at: Instant, fx: EffectSink) -> None:

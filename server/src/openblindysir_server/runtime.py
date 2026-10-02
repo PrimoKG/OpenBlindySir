@@ -21,6 +21,7 @@ from openblindysir_server.game import Clock, GameEngine, Instant
 from openblindysir_server.game import commands as c
 from openblindysir_server.game import effects as e
 from openblindysir_server.logging import get, log_event
+from openblindysir_server.persistence import SnapshotStore
 from openblindysir_server.ws.bridge_link import BridgeLink
 from openblindysir_server.ws.hub import PlayerHub
 
@@ -67,9 +68,27 @@ class Runtime:
     timers: TimerDriver = field(init=False)
     _queue: deque[tuple[c.Command, Instant | None]] = field(default_factory=deque)
     _running: bool = False
+    snapshots: SnapshotStore | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         self.timers = TimerDriver(self)
+        if self.settings.state_dir is not None:
+            self.snapshots = SnapshotStore(self.settings.state_dir, self.settings.secrets)
+            self.snapshots.restore(self.engine, self.sessions, self.clock.now())
+            self.engine.state.persistence_status = "ready"
+
+    def save_snapshot(self) -> None:
+        if self.snapshots is None:
+            return
+        previous = self.engine.state.persistence_status
+        try:
+            self.snapshots.save(self.engine, self.sessions, self.clock.now())
+            self.engine.state.persistence_status = "ready"
+        except (OSError, ValueError):
+            self.engine.state.persistence_status = "failed"
+            log_event(LOG_GAME, "snapshot_failed")
+        if previous != self.engine.state.persistence_status:
+            self.hub.mark_dirty()
 
     def view_json(self, player_id: str) -> str | None:
         if not self.engine.player_exists(player_id):
@@ -100,6 +119,8 @@ class Runtime:
         self.cache.retain(self.engine.retained_assets())
         if changed:
             self.hub.mark_dirty()
+        if changed or isinstance(cmd, c.DraftIn):
+            self.save_snapshot()
         self.timers.reschedule(self.engine.next_wakeup())
         assert first is not None
         return first
@@ -116,8 +137,8 @@ class Runtime:
                         clip_offset=play.clip_offset_s,
                     )
                 )
-            case e.SendStop(play_id=play_id):
-                self.hub.broadcast_critical(StopMsg(t="STOP", play_id=play_id))
+            case e.SendStop(play_id=play_id, stop_at=stop_at):
+                self.hub.broadcast_critical(StopMsg(t="STOP", play_id=play_id, stop_at=stop_at))
             case e.SendAck(player_id=pid, round_id=rid, status=status, reason=reason):
                 self.hub.send_critical(
                     pid, AnswerAck(t="ANSWER_ACK", round_id=rid, status=status, reason=reason)
@@ -144,6 +165,7 @@ class Runtime:
                 log_event(LOG_GAME, event, **dict(fields))
 
     def shutdown(self) -> None:
+        self.save_snapshot()
         self.timers.enabled = False
         self.timers.reschedule(None)
         self.hub.cancel_pending()

@@ -13,7 +13,7 @@ from conftest import FAKE_M4A, Harness, bridge_hello, catalog, put_asset, put_ca
 from openblindysir_protocol.bridge import UPLOAD_TOKEN_TTL_S
 from openblindysir_protocol.enums import AssetState
 
-HELLO = json.dumps({"t": "HELLO", "client_version": "0.1.0", "protocol": 1})
+HELLO = json.dumps({"t": "HELLO", "client_version": "0.1.0", "protocol": 2})
 
 
 def receive(ws: Any, t: str) -> dict[str, Any]:

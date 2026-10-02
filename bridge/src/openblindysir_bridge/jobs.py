@@ -170,6 +170,28 @@ class JobRunner:
             start, duration = compute_start(probe.duration_s, request.duration_s, request.fraction)
         except TooShortError as exc:
             raise JobError(JobFailureCode.TOO_SHORT, "piste trop courte") from exc
+        if request.avoid_silence:
+            for attempt in range(3):
+                analysis = await ffmpeg.run_bounded(
+                    ffmpeg.analysis_argv(self.tools, real, start, duration), ffmpeg.PROBE_TIMEOUT_S
+                )
+                if analysis.returncode is None:
+                    raise JobError(JobFailureCode.TIMEOUT, "silence analysis timed out")
+                if analysis.returncode != 0:
+                    raise JobError(JobFailureCode.DECODE_ERROR, "silence analysis failed")
+                silent, leading = ffmpeg.analyze_silence(analysis.stderr, duration)
+                if not silent:
+                    start = min(max(0, probe.duration_s - duration), start + leading)
+                    break
+                start, duration = compute_start(
+                    probe.duration_s,
+                    request.duration_s,
+                    (request.fraction + (attempt + 1) * 0.31) % 0.999,
+                )
+            else:
+                raise JobError(
+                    JobFailureCode.SILENT_AUDIO, "no audible excerpt found after three attempts"
+                )
         self._progress(job, JobStage.ENCODING)
         if self.faults.slow_encode_ms:
             await asyncio.sleep(self.faults.slow_encode_ms / 1000)
@@ -181,6 +203,7 @@ class JobRunner:
             duration=duration,
             bitrate_kbps=request.bitrate_kbps,
             clip_format=request.clip_format,
+            normalize_audio=request.normalize_audio,
         )
         encode_run = await ffmpeg.run_bounded(argv, ffmpeg.ENCODE_TIMEOUT_S)
         if encode_run.returncode is None:

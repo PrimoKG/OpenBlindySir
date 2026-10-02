@@ -32,6 +32,7 @@ def main() -> int:
         "BRIDGE_SECRET": SECRET,
         "PORT": str(PORT),
         "STATIC_DIR": str(ROOT / "web" / "dist"),
+        "STATE_DIR": str(work / "state"),
         # Playwright's Chromium has no AAC decoder; Opus decodes everywhere.
         "CLIP_FORMAT": "opus",
         "READY_TIMEOUT_S": "10",

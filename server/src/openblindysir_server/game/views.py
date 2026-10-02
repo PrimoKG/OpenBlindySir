@@ -29,6 +29,8 @@ from openblindysir_protocol.views import (
     FinalResults,
     FinalReviewRow,
     GameInfo,
+    GameRecord,
+    GameRules,
     HistoryEntry,
     HostMcView,
     HostPanel,
@@ -38,6 +40,7 @@ from openblindysir_protocol.views import (
     McTrackInfo,
     Me,
     MyAnswer,
+    PauseInfo,
     PlayerOps,
     PlayerView,
     PlayInfo,
@@ -55,16 +58,18 @@ from openblindysir_protocol.views import (
     RoundRevealed,
     SessionInfo,
     StandingRow,
+    TeamStanding,
     ViewPlayer,
 )
 from openblindysir_server import __version__
-from openblindysir_server.game import assets, permissions, selection
+from openblindysir_server.game import assets, permissions, rounds, selection
 from openblindysir_server.game.readiness import expected_ready, ready_ids
 from openblindysir_server.game.standings import standings
 from openblindysir_server.game.state import (
     IN_FLIGHT_ASSET_STATES,
     Answer,
     Player,
+    RevealInfo,
     Round,
     SessionState,
     Slot,
@@ -105,6 +110,7 @@ def view_for(s: SessionState, player_id: str) -> AnyView:
     audio = audio_slots(s)
     play = _play(s)
     final_results = _final_results(s, ranking)
+    rules, paused, teams = _rules(s), _paused(s), team_standings(s, ranking)
     if p.role is Role.PLAYER:
         return PlayerView(
             kind="player",
@@ -118,6 +124,9 @@ def view_for(s: SessionState, player_id: str) -> AnyView:
             play=play,
             final_results=final_results,
             round=_round_player(s, p),
+            rules=rules,
+            paused=paused,
+            team_standings=teams,
         )
     host = _host_panel(s, p, ranking)
     if p.host_mode is HostMode.PLAYER:
@@ -134,6 +143,9 @@ def view_for(s: SessionState, player_id: str) -> AnyView:
             final_results=final_results,
             round=_round_host_pm(s, p),
             host=host,
+            rules=rules,
+            paused=paused,
+            team_standings=teams,
         )
     return HostMcView(
         kind="host_mc",
@@ -149,6 +161,9 @@ def view_for(s: SessionState, player_id: str) -> AnyView:
         round=_round_mc(s),
         host=host,
         mc=_mc_panel(s),
+        rules=rules,
+        paused=paused,
+        team_standings=teams,
     )
 
 
@@ -156,7 +171,61 @@ def view_for(s: SessionState, player_id: str) -> AnyView:
 
 
 def _session(s: SessionState) -> SessionInfo:
-    return SessionInfo(epoch=s.epoch, protocol=PROTOCOL_VERSION, server_version=__version__)
+    return SessionInfo(
+        epoch=s.epoch,
+        protocol=PROTOCOL_VERSION,
+        server_version=__version__,
+        recovered=s.recovered,
+        persistence_status=s.persistence_status,
+    )
+
+
+def _rules(s: SessionState) -> GameRules:
+    cfg = s.game.settings
+    return GameRules(
+        answer_mode=cfg.answer_mode,
+        title_points=cfg.title_points,
+        artist_points=cfg.artist_points,
+        instructions=cfg.instructions,
+        captured_policy=cfg.captured_policy,
+    )
+
+
+def _paused(s: SessionState) -> PauseInfo | None:
+    r = current_round(s.game)
+    if r is None or r.paused_at is None or r.state is not RoundState.OPEN:
+        return None
+    assert r.deadline is not None
+    return PauseInfo(
+        paused_at=r.paused_at,
+        remaining_ms=r.deadline - (r.resume_at or r.paused_at),
+        clip_offset_s=r.pause_offset_s,
+        resume_at=r.resume_at,
+    )
+
+
+def team_standings(s: SessionState, ranking: list[StandingRow]) -> list[TeamStanding]:
+    groups: dict[str, list[StandingRow]] = {}
+    for row in ranking:
+        team = s.players[row.player_id].team
+        if team:
+            groups.setdefault(team, []).append(row)
+    ordered = sorted(
+        groups, key=lambda team: (-sum(row.score for row in groups[team]), team.casefold())
+    )
+    result: list[TeamStanding] = []
+    previous: int | None = None
+    rank = 0
+    for index, team in enumerate(ordered, 1):
+        score = sum(row.score for row in groups[team])
+        if score != previous:
+            rank, previous = index, score
+        result.append(
+            TeamStanding(
+                team=team, score=score, rank=rank, members=[row.player_id for row in groups[team]]
+            )
+        )
+    return result
 
 
 def _me(p: Player) -> Me:
@@ -177,6 +246,8 @@ def _players(s: SessionState, viewer_id: str) -> list[ViewPlayer]:
             online=p.connection is ConnectionState.ONLINE,
             is_host=p.role is Role.HOST,
             is_me=p.id == viewer_id,
+            spectator=p.spectator,
+            team=p.team,
         )
         for p in active_players(s)
     ]
@@ -245,6 +316,8 @@ def _final_results(s: SessionState, ranking: list[StandingRow]) -> FinalResults 
         podium=[row for row in ranking if row.rank <= 3],
         rounds_played=sum(1 for r in g.rounds if r.state is RoundState.REVEALED),
         final_adjustments=shown,
+        recap=_final_rows(s, ranking),
+        finished_at=g.finalized_wall_ms,
     )
 
 
@@ -293,7 +366,16 @@ def _progress(s: SessionState, r: Round) -> Progress | None:
 def _pending(r: Round) -> RoundPending:
     state = r.state.value
     assert state in ("QUEUED", "PREPARING", "LOADING")
-    return RoundPending(state=state, round_id=r.id, number=r.number)
+    return RoundPending(
+        state=state,
+        round_id=r.id,
+        number=r.number,
+        wait_reason="pool_exhausted"
+        if r.slot.track_ref is None
+        else "bridge_offline"
+        if r.slot.waiting_bridge
+        else None,
+    )
 
 
 def _countdown(r: Round) -> RoundCountdown:
@@ -356,6 +438,8 @@ def _review_rows(s: SessionState, r: Round) -> list[ReviewRow]:
                 near_tie=answer.near_tie,
                 late_start_ms=late_start_ms(r, pid),
                 points_draft=r.score_draft.get(pid, 0),
+                reviewed=pid in r.score_reviewed,
+                score_before=s.journal.score(s.game.game_id, pid),
             )
         )
     return rows
@@ -370,6 +454,8 @@ def _host_review(s: SessionState, r: Round) -> RoundHostReview:
         official_start_at=r.official_start_at,
         answers=_review_rows(s, r),
         ending=s.game.ending is not None,
+        track=_track_info(rounds.build_reveal(s, r)),
+        recovery_interrupted=r.recovery_interrupted,
     )
 
 
@@ -378,6 +464,25 @@ def _reveal_track(r: Round) -> RevealTrack:
     assert info is not None
     return RevealTrack(
         display_name=info.display_name, folder=info.folder, title=info.title, artist=info.artist
+    )
+
+
+def _track_info(info: RevealInfo) -> RevealTrack:
+    return RevealTrack(
+        display_name=info.display_name, folder=info.folder, title=info.title, artist=info.artist
+    )
+
+
+def game_record(s: SessionState, finished_at: int) -> GameRecord:
+    ranking = standings(s)
+    results = _final_results(s, ranking)
+    assert results is not None
+    return GameRecord(
+        game_id=s.game.game_id,
+        finished_at=finished_at,
+        players=_players(s, ""),
+        results=results,
+        teams=team_standings(s, ranking),
     )
 
 
@@ -500,6 +605,13 @@ def _settings(s: SessionState) -> GameSettings:
         auto_start=settings.auto_start,
         prefetch_depth=settings.prefetch_depth,
         allow_repeats=settings.allow_repeats,
+        answer_mode=settings.answer_mode,
+        title_points=settings.title_points,
+        artist_points=settings.artist_points,
+        instructions=settings.instructions,
+        captured_policy=settings.captured_policy,
+        normalize_audio=settings.normalize_audio,
+        avoid_silence=settings.avoid_silence,
     )
 
 
@@ -588,6 +700,7 @@ def _history(s: SessionState, player_id: str) -> list[HistoryEntry]:
                 order=answer.order,
                 near_tie=answer.near_tie,
                 points=s.journal.round_points(game_id, r.id, player_id),
+                track=_reveal_track(r),
             )
         )
     return entries
@@ -658,6 +771,9 @@ def _host_panel(s: SessionState, p: Player, ranking: list[StandingRow]) -> HostP
         last_play_id=r.plays[-1].play_id if r is not None and r.plays else None,
         final_review=_final_rows(s, ranking) if g.phase is GamePhase.FINAL_SCORE_REVIEW else None,
         warnings=_warnings(s),
+        history=[GameRecord.model_validate(entry) for entry in reversed(s.archives)]
+        if g.phase in {GamePhase.LOBBY, GamePhase.FINAL_RESULTS}
+        else [],
     )
 
 

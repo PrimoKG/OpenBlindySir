@@ -28,6 +28,7 @@ class SendPlay:
 @dataclass(frozen=True, slots=True)
 class SendStop:
     play_id: str
+    stop_at: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +53,8 @@ class RequestPrepare:
     track_id: str
     start_fraction: float
     duration_s: float
+    normalize_audio: bool = True
+    avoid_silence: bool = True
 
 
 @dataclass(frozen=True, slots=True)

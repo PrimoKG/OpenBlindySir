@@ -66,13 +66,31 @@ def take(s: SessionState) -> TrackRef | None:
         ref = queue.popleft()
         if ref not in s.game.unavailable and track_exists(s, ref):
             return ref
+    if s.game.settings.allow_repeats:
+        candidates = [t for t in pool(s) if t not in {slot.track_ref for slot in live_slots(s)}]
+        # A one-track library may repeat after its previous round has finished.
+        if candidates:
+            s.rng.shuffle(candidates)
+            queue.extend(candidates[1:])
+            return candidates[0]
     return None
 
 
 def pool_status(s: SessionState) -> PoolStatus:
-    size = len(pool(s))
+    tracks = pool(s)
+    size = len(tracks)
+    fresh = sum(t not in s.played for t in tracks)
+    reserved = sum(slot.track_ref is not None for slot in live_slots(s))
     if s.game.phase is GamePhase.IN_GAME:
         remaining = len(s.game.queue)
     else:
-        remaining = len([t for t in pool(s) if t not in s.played])
-    return PoolStatus(size=size, remaining=remaining, exhausted=remaining == 0)
+        remaining = size if s.game.settings.allow_repeats else fresh
+    return PoolStatus(
+        size=size,
+        remaining=remaining,
+        exhausted=size == 0 or (remaining == 0 and reserved == 0),
+        fresh=fresh,
+        played=size - fresh,
+        unavailable=len(s.game.unavailable),
+        reserved=reserved,
+    )
