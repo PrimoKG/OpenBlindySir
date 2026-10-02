@@ -121,10 +121,12 @@ def h_configure(
     if patch.prefetch_depth is not None:
         settings.prefetch_depth = patch.prefetch_depth
     if patch.allow_repeats is not None:
-        turned_on = patch.allow_repeats and not settings.allow_repeats
+        changed = patch.allow_repeats != settings.allow_repeats
         settings.allow_repeats = patch.allow_repeats
-        if turned_on and g.phase is GamePhase.IN_GAME:
-            g.queue = selection.build_queue(s, include_played=True)
+        if changed and g.phase is GamePhase.IN_GAME:
+            g.queue = selection.build_queue(s, include_played=patch.allow_repeats)
+            if not patch.allow_repeats:
+                selection.drop_played_from_idle_slots(s)
     s.touched = True
     fx.log("game_configured", fields=",".join(sorted(given)))
 

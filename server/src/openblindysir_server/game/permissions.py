@@ -6,7 +6,13 @@ key): whether the command is allowed in the current phase and round state.
 
 from collections.abc import Callable
 
-from openblindysir_protocol.enums import BridgeState, EndGameMode, GamePhase, RoundState
+from openblindysir_protocol.enums import (
+    AssetState,
+    BridgeState,
+    EndGameMode,
+    GamePhase,
+    RoundState,
+)
 from openblindysir_protocol.errors import StartBlocker
 from openblindysir_protocol.host_commands import HOST_COMMAND_NAMES
 from openblindysir_server.game import selection
@@ -91,7 +97,13 @@ def _next(s: SessionState, issuer: Player) -> bool:
 def _force_start(s: SessionState, issuer: Player) -> bool:
     del issuer
     r = current_round(s.game)
-    return r is not None and r.state is RoundState.LOADING and len(ready_ids(s, r)) >= 1
+    return (
+        r is not None
+        and r.state is RoundState.LOADING
+        and len(ready_ids(s, r)) >= 1
+        and r.slot.asset_id in s.assets
+        and s.assets[r.slot.asset_id].state is AssetState.STORED
+    )
 
 
 def _stop(s: SessionState, issuer: Player) -> bool:

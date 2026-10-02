@@ -2,7 +2,7 @@
 
 from collections import deque
 
-from openblindysir_protocol.enums import GamePhase
+from openblindysir_protocol.enums import GamePhase, RoundState
 from openblindysir_protocol.views import PoolStatus
 from openblindysir_server.game.state import SessionState, Slot, TrackRef, current_round
 
@@ -26,11 +26,19 @@ def pool(s: SessionState) -> list[TrackRef]:
 
 
 def live_slots(s: SessionState) -> list[Slot]:
+    """Slots whose track is in use: the pipeline and the current round while it is live."""
     slots: list[Slot] = list(s.game.pipeline)
     r = current_round(s.game)
-    if r is not None:
+    if r is not None and r.state is not RoundState.REVEALED:
         slots.insert(0, r.slot)
     return slots
+
+
+def drop_played_from_idle_slots(s: SessionState) -> None:
+    """Repeats turned off: prefetch slots not prepared yet give up already-played tracks."""
+    for slot in s.game.pipeline:
+        if slot.track_ref in s.played and slot.asset_id is None:
+            slot.track_ref = None
 
 
 def build_queue(s: SessionState, *, include_played: bool) -> deque[TrackRef]:

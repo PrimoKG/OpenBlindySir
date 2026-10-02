@@ -163,7 +163,8 @@ def handle_audio_status(s: SessionState, cmd: c.AudioStatusIn, at: Instant, fx: 
     if before != after:
         s.touched = True
     asset_id = msg.asset_id
-    if asset_id is not None and msg.state in (AudioState.READY, AudioState.PLAYING):
+    known = asset_id is not None and asset_id in s.assets
+    if known and asset_id is not None and msg.state in (AudioState.READY, AudioState.PLAYING):
         ready = s.asset_ready.setdefault(asset_id, {})
         if p.id not in ready:
             ready[p.id] = at.mono_ms

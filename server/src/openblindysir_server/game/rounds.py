@@ -120,8 +120,13 @@ def begin_countdown(s: SessionState, r: Round, at: Instant, fx: EffectSink) -> N
     """First PLAY of the round: ``official_start_at`` is fixed here, once and for all."""
     assert r.official_start_at is None
     asset = assets.stored(s, r.slot.asset_id)
-    assert asset is not None
-    assert r.slot.track_ref is not None
+    if asset is None or r.slot.track_ref is None:
+        # Defensive: the clip vanished meanwhile; prepare it again rather than play nothing.
+        r.slot.asset_id = None
+        r.state = RoundState.PREPARING
+        r.ready_deadline = None
+        s.touched = True
+        return
     duration = clip_ms(s, r)
     start_at = at.mono_ms + s.config.lead_ms
     play = Play(s.ids.play_id(), asset.asset_id, start_at, 0.0, start_at + duration)

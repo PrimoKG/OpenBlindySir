@@ -153,6 +153,8 @@ def handle_job_done(s: SessionState, cmd: c.JobDoneIn, at: Instant, fx: EffectSi
     asset = asset_for_job(s, msg.job_id)
     if asset is None or asset.state not in IN_FLIGHT_ASSET_STATES:
         fx.log("job_late", job_id=msg.job_id)
+        if asset is not None:
+            wake_waiting_slots(s, asset.track_ref.bridge_id)  # the Bridge freed a place
         return
     upload = asset.upload
     if upload is None or upload.sha256 != msg.sha256 or upload.size != msg.bytes:
@@ -176,6 +178,8 @@ def handle_job_failed(s: SessionState, cmd: c.JobFailedIn, at: Instant, fx: Effe
     asset = asset_for_job(s, cmd.job_id)
     if asset is None or asset.state not in IN_FLIGHT_ASSET_STATES:
         fx.log("job_late", job_id=cmd.job_id)
+        if asset is not None and cmd.code is not JobFailureCode.QUEUE_FULL:
+            wake_waiting_slots(s, asset.track_ref.bridge_id)  # the Bridge freed a place
         return
     fail_asset(s, asset, map_job_failure(cmd.code), fx)
     if cmd.code is not JobFailureCode.QUEUE_FULL:
@@ -193,6 +197,17 @@ def handle_asset_evicted(s: SessionState, cmd: c.AssetEvicted, at: Instant, fx: 
     for slot in s.game.pipeline:
         if slot.asset_id == cmd.asset_id:
             slot.asset_id = None
+    r = current_round(s.game)
+    if (
+        r is not None
+        and r.slot.asset_id == cmd.asset_id
+        and r.state in (RoundState.PREPARING, RoundState.LOADING)
+    ):
+        # Not yet played: prepare the same track again instead of starting without audio.
+        r.slot.asset_id = None
+        r.state = RoundState.PREPARING
+        r.loading_since = None
+        r.ready_deadline = None
     fx.log("asset_evicted", reason="cache_full")
 
 
@@ -318,10 +333,12 @@ def pipeline_target(s: SessionState) -> int:
     r = current_round(g)
     if g.phase is not GamePhase.IN_GAME or g.ending is not None or r is None:
         return 0  # spec §7.1: prefetch stops when the end is requested
-    if r.state in (RoundState.QUEUED, RoundState.PREPARING):
-        return 0  # spec §7.3: N+1 is requested only once N enters LOADING
     remaining = g.settings.rounds - r.number
-    return max(0, min(g.settings.prefetch_depth, remaining))
+    target = max(0, min(g.settings.prefetch_depth, remaining))
+    if r.state in (RoundState.QUEUED, RoundState.PREPARING):
+        # spec §7.3: new prefetch only once N enters LOADING; slots already prepared stay.
+        return min(target, len(g.pipeline))
+    return target
 
 
 def ensure_pipeline(s: SessionState, at: Instant, fx: EffectSink) -> bool:
@@ -387,6 +404,7 @@ def retire_unretained(s: SessionState, at: Instant, fx: EffectSink) -> bool:
             continue
         if asset.state is AssetState.STORED:
             asset.state = AssetState.EVICTED
+            s.asset_ready.pop(asset.asset_id, None)
             fx.log("asset_evicted", job_id=asset.job_id)
             changed = True
         elif asset.state in IN_FLIGHT_ASSET_STATES:
