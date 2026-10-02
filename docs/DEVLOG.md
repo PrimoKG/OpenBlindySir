@@ -195,3 +195,101 @@
 - CI GitHub jamais exécutée (pas de remote).
 
 **Prochaine étape** — Étape 6 (Bridge réel) : déjà en grande partie couverte (scanner, sandbox, sélection de dossiers, préchargement, remplacement ; tests Windows verts en local). Puis étape 7 : variantes d'intégration et E2E Playwright.
+
+## 2026-10-02 — Robustesse (§26 étape 7)
+
+**Objectif** — Couvrir les scénarios de panne du §20.2 sur la vraie pile (serveur, Bridge démo, bots, navigateurs) : reconnexion, perte du Bridge, assets invalides, fichiers disparus, fin anticipée. Ajouter un E2E Playwright passant réellement par l'interface et vérifier l'absence de fuite et de régression. Aucune nouvelle fonctionnalité.
+
+**Scénarios couverts**
+- **Reconnexion pendant OPEN** (intégration, 3 bots + hôte) :
+  - brouillon puis coupure brutale du transport : le joueur passe OFFLINE et le compteur des autres n'attend plus que 3 joueurs ;
+  - reconnexion avec le même cookie : même identité, round OPEN, brouillon restauré, `play` présent (départ en rattrapage) ;
+  - un second onglet supplante la connexion (4001), qui ne peut plus rien envoyer ;
+  - reprise, validation acceptée, `late_start_ms > 0` dans la revue de l'hôte, points conservés jusqu'à `FINAL_RESULTS`.
+- **Bridge tué puis relancé** (intégration) :
+  - les extraits déjà `STORED` restent servis (HTTP 200) ;
+  - l'hôte voit `bridge_offline`, le round 2 se joue avec l'extrait préchargé et le round 3 attend en QUEUED/PREPARING sans job zombie ;
+  - relance : nouvelle connexion, catalogue resynchronisé, round 3 joué, `FINAL_RESULTS` ;
+  - cas limite : Bridge tué **pendant l'encodage d'un PREPARE** (`--demo-fault slow-encode=4000`). Le job passe en `job_failed`, la liste des jobs en vol est vide, puis la partie reprend après relance.
+- **Uploads corrompus** :
+  - en intégration, `--demo-fault corrupt-upload=1` : refus sur le SHA-256, nouvel essai, puis `asset_stored` ;
+  - en tests serveur (14 cas) : mauvais magic bytes, Ogg envoyé à un serveur AAC (MIME incohérent), contenu tronqué, SHA-256 faux ou mal formé, corps trop gros (annoncé ou en flux), jeton faux, expiré, rejoué, jeton d'un autre asset, asset sans job, identifiant d'asset malformé ;
+  - un asset refusé n'est jamais `STORED` ni servi ; un seul nouvel essai sur le même morceau, puis le morceau est remplacé ; aucun jeton dans les logs.
+- **Fichier supprimé après le scan** :
+  - en intégration, `--demo-fault delete-track=1` : `track_unavailable code=NOT_FOUND`, remplacement automatique, aucun chemin dans la console du Bridge ;
+  - côté Bridge : fichier supprimé, renommé ou remplacé après le scan → `NOT_FOUND`, et aucun message ne contient le nom, le dossier ou la racine.
+  - Les cas lien symbolique et junction étaient déjà couverts par les tests du bac à sable ; ils n'ont pas été dupliqués.
+- **Fin anticipée pendant OPEN** (intégration, paramétrée) :
+  - `score` : OPEN → REVIEW (`ending`), aucun N+1 proposé, notation puis publication, `FINAL_SCORE_REVIEW` puis `FINAL_RESULTS` avec exactement les points attribués ;
+  - `abandon` : directement `FINAL_SCORE_REVIEW` puis `FINAL_RESULTS`, 0 round joué, tous les scores à 0 alors que des réponses étaient validées ;
+  - dans les deux cas : aucun job en vol et cache audio vide à la fin.
+- **Heartbeat** (horloge contrôlable, balayeur exécuté dans la boucle de l'application) :
+  - des PING réguliers maintiennent le joueur en ligne ;
+  - un joueur silencieux passe OFFLINE seul (fermeture 1001), les autres le voient, puis il revient ONLINE avec la même session ;
+  - le fait que le ready check ignore les joueurs OFFLINE reste couvert par le test du cœur.
+- **Limitation de débit** :
+  - des mots de passe faux répétés déclenchent 429 ; un mot de passe correct passe une fois la fenêtre écoulée ;
+  - les succès ne comptent pas, même entrelacés avec des échecs ;
+  - la limite du mot de passe hôte est distincte et ne bloque pas l'entrée des joueurs.
+  - La spec §12 reste canonique et inchangée.
+- **FFmpeg** :
+  - des playlists ffconcat et HLS déguisées en `.mp3` sont refusées (`DECODE_ERROR`), même quand elles pointent dans la racine. C'est le complément multiplateforme de la régression junction, qui reste propre à Windows ;
+  - des métacaractères de shell dans un nom de fichier restent de simples données ;
+  - test de mutation manuel : en retirant `-format_whitelist`, les deux tests ffconcat échouent ;
+  - [ADR 0008](adr/0008-ffmpeg-demuxer-whitelist.md) et `bridge-security.md` documentent la décision.
+- **Fuzzer** : la machine à états Hypothesis du cœur reste le fuzzer permanent. Un profil `nightly` (3 000 séquences d'au plus 120 pas, environ 5 min) a été exécuté une fois en local sans rupture d'invariant ; il tourne chaque nuit en CI. Toute découverte devra devenir un test déterministe.
+
+**E2E Playwright (Chromium)** — `web/e2e/game.spec.ts`, lancé par `tools/e2e_stack.py` (serveur servant `web/dist`, `DEV_MODE`, `CLIP_FORMAT=opus`, Bridge démo). Un hôte en mode joueur et deux joueurs, chacun dans son propre contexte, jouent 2 rounds en passant par l'interface :
+- lobby, supplantation par un second onglet puis « Reprendre ici » ;
+- réglages et dossier dans le tiroir hôte, lancement, compte à rebours ;
+- VALIDER et « ✓ Réponse enregistrée » sans aucun temps affiché ; compteur « 1/3 ont validé » sans nom ;
+- rechargement de la page en plein round : le brouillon est restauré, puis validé ;
+- en REVIEW, le joueur ne voit ni les réponses, ni les temps, ni les rangs des autres ; l'hôte voit tout et note ;
+- au reveal, tout le monde voit tout ;
+- vérification finale : +2 pour un joueur et −1 pour l'hôte lui-même, affichés « avant → delta → après ». Les joueurs ne voient pas ce brouillon de correction ;
+- confirmation, résultats (podium, scores, ajustements finaux), puis fin de session : tout le monde revient à l'écran d'entrée.
+
+Contrôles transverses de l'E2E :
+- **anti-spoiler** : les trames WebSocket reçues par chaque joueur avant REVEALED ne contiennent ni `relpath`, ni `track_id`, ni `elapsed_ms`, ni dossier, ni nom de fichier, ni titre ou artiste démo, ni la réponse d'un autre ;
+- **audio** : chaque navigateur a envoyé `AUDIO_STATUS READY` (téléchargement et décodage) et un `PLAYBACK_REPORT` par round.
+
+**Configuration headless** — Le Chromium de Playwright n'a pas de décodeur AAC, d'où les extraits Opus pour l'E2E. Le Chromium headless est lancé avec `--autoplay-policy=no-user-gesture-required` ; le test clique quand même sur « Tester mon audio ». Aucune vérification acoustique : seuls l'état, le décodage, la planification et les rapports sont vérifiés.
+
+**WebKit** — Non validé. Sous Windows, le WebKit de Playwright n'expose pas `AudioContext`, et l'écran de déverrouillage audio ne peut pas se fermer. Le job nightly `e2e-webkit` tourne sous Linux sans être bloquant (`continue-on-error`) ; son premier passage échoue plus loin. L'audio se déverrouille et Alice valide, mais Bob n'affiche jamais « 1/3 ont validé » dans les 30 s. La relance échoue ensuite pour une raison d'isolation : la première tentative n'a pas atteint la fin de session, et les pseudos sont déjà pris. Cause non analysée (pas d'instantané de page dans le rapport) : **point ouvert**. Ce n'est **pas** une validation iOS.
+
+**Reconnexion en E2E** — Couverte par le rechargement de page en plein round et par la supplantation via un second onglet. Une coupure réseau simulée (`setOffline`) n'est pas utilisée, car elle ne ferme pas de façon fiable un WebSocket déjà ouvert. La coupure brutale du transport est couverte en intégration.
+
+**Bugs** — Aucun bug fonctionnel découvert.
+- Défaut d'observabilité corrigé (`771da99`) : trois branches de refus d'upload (en-tête SHA-256 mal formé, corps annoncé trop gros, asset plus en vol) refusaient sans écrire `upload_rejected`.
+- Défaut de test corrigé dans `47b2c20` : le test Windows de régression ffconcat passait aussi pour une mauvaise raison, car le dossier de travail du job n'existait pas. Le helper le crée désormais, et le test de mutation confirme que la protection est bien ce qui le fait passer.
+
+**Zones touchées** — server/tests (integration, shell, conftest), server/src (`audio/routes.py`, logs uniquement), bridge/tests, tools (`bots.py`, `e2e_stack.py`), web (e2e, `playwright.config.ts`), CI (`e2e`, `nightly.yml`), docs (ADR 0008, `bridge-security.md`).
+
+**Tests exécutés** (poste Windows du mainteneur)
+- Ruff, ruff format, Pyright : OK.
+- Python, `uv run pytest` (profil `ci`) : **498 réussis, 1 ignoré** (lien symbolique non autorisé sans le mode développeur Windows) :
+  - protocole 143 ;
+  - cœur 257 ;
+  - shell serveur 65 ;
+  - Bridge 33 + 1 ignoré.
+- Intégration, `pytest server/tests/integration -m integration` : **8/8** (partie complète + 7 variantes, 4 min 17 s).
+- Fuzzer `nightly` du cœur : 1/1 (4 min 55 s).
+- Web : Biome OK, `tsc` OK, Vitest **21/21**, build OK.
+- Playwright Chromium : **1/1** ; stabilité vérifiée sur 3 puis 5 répétitions consécutives, toutes réussies.
+- Playwright WebKit (Windows) : 0/1, limitation de l'environnement décrite plus haut.
+
+**GitHub** — Dépôt public `PrimoKG/OpenBlindySir` ; `main` poussé (`fd64827`). CI du push (run 36998584922) : 8/8 jobs verts (hygiene, python, protocol-drift, web, bridge-linux, bridge-windows, integration, **e2e** Chromium sous Linux). Nightly déclenché manuellement (run 36998597618) : `fuzz-core` vert ; `e2e-webkit` rouge (non bloquant), voir WebKit.
+
+**Portes**
+- G1: PENDING USER MEASUREMENT
+- G2: PENDING USER MEASUREMENT
+
+Elles ne bloquent pas l'étape 7, mais bloquent toute validation de release.
+
+**État** — DONE pour l'étape 7 (robustesse).
+
+**Problèmes connus**
+- WebKit n'est pas validé : compteur non affiché chez un joueur sous WebKit Linux, à analyser avec la trace du nightly ; iOS et Android n'ont pas été testés sur appareils réels.
+- L'absence du compteur quand moins de 3 joueurs sont attendus est couverte par les tests du cœur, pas en E2E.
+
+**Prochaine étape** — Étape 8 (déploiement VPS et soirée alpha). Non commencée, en attente du feu vert.
