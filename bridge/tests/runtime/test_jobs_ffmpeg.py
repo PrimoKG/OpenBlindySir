@@ -58,9 +58,13 @@ def prepare(track_id: str, duration: float = 12.0) -> Prepare:
     )
 
 
-def run_job(root: Path, track_id: str, tmp_path: Path) -> tuple[list[Any], dict[str, bytes]]:
+def run_job(
+    root: Path, track_id: str, tmp_path: Path, catalog: LocalCatalog | None = None
+) -> tuple[list[Any], dict[str, bytes]]:
+    """Run one PREPARE; ``catalog`` lets a test change the files after the scan."""
     tools = ffmpeg.discover()
-    catalog = LocalCatalog.from_scan(scan(root))
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    catalog = catalog or LocalCatalog.from_scan(scan(root))
     sent: list[Any] = []
     uploads: dict[str, bytes] = {}
 
@@ -154,3 +158,70 @@ def test_ffconcat_playlist_cannot_read_outside_root(tmp_path: Path) -> None:
     assert not uploads
     failed = next(m for m in sent if isinstance(m, JobFailed))
     assert failed.code in (JobFailureCode.DECODE_ERROR, JobFailureCode.NOT_FOUND)
+
+
+# --- files changed after the scan (spec §11): NOT_FOUND, never a path -----------------------
+
+
+def _after_scan(tmp_path: Path, change: str) -> tuple[Path, list[Any], dict[str, bytes]]:
+    root = tmp_path / "music"
+    lavfi(root / "Dossier" / "piste.flac", "sine=frequency=500:duration=40")
+    catalog = LocalCatalog.from_scan(scan(root))
+    track = next(iter(catalog.entries))
+    target = root / "Dossier" / "piste.flac"
+    if change == "deleted":
+        target.unlink()
+    elif change == "renamed":
+        target.rename(root / "Dossier" / "piste-renommee.flac")
+    elif change == "replaced":
+        lavfi(root / "autre.flac", "sine=frequency=700:duration=50")
+        (root / "autre.flac").replace(target)
+    sent, uploads = run_job(root, track, tmp_path / "work", catalog)
+    return root, sent, uploads
+
+
+@pytest.mark.parametrize("change", ["deleted", "renamed", "replaced"])
+def test_file_changed_after_scan_is_not_found_without_path(tmp_path: Path, change: str) -> None:
+    root, sent, uploads = _after_scan(tmp_path, change)
+    assert not uploads
+    failed = next(m for m in sent if isinstance(m, JobFailed))
+    assert failed.code is JobFailureCode.NOT_FOUND
+    wire = "".join(m.model_dump_json() for m in sent)
+    assert "piste" not in wire
+    assert str(root) not in wire
+    assert "Dossier" not in wire
+
+
+# --- FFmpeg demuxer whitelist (ADR 0008): playlists never open other files ----------------
+
+
+@pytest.mark.parametrize(
+    "playlist",
+    [
+        "ffconcat version 1.0\nfile 'inner.wav'\nduration 60\n",
+        "#EXTM3U\n#EXT-X-TARGETDURATION:60\n#EXTINF:60,\ninner.wav\n#EXT-X-ENDLIST\n",
+    ],
+    ids=["ffconcat", "hls"],
+)
+def test_playlist_disguised_as_audio_is_refused(tmp_path: Path, playlist: str) -> None:
+    """Even pointing inside the root, a playlist is not audio: the demuxer is not allowed."""
+    root = tmp_path / "music"
+    lavfi(root / "inner.wav", "sine=frequency=1000:duration=60")
+    (root / "trap.mp3").write_text(playlist, encoding="utf-8")
+    sent, uploads = run_job(root, track_id_of(root, "trap.mp3"), tmp_path / "work")
+    assert not uploads
+    failed = next(m for m in sent if isinstance(m, JobFailed))
+    assert failed.code is JobFailureCode.DECODE_ERROR
+
+
+def test_shell_metacharacters_in_names_are_plain_data(tmp_path: Path) -> None:
+    """argv lists without a shell: a hostile file name is just a name."""
+    root = tmp_path / "music"
+    canary = tmp_path / "pwned"
+    name = f"a & copy nul {canary.name} ; $(touch {canary.name}) `id` 'q' %OS%.flac"
+    lavfi(root / name, "sine=frequency=600:duration=40")
+    sent, uploads = run_job(root, track_id_of(root, name), tmp_path / "work")
+    assert any(isinstance(m, JobDone) for m in sent)
+    assert len(uploads) == 1
+    assert not canary.exists()
+    assert not (tmp_path / "work" / canary.name).exists()
