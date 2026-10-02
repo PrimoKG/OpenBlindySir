@@ -293,3 +293,118 @@ Elles ne bloquent pas l'étape 7, mais bloquent toute validation de release.
 - L'absence du compteur quand moins de 3 joueurs sont attendus est couverte par les tests du cœur, pas en E2E.
 
 **Prochaine étape** — Étape 8 (déploiement VPS et soirée alpha). Non commencée, en attente du feu vert.
+
+## 2026-10-02 — Passe UX/UI du jeu
+
+**Objectif** — Après lecture de la spec, du HANDOFF et du journal, améliorer le
+frontend existant pour une soirée entre amis : priorité au joueur, actions hôte
+contextuelles, identité cohérente et lecture confortable sur téléphone.
+
+**Décisions**
+- Réutilisation des composants React locaux et des éléments HTML natifs ; aucune
+  bibliothèque de design, d'icônes ni police distante ajoutée.
+- Fond papier, encre sombre, un accent terre cuite, corps à 17 px, titres Georgia
+  et signature de disque en CSS. Contrastes des principaux textes vérifiés
+  numériquement, cibles de boutons d'au moins 44 × 44 px et mouvement réduit.
+- Une scène de jeu commune aux trois rôles. Les commandes hôte suivent la partie
+  sur téléphone et restent à côté sur ordinateur ; la notation et la vérification
+  finale prennent toute la largeur. Réglages avancés et diagnostic accessibles
+  dans des disclosures natifs. Inspection, grammaire et parcours dans [UX.md](UX.md).
+- Aucune modification du protocole, du cœur, des scores, des délais, des
+  permissions ou du moteur de synchronisation audio.
+
+**Implémentation et scénarios**
+- Entrée avec pseudo puis mot de passe partagé, élévation hôte distincte,
+  connexion en cours, erreur compréhensible et relance.
+- Lobby avec test audio, confirmation entendue, volume et participants. La reprise
+  audio reste dans le flux et ne recouvre plus les réponses ni les commandes hôte.
+- Préparation, chargement, compte à rebours, lecture et fin d'extrait explicités.
+  Brouillon restauré, validation vide désactivée, attente d'accusé et réponse
+  définitive affichée ; aucun temps personnel anticipé ajouté.
+- Revue lisible avec notation manuelle, temps, quasi-ex æquo, retard audio et
+  brouillon capturé. Publication après les réponses. Révélation, classement,
+  corrections finales, confirmation, podium, nouvelle partie et fin de session.
+- Hôte joueur et MC vérifiés. Le MC voit la progression autorisée sans saisie de
+  réponse ; les prochains morceaux restent accessibles dans « À venir ».
+- Chargement/erreur de bibliothèque et diagnostic, échec audio et relance,
+  reconnexion avec mutations hôte désactivées, reprise d'une session supplantée
+  et exclusion explicites. Textes ajoutés dans les dictionnaires français et anglais.
+- Trois parcours Playwright avec le vrai serveur et Bridge démo : deux parties de
+  deux manches à 1280 et 320 px, puis une partie MC à 390 px avec réponse capturée,
+  publication, résultats, nouvelle partie et retour au mode joueur. Les tests
+  contrôlent aussi les trames anti-spoiler, READY/PLAYBACK_REPORT, la restauration
+  du brouillon, les scores figés pendant la correction finale, les rangs partagés
+  et l'absence de compteur pour les deux compétiteurs du MC.
+- Seize scénarios d'interface complémentaires avec vues synthétiques : toutes les
+  phases à 320/390/1280 px, textes longs, cibles et tableaux, démarrage forcé permis,
+  Enter pour valider, focus/Échap du dialogue, erreurs et reconnexions, langue
+  anglaise, contrastes et réduction de mouvement. Captures relues visuellement.
+
+**Bugs réellement découverts**
+- L'ancienne élévation restait mémorisée côté interface après une fin de session,
+  puis une nouvelle entrée sur `/host`. Le formulaire d'élévation est de nouveau
+  présenté. Les permissions du serveur n'étaient pas contournées.
+- En OPEN, le serveur retire le PLAY actif à la fin ou à l'arrêt de l'extrait.
+  L'affichage pouvait alors rester sur un état audio « prêt ». Il montre désormais
+  « Extrait terminé », sans fermer le champ pendant le délai de réponse.
+- Une régression de la refonte a été interceptée avant livraison : à 320 px, le
+  réglage son dépassait le bord droit avec un pseudo court. Il est ancré à l'en-tête
+  sur téléphone ; un test couvre les pseudos courts et longs.
+- L'E2E précédent laissait une session non terminée après un échec, ce qui pouvait
+  bloquer les relances avec des pseudos déjà pris. Nettoyage du salon de test avant
+  et après chaque parcours réel par les commandes existantes. Cela ne constitue
+  pas une résolution de l'échec du compteur WebKit Linux.
+
+**Zones touchées** — `web/src/app`, `web/src/player`, `web/src/host`,
+`web/src/ui/components.tsx`, `web/src/styles.css`, les deux dictionnaires i18n,
+`web/tests/presentation.test.ts`, `web/e2e`, `CHANGELOG.md`, `docs/UX.md` et ce journal.
+Le `docs/HANDOFF.md` préexistant est laissé intact et hors des commits.
+
+**Tests exécutés** — Poste Windows, Chromium headless installé dans le cache
+ignoré de `web/node_modules`, pile serveur et Bridge démo dédiée aux tests (8766).
+- Python ciblé : `.venv/Scripts/python.exe -m pytest
+  server/tests/game/test_views_leak_matrix.py server/tests/game/test_permissions.py
+  server/tests/game/test_final_review.py -p no:cacheprovider --basetemp
+  web/test-results/python-ui-checks` : **123/123**.
+- Intégration Python : **non relancée** pendant cette passe frontend.
+- Bridge unitaire : **non relancé** ; le Bridge démo réel est exercé par les trois
+  parcours navigateur. Les sons restent synthétiques, aucune musique personnelle.
+- Web : `npm run lint` **OK**, `npm run typecheck` (dans le build) **OK**, Vitest
+  `npm run test` **28/28**, dont sept cas de présentation de l'extrait.
+- Playwright Chromium : `E2E_PORT=8766`, cache navigateur local puis `npm run e2e`
+  **19/19**, dernière exécution **53,4 s**. Le contrôle ajouté sur le réglage son
+  avait d'abord échoué à 320 px (bord droit à 444,6 px), puis la suite complète est
+  passée après correction. Des échecs intermédiaires de fixture/type, d'état de
+  disclosure et d'isolation ont été corrigés avant ce résultat final.
+- Playwright WebKit : **non exécuté**, toujours non validé ; aucun appareil iOS ou
+  Android réel testé. Les extraits E2E sont Opus et le navigateur est muet : pas de
+  mesure acoustique ni de validation AAC de production.
+- Build : `npm run build` **OK** ; types et compilation Vite passent.
+- `git diff --check` **OK**. Hygiène exécutée après chaque `git add` avant les
+  commits ; aucun secret, son, build, cache, capture ou dépendance indexé.
+- Environnement : le premier pytest avait réussi les assertions mais terminé en
+  erreur en écrivant le cache préexistant interdit ; relance sans cache réussie.
+  Le navigateur Chromium était absent et a été installé dans le dossier ignoré.
+  Ces ajustements ne changent ni les dépendances du projet ni les règles du jeu.
+
+**Git / GitHub** — Branche locale `codex/ux-game-experience`, issue de `main`
+`8d240d0`. Commits granulaires : `04275c8`
+(`feat(web): refresh game screens and shared visual language`), `871754c`
+(`test(web): cover responsive game and host journeys`), puis documentation séparée.
+Aucun push ni PR pendant cette intervention : résultat livré localement pour
+revue visuelle. Aucune nouvelle CI GitHub déclenchée ; les résultats ci-dessus
+sont locaux. Aucun squash, merge ni release.
+
+**Gates**
+- G1: PENDING USER MEASUREMENT
+- G2: PENDING USER MEASUREMENT
+
+**État** — DONE pour la passe UX/UI et les vérifications locales demandées.
+
+**Restant / problèmes connus** — WebKit Linux (compteur) reste ouvert ; Safari,
+iOS et Android demandent de vrais appareils. Le contrôle de contraste ne remplace
+pas un audit d'accessibilité complet. La vraie bibliothèque du mainteneur, G1/G2,
+le VPS et toute release restent hors de cette intervention.
+
+**Prochaine étape recommandée** — Revue sur appareils réels des vues joueur et
+hôte, en gardant G1/G2 en attente jusqu'aux mesures du mainteneur.
