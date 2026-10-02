@@ -143,3 +143,17 @@ def test_kick_closes_with_4003(harness: Harness) -> None:
         )
         assert close_code(victim) == 4003
     assert harness.client.get("/api/session", headers=harness.cookie(token)).status_code == 401
+
+
+def test_silent_connection_is_swept_offline(harness: Harness) -> None:
+    from openblindysir_server.main import sweep_once  # noqa: PLC0415
+
+    pid, token = harness.join("Silencieux")
+    with harness.player_ws(token) as ws:
+        ws.send_text(HELLO)
+        receive_until(ws, "STATE")
+        harness.clock.advance(21_000)
+        assert sweep_once(harness.runtime) == [pid]
+        assert close_code(ws) == 1001
+    state = harness.runtime.engine.state.players[pid].connection.value
+    assert state == "OFFLINE"

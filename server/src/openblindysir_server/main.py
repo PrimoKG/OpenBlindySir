@@ -21,6 +21,7 @@ from openblindysir_server.config import Settings, to_core_config
 from openblindysir_server.diagnostics import LoopLagMonitor
 from openblindysir_server.diagnostics import router as diagnostics_router
 from openblindysir_server.game import Clock, GameEngine, IdFactory, MonotonicClock, SecretIds
+from openblindysir_server.game import commands as c
 from openblindysir_server.library import routes as library_routes
 from openblindysir_server.logging import get, log_event
 from openblindysir_server.ratelimit import ConnectionCounter, SlidingWindowLimiter
@@ -150,12 +151,25 @@ def _mount_spa(app: FastAPI, static_dir: Path | None) -> None:
         return FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
+def sweep_once(runtime: Runtime) -> list[str]:
+    """Heartbeat (spec §7.4): a connection silent for about 20 s goes OFFLINE.
+
+    The connection is removed from the hub here, so the endpoint will not report the
+    disconnection itself: the sweeper dispatches it. Idle sessions expire too.
+    """
+    now = runtime.clock.now().mono_ms
+    swept: list[str] = []
+    for conn in runtime.hub.connections():
+        if now - conn.last_rx_mono > OFFLINE_AFTER_MS:
+            runtime.hub.close(conn.player_id, 1001)
+            runtime.dispatch(c.Disconnected(conn.player_id))
+            log_event(LOG, "player_heartbeat_lost", player_id=conn.player_id)
+            swept.append(conn.player_id)
+    runtime.sessions.expire_idle(now)
+    return swept
+
+
 async def _sweeper(runtime: Runtime) -> None:
-    """Heartbeat: a connection silent for 20 s goes OFFLINE; idle sessions expire."""
     while True:
         await asyncio.sleep(SWEEP_INTERVAL_S)
-        now = runtime.clock.now().mono_ms
-        for conn in runtime.hub.connections():
-            if now - conn.last_rx_mono > OFFLINE_AFTER_MS:
-                runtime.hub.close(conn.player_id, 1001)
-        runtime.sessions.expire_idle(now)
+        sweep_once(runtime)
