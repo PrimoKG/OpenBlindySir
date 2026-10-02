@@ -836,6 +836,20 @@ Les trois paquets Python restent distincts (`openblindysir_protocol`, `openblind
   - sans Docker : `DEV_MODE=1 uv run openblindysir-server` pour le serveur, `npm run dev` (proxy Vite vers `/api` et le WebSocket), `uv run openblindysir-bridge --demo` ou le Bridge sur un vrai dossier ;
   - `compose.dev.yaml` sert uniquement à tester l'image.
 
+**Hébergement natif sur PC (2026-10-02, demandé par le mainteneur)**
+- Le VPS est une option ; le même serveur mono-processus peut tourner sur le PC
+  de l'hôte, avec le Bridge sur ce PC ou sur un autre ordinateur.
+- `tools/host_pc.py init` prépare une configuration privée et des secrets ; `run`
+  lance le serveur sur la boucle locale et Caddy devant lui, sans Docker.
+- Profil privé : HTTPS sur l'IP LAN ou VPN choisie, certificat local approuvé par
+  les appareils, aucun port entrant de la box à ouvrir pour le jeu. Profil public :
+  domaine vers le PC, HTTPS public et TCP 80/443 redirigés vers Caddy.
+- Les cookies Secure, l'origine exacte, les secrets et les permissions restent
+  inchangés. Le lanceur ne modifie pas le pare-feu, la box ou la confiance système.
+- [Guide d'hébergement](deployment.md) et [guide utilisateur](guide-utilisateur.md)
+  en français pour l'interface v0.1. Cela ne valide ni G1/G2 ni le déploiement VPS
+  ou une release ; le parcours Docker ci-dessus reste prévu pour l'étape 8.
+
 ---
 
 ## 18. Open source et documentation
