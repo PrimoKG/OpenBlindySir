@@ -62,6 +62,8 @@ La fenêtre TOCTOU résiduelle est acceptée : il faudrait un attaquant déjà p
 - Vérification de la version et des encodeurs disponibles au démarrage.
 - S'il manque, message clair avec la commande winget, brew ou apt.
 - **FFmpeg n'est pas embarqué en V0.x**, pour éviter les obligations liées aux builds GPL.
+- Gabarit fixe sans shell. `ffprobe` et `ffmpeg` reçoivent tous les deux `-protocol_whitelist file`, `-format_whitelist mp3,flac,wav,mov,ogg,aiff,asf,aac` et l'entrée `file:` + chemin résolu. Le serveur ne fournit jamais d'argument FFmpeg.
+- FFmpeg détecte le format par le contenu, pas par l'extension. Sans la liste de démultiplexeurs, une playlist `ffconcat` ou HLS nommée `.mp3` pourrait lire d'autres fichiers, y compris hors de la racine. Voir [ADR 0008](adr/0008-ffmpeg-demuxer-whitelist.md) et les tests de régression associés.
 
 **Mode `--demo`** : catalogue virtuel de morceaux synthétiques (sinusoïdes, mélodies de bips, clics générés par `ffmpeg -f lavfi`). Il sert au développement, à la CI, aux tests E2E et à essayer un déploiement **sans aucun contenu protégé**.
 
