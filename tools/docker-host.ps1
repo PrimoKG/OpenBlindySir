@@ -29,7 +29,7 @@ $taskKeys = @('DOMAIN', 'TLS_HOST', 'HTTPS_PORT', 'BIND_IP', 'CADDY_PROFILE',
 $taskSaved = @{}
 foreach ($key in $taskKeys) {
     $taskSaved[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
-    [Environment]::SetEnvironmentVariable($key, $null, 'Process')
+    Remove-Item -LiteralPath "Env:$key" -ErrorAction SilentlyContinue
 }
 Push-Location $taskRoot
 try {
@@ -95,6 +95,7 @@ try {
 } finally {
     Pop-Location
     foreach ($key in $taskKeys) {
-        [Environment]::SetEnvironmentVariable($key, $taskSaved[$key], 'Process')
+        if ($null -eq $taskSaved[$key]) { Remove-Item -LiteralPath "Env:$key" -ErrorAction SilentlyContinue }
+        else { Set-Item -LiteralPath "Env:$key" -Value $taskSaved[$key] }
     }
 }
