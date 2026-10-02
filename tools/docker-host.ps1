@@ -13,6 +13,17 @@ $ErrorActionPreference = 'Stop'
 $taskRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $taskData = Join-Path $taskRoot '.local/docker'
 $taskEnv = Join-Path $taskData 'hosting.env'
+. (Join-Path $PSScriptRoot 'docker-context.ps1')
+
+function Build-DockerImages([string[]]$Targets) {
+    $taskContext = New-DockerBuildContext $taskRoot $taskData
+    try {
+        foreach ($target in $Targets) {
+            $tag = if ($target -eq 'app') { 'openblindysir-server:local' } else { 'openblindysir-bridge:local' }
+            Invoke-Docker @('build', '--target', $target, '--tag', $tag, $taskContext)
+        }
+    } finally { Remove-DockerBuildContext $taskContext $taskData }
+}
 
 function Invoke-Docker([string[]]$DockerArguments) {
     & docker @DockerArguments
@@ -50,7 +61,7 @@ try {
             throw 'Indiquez -MusicDir avec un dossier existant, ou utilisez -Demo.'
         }
         $taskMusic = (Resolve-Path -LiteralPath $MusicDir).Path.Replace('\', '/')
-        if (-not $NoBuild) { Invoke-Docker @('build', '--target', 'app', '--tag', 'openblindysir-server:local', '.') }
+        if (-not $NoBuild) { Build-DockerImages @('app') }
         $taskUser = '0:0'
         if ([Environment]::OSVersion.Platform -eq 'Unix') { $taskUser = "$(id -u):$(id -g)" }
         $taskInit = @('run', '--rm', '--user', $taskUser, '--mount',
@@ -77,8 +88,8 @@ try {
     } elseif ($taskRouting['CADDY_PROFILE'] -ne 'private') { throw 'CADDY_PROFILE doit être private ou public.' }
     switch ($Action) {
         'start' {
-            $taskUp = @('up', '-d', '--wait', '--wait-timeout', '120')
-            if (-not $NoBuild) { $taskUp += '--build' }
+            if (-not $NoBuild) { Build-DockerImages @('app', 'bridge') }
+            $taskUp = @('up', '-d', '--no-build', '--wait', '--wait-timeout', '120')
             Invoke-Docker ($taskCompose + $taskUp)
             Write-Host "Partie : https://$($taskRouting['DOMAIN'])`nHôte : $taskUrl"
             if ($taskRouting['CADDY_PROFILE'] -eq 'private') {
