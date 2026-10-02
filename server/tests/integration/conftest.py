@@ -76,6 +76,13 @@ class Stack:
         self.bridge = subprocess.Popen(args, env=env, stdout=log, stderr=log)
         wait_until(lambda: self.bridge_state() == "ONLINE", 60)
 
+    def server_log(self) -> str:
+        return (self.workdir / "server.log").read_text(encoding="utf-8", errors="replace")
+
+    def bridge_log(self) -> str:
+        path = self.workdir / "bridge.log"
+        return path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+
     def stop_bridge(self) -> None:
         if self.bridge is not None:
             self.bridge.kill()
@@ -85,7 +92,15 @@ class Stack:
 
 
 @pytest.fixture
-def stack(tmp_path: Path) -> Iterator[Stack]:
+def stack(bare_stack: Stack) -> Stack:
+    """Server plus a connected demo Bridge."""
+    bare_stack.start_bridge()
+    return bare_stack
+
+
+@pytest.fixture
+def bare_stack(tmp_path: Path) -> Iterator[Stack]:
+    """Server only: the test starts the Bridge itself (e.g. with fault injection)."""
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
         pytest.skip("FFmpeg is required for the demo Bridge")
     port = free_port()
@@ -112,9 +127,7 @@ def stack(tmp_path: Path) -> Iterator[Stack]:
         wait_until(lambda: httpx.get(f"{base_url}/healthz", timeout=2).status_code == 200)
         stack = Stack(base_url=base_url, port=port, workdir=tmp_path, server=server, logs=[log])
         try:
-            stack.start_bridge()
             yield stack
-            stack.stop_bridge()
         finally:
             if stack.bridge is not None:
                 stack.bridge.kill()

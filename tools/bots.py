@@ -46,6 +46,8 @@ class Bot:
         self.acks: list[dict[str, Any]] = []
         self.errors: list[str] = []
         self.plays: list[dict[str, Any]] = []
+        self.received: list[dict[str, Any]] = []
+        self.close_code: int | None = None
         self.answered: set[str] = set()
         self.ready_assets: set[str] = set()
         self.auto_answer = True
@@ -86,6 +88,41 @@ class Bot:
         self._reader = asyncio.create_task(self._read())
         self._spawn(self._heartbeat())
 
+    async def drop(self) -> None:
+        """Abrupt network loss: the socket dies without a closing handshake."""
+        transport = getattr(self._ws, "transport", None)
+        if transport is not None:
+            transport.abort()
+        if self._reader is not None:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await asyncio.wait_for(self._reader, 5)
+
+    async def reconnect(self) -> None:
+        """Same cookie, new socket; re-declares the clips it already has (kept buffers)."""
+        self.view = {}
+        await self.connect()
+        current = await self.wait_for(lambda v: True)
+        ref = (current.get("audio") or {}).get("current")
+        if ref and ref["asset_id"] in self.ready_assets:
+            await self.send(
+                {"t": "AUDIO_STATUS", "state": "READY", "asset_id": ref["asset_id"], "clock": CLOCK}
+            )
+
+    async def raw_socket(self) -> Any:
+        """A second, unmanaged connection with the same session (another tab)."""
+        ws_url = self.base_url.replace("http", "ws", 1) + "/api/ws"
+        ws = await websockets.connect(
+            ws_url, additional_headers={"Cookie": self.cookie_header(), "Origin": self.origin}
+        )
+        await ws.send(json.dumps({"t": "HELLO", "client_version": "bot", "protocol": PROTOCOL}))
+        return ws
+
+    async def draft(self, round_id: str, text: str) -> None:
+        await self.send({"t": "ANSWER_DRAFT", "round_id": round_id, "text": text})
+
+    async def submit(self, round_id: str, text: str) -> None:
+        await self.send({"t": "ANSWER_SUBMIT", "round_id": round_id, "text": text})
+
     async def close(self) -> None:
         for task in list(self._tasks):
             task.cancel()
@@ -104,7 +141,8 @@ class Bot:
     async def _read(self) -> None:
         try:
             await self._read_loop()
-        except websockets.ConnectionClosed:
+        except websockets.ConnectionClosed as exc:
+            self.close_code = exc.rcvd.code if exc.rcvd is not None else 1006
             return
         except Exception as exc:  # report instead of dying silently
             print(f"{self.nickname}: reader failed: {exc!r}", file=sys.stderr, flush=True)
@@ -113,6 +151,7 @@ class Bot:
     async def _read_loop(self) -> None:
         async for raw in self._ws:
             msg = json.loads(raw)
+            self.received.append(msg)
             kind = msg["t"]
             if kind == "STATE":
                 self.view = msg["view"]
@@ -152,9 +191,15 @@ class Bot:
     async def _heartbeat(self) -> None:
         """PING every 5 s like a browser; the server marks silent players OFFLINE."""
         loop = asyncio.get_running_loop()
+        ws = self._ws
         while True:
             await asyncio.sleep(5)
-            await self.send({"t": "PING", "c": loop.time() * 1000})
+            if ws is not self._ws:
+                return  # a newer connection has its own heartbeat
+            try:
+                await ws.send(json.dumps({"t": "PING", "c": loop.time() * 1000}))
+            except websockets.ConnectionClosed:
+                return
 
     async def _fetch_and_ready(self, ref: dict[str, Any]) -> None:
         response = await self.http.get(ref["url"])
