@@ -408,3 +408,108 @@ le VPS et toute release restent hors de cette intervention.
 
 **Prochaine étape recommandée** — Revue sur appareils réels des vues joueur et
 hôte, en gardant G1/G2 en attente jusqu'aux mesures du mainteneur.
+
+## 2026-10-02 — Guides utilisateur et hébergement natif sur PC
+
+**Objectif** — À la demande du mainteneur, documenter concrètement l'usage du jeu,
+permettre le serveur sur son propre PC pour un LAN ou une partie distante, puis
+commiter, fusionner et pousser les changements après validation.
+
+**Décisions**
+- Le VPS reste facultatif : même serveur, même processus, même protocole. Pas
+  d'ajout de room, de compte, de persistance ni de changement des règles du jeu.
+- `tools/host_pc.py` supervise le serveur existant et le binaire Caddy standard.
+  `init` génère une configuration privée et trois secrets sans écraser un fichier
+  existant ; `run` valide le build/config puis lance les deux services. Une panne
+  d'un service et Ctrl+C entraînent l'arrêt de l'autre.
+- Profil privé : IP LAN ou VPN choisie, HTTPS avec autorité locale à approuver par
+  les appareils ; profil public : domaine, HTTPS et TCP 80/443 redirigés vers le
+  PC. Les procédures box, pare-feu, VPN et certificats sont documentées ; aucune
+  de ces configurations système/réseau n'est appliquée sur le poste par l'agent.
+- Backend uniquement sur 127.0.0.1, proxy approuvé uniquement en boucle locale,
+  cookies Secure et origine exacte conservés ; DEV_MODE refusé pour ce lanceur.
+  Caddy n'installe pas automatiquement une autorité privée dans la confiance
+  système. Son administration est désactivée dans les deux profils.
+- Données Caddy dans `.local/`, ignorées et interdites par le contrôle d'hygiène
+  même en cas d'indexation forcée. Le binaire utilisé pour les vérifications reste
+  dans un cache ignoré, sans installation globale ou dépendance Python/JS ajoutée.
+- Guides en français, correspondant aux textes de l'interface actuelle ; README
+  public anglais corrigé pour supprimer « rien n'est jouable » et l'obligation VPS.
+
+**Implémentation / zones touchées**
+- `tools/host_pc.py`, `deploy/Caddyfile.pc.private`, `deploy/Caddyfile.pc.public`,
+  `.gitignore`, `.env.example`, `tools/check_repo_hygiene.py`.
+- `docs/guide-utilisateur.md` : rejoindre, audio, brouillon/validation, attente,
+  révélation, hôte joueur/MC, notation, corrections, résultats et dépannage.
+- `docs/deployment.md` : prérequis, installation, adresses LAN/VPN/Internet,
+  lancement, arrêt, confiance TLS, Bridge sur le même PC ou ailleurs, DNS/NAT,
+  pare-feu, maintien du PC allumé et perte de la partie à l'arrêt.
+- `README.md`, `CHANGELOG.md`, ajout du parcours PC à `docs/architecture.md`.
+- `server/tests/shell/test_host_pc.py` : 32 nouveaux cas, dont adresses canoniques
+  (IPv4/IPv6 et port standard), entrées ambiguës refusées, secrets conservés,
+  génération sans BOM, origine exacte, loopback et arrêt après échec d'un service.
+- `server/tests/integration/conftest.py` : isolation du format/niveau de logs.
+
+**Bugs réellement découverts**
+- Quatre scénarios d'intégration jouaient correctement mais échouaient sur leurs
+  assertions `event=...` : le terminal hérite de `LOG_FORMAT=json`. Le fixture
+  subprocess impose maintenant `LOG_FORMAT=text` et `LOG_LEVEL=INFO`. Après
+  correction, les huit scénarios passent en gardant JSON dans le terminal parent.
+- Les validations du nouveau lanceur ont aussi intercepté le port zéro et une
+  collision entre port HTTPS et port interne ; ces configurations sont refusées.
+  Aucun nouveau défaut des règles métier découvert.
+
+**Tests exécutés** — Windows, FFmpeg 9.0.2 local, Caddy officiel **2.11.6** en cache.
+- Python : `.venv/Scripts/python.exe -m pytest -p no:cacheprovider --basetemp
+  web/test-results/python-pc-full`, avec FFmpeg dans PATH et profil Hypothesis `ci`
+  : **530 réussis, 1 ignoré, 8 désélectionnés**, 15,84 s. Détail : protocole 143,
+  cœur 257, shell serveur 97, Bridge 33 ; le lien symbolique reste ignoré Windows.
+- Intégration : `pytest server/tests/integration -m integration
+  -p no:cacheprovider --basetemp web/test-results/python-pc-integration-fixed` :
+  **8/8**, 264,02 s. Premier passage : 4/8 réussis, quatre assertions de format
+  héritées échouées, comme expliqué ci-dessus.
+- Bridge : **33 réussis + 1 ignoré**, inclus dans la suite Python ; les huit
+  scénarios d'intégration utilisent aussi le Bridge démo réel avec sons synthétiques.
+- Lanceur/configuration : tests ciblés `test_host_pc.py` + `test_config.py`
+  **46/46** ; inclus ensuite dans la suite complète.
+- Caddy : adaptation et validation réelles des **deux profils** ; écoute privée
+  sur l'interface choisie, publique sur 443, upstream loopback, administration
+  désactivée. Aucun démarrage public ni émission ACME Internet effectué.
+- Smoke HTTPS réel : serveur + Caddy, certificat vérifié avec la racine de test,
+  build Web servi, mauvaise origine refusée, entrée/élévation, cookie `__Host-`
+  Secure/HttpOnly et WSS jusqu'à STATE LOBBY ; arrêt des enfants contrôlé. PASS
+  pour localhost et 127.0.0.1, puis **trois répétitions consécutives** sur l'IP.
+  Le premier probe avait échoué sur une entrée ; sa boucle de readiness pouvait
+  rejouer une entrée après avoir perdu les cookies. Le retry après readiness a
+  été supprimé avant les répétitions. Ce probe ponctuel reste dans le cache ignoré.
+- Hygiène : contrôle positif de l'index après chaque `git add` ; contrôle négatif
+  dans un dépôt jetable, `.local/example-state.json` indexé → refus attendu.
+- Ruff et format : **OK**. Pyright : **0 erreur** avec
+  `--pythonpath .venv/Scripts/python.exe` (le premier appel sans ce chemin cherchait
+  les imports dans le Python système). Génération protocole `--check` : **OK**,
+  aucune dérive. `git diff --check` : **OK**.
+- Web/Vitest : **28/28**, Biome et typecheck **OK**, build **OK** ; Playwright
+  Chromium **19/19**, vérifications de la passe UX précédente, code UI inchangé
+  pendant cette extension d'hébergement. La CI de PR devra les réexécuter.
+- Playwright WebKit : **non exécuté** ; aucun iOS/Android réel ni mesure acoustique.
+
+**Git / GitHub** — Branche `codex/ux-game-experience`. Commits de cette extension :
+`d8f598c` (`feat(tools): support native PC hosting over HTTPS`) et `ad0cffe`
+(`test(server): isolate integration logging from caller`), puis guides et journal
+dans un commit distinct. Les trois commits UX antérieurs sont conservés. Le
+mainteneur a explicitement demandé le commit, la fusion et le push ; la branche
+sera soumise en PR, fusionnée par rebase après CI verte, puis `main` synchronisée.
+L'état distant final et l'URL de PR sont rapportés dans le compte rendu de fin.
+
+**Gates**
+- G1: PENDING USER MEASUREMENT
+- G2: PENDING USER MEASUREMENT
+
+**État** — DONE pour le code, les guides et les vérifications locales.
+
+**Restant** — Essai sur de vrais appareils LAN/VPN et configuration de la box pour
+un accès public ; aucun port ni confiance système modifié ici. WebKit Linux,
+mesures G1/G2, vraie bibliothèque, déploiement VPS/Docker et release restent ouverts.
+
+**Prochaine étape recommandée** — Suivre `docs/deployment.md` avec l'adresse LAN
+ou VPN réelle du PC, puis faire une partie d'essai avec les appareils des participants.

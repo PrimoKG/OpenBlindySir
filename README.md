@@ -7,8 +7,8 @@ game only through the OpenBlindySir Bridge.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-It is built for **one private game at a time**, with 2 to 15 friends playing
-**remotely**: everyone listens in their own browser, usually with a voice chat on the
+It is built for **one private game at a time**, with friends playing on the same
+local network or **remotely**: everyone listens in their own browser, usually with a voice chat on the
 side, types a free-text answer, and the host does the scoring.
 
 ## What it is not
@@ -24,7 +24,7 @@ side, types a free-text answer, and the host does the scoring.
 ## How the Bridge works
 
 ```
-  Players' browsers            VPS (Docker + Caddy)                   PC with the music
+  Players' browsers           Host PC or VPS + Caddy                 PC with the music
 +-------------------+       +------------------------+           +-------------------------+
 | Web UI            |       | OpenBlindySir Server   |           | OpenBlindySir Bridge    |
 | (player or host)  |       |                        |           |                         |
@@ -44,7 +44,8 @@ side, types a free-text answer, and the host does the scoring.
 - The **OpenBlindySir Bridge** is a small command-line program that runs on the
   computer holding your music. It opens an **outbound** connection to your server
   (secure WebSocket for control, HTTPS for uploads): no open port, no port forwarding,
-  no network share.
+  no network share required by the Bridge. If the server runs on the same PC, the
+  server's HTTPS endpoint must still be reachable by players.
 - It scans **one folder you choose** and sends the server a lightweight catalogue
   (opaque track IDs, relative paths, sizes).
 - When a round needs a track, the server asks for it by ID. The Bridge cuts a short
@@ -59,7 +60,7 @@ side, types a free-text answer, and the host does the scoring.
 
 | Component | Runs on | Role |
 |---|---|---|
-| **OpenBlindySir Server** | A small VPS, in Docker | Python (FastAPI). Serves the web UI and holds the whole game in RAM in a **single process**: players, rounds, answers, scores. It is authoritative for identity, game state, timing and scores. No database, no FFmpeg. |
+| **OpenBlindySir Server** | Your own PC or a VPS | Python (FastAPI). Serves the web UI and holds the whole game in RAM in a **single process**: players, rounds, answers, scores. It is authoritative for identity, game state, timing and scores. No database, no FFmpeg. |
 | **Web UI** | Each player's browser | React + TypeScript. Downloads and decodes the clip, then starts playback at a time set by the server, using a synchronised clock. |
 | **OpenBlindySir Bridge** | The PC with the music | Python CLI. Folder scanner, sandbox, FFmpeg clip jobs, outbound client. Knows nothing about the game rules. |
 
@@ -67,6 +68,12 @@ Deployment (planned): one application image plus the official
 [Caddy](https://caddyserver.com/) image in Docker Compose, for automatic HTTPS.
 Caddy is optional if you already run a reverse proxy. There are no rooms: one server
 is one game night.
+
+**PC hosting is available without Docker or a VPS.** The PC launcher starts the
+server and Caddy with HTTPS. Use a LAN address for a local game, a private VPN
+address for distant friends, or a public domain with TCP ports 80/443 forwarded
+to your PC. See the [hosting guide](docs/deployment.md) for certificates, firewall
+configuration and exact commands.
 
 ## Human scoring
 
@@ -87,12 +94,30 @@ is one game night.
 
 ## Quickstart
 
-Not usable yet — see [Status](#status).
+Install Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js 22+,
+[Caddy](https://caddyserver.com/docs/install) and FFmpeg (for the Bridge).
+From a clone of this repository:
+
+```sh
+uv sync --locked
+npm --prefix web ci
+npm --prefix web run build
+uv run python tools/host_pc.py init --address 192.168.1.42:8443
+uv run python tools/host_pc.py run
+```
+
+Replace the example address with your PC's LAN address. Before inviting players,
+follow the [hosting guide](docs/deployment.md) to trust the private certificate and
+start the Bridge. Then open the printed `/host` URL. The
+[user guide](docs/guide-utilisateur.md) explains joining, testing sound, answering,
+manual scoring and the final score review.
 
 ## Status
 
-**Early development.** Implementation started on 2026-10-01. Nothing is playable yet,
-no release has been published, and the API and protocol will change until v1.0.
+**Early development.** A playable source checkout is available and complete games
+are tested locally and in CI with synthetic clips. No release has been published.
+Real mobile devices, acoustic synchronisation and the maintainer's music library
+still require validation; the API and protocol may change until v1.0.
 
 Roadmap:
 
@@ -107,15 +132,18 @@ Real progress is recorded in [docs/DEVLOG.md](docs/DEVLOG.md).
 
 ## Documentation
 
+- [User guide](docs/guide-utilisateur.md) — players, playing host and MC (French)
+- [Hosting on your PC](docs/deployment.md) — LAN, private VPN and Internet (French)
+- [UX notes](docs/UX.md) — interface grammar and local verification
 - [docs/architecture.md](docs/architecture.md) — canonical design specification
 - [docs/protocol.md](docs/protocol.md) — network protocol
 - [docs/sync.md](docs/sync.md) — audio synchronisation
 - [docs/bridge-security.md](docs/bridge-security.md) — Bridge threat model and sandbox
 - [docs/adr/](docs/adr/) — architecture decision records
 
-These design documents are written in **French**. User documentation (this README,
-and the deployment and troubleshooting guides as they land) is in **English**. The web
-UI is in French in v0.1; an English translation is planned for v0.2.
+The design documents and the current user guides are written in **French**, matching
+the v0.1 web UI. This public README is in **English**. The development preview also
+includes English UI strings through `?lang=en`.
 
 ## Security
 
