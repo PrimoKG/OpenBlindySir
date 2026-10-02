@@ -19,6 +19,11 @@ function Invoke-Docker([string[]]$DockerArguments) {
     if ($LASTEXITCODE -ne 0) { throw "Docker a échoué (code $LASTEXITCODE)." }
 }
 
+function Open-HostBrowser([string]$Url) {
+    try { Start-Process $Url }
+    catch { Write-Warning "Ouvrez votre navigateur : $Url" }
+}
+
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw 'Installez Docker Desktop avec Compose, puis démarrez le moteur Linux.'
 }
@@ -81,11 +86,11 @@ try {
                     (Join-Path $taskData 'root.crt')))
                 Write-Host "Certificat à approuver sur les appareils : $(Join-Path $taskData 'root.crt')"
             }
-            if (-not $NoBrowser) { Start-Process $taskUrl }
+            if (-not $NoBrowser) { Open-HostBrowser $taskUrl }
         }
         'stop' { Invoke-Docker ($taskCompose + @('down')) }
         'status' { Invoke-Docker ($taskCompose + @('ps')) }
-        'open' { Start-Process $taskUrl }
+        'open' { Open-HostBrowser $taskUrl }
         'certificate' {
             if ($taskRouting['CADDY_PROFILE'] -ne 'private') { throw 'Le mode public utilise un certificat public.' }
             Invoke-Docker ($taskCompose + @('cp', 'caddy:/data/caddy/pki/authorities/local/root.crt',

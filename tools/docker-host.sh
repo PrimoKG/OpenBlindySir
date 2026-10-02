@@ -61,8 +61,9 @@ compose() {
     fi
 }
 open_browser() {
-    if command -v xdg-open >/dev/null 2>&1; then xdg-open "$task_url"
-    elif command -v open >/dev/null 2>&1; then open "$task_url"
+    if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$task_url" || echo "Ouvrez votre navigateur : $task_url"
+    elif command -v open >/dev/null 2>&1; then open "$task_url" || echo "Ouvrez votre navigateur : $task_url"
     else echo "Ouvrez votre navigateur : $task_url"; fi
 }
 certificate() {
