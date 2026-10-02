@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from openblindysir_bridge import console, ffmpeg
+from openblindysir_bridge import console, ffmpeg, tempdirs
 from openblindysir_bridge.catalog import LocalCatalog
 from openblindysir_bridge.client import BridgeClient
 from openblindysir_bridge.config import BridgeConfig, load_config, write_config
@@ -48,14 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def purge_tempdirs() -> int:
     """Remove leftovers of previous runs (partial clips of the user's music, spec §11)."""
-    failures = 0
-    for path in Path(tempfile.gettempdir()).glob(ffmpeg.private_tempdir_prefix() + "*"):
-        if ffmpeg.is_own_tempdir(path):
-            try:
-                shutil.rmtree(path)
-            except OSError:
-                failures += 1
-    return failures
+    return tempdirs.purge(Path(tempfile.gettempdir()))
 
 
 def parse_faults(items: list[str]) -> Faults:
@@ -178,7 +171,7 @@ async def _run(
     scan_s: float,
 ) -> int:
     state = {"catalog": catalog, "scan_s": scan_s}
-    tmpdir = Path(tempfile.mkdtemp(prefix=ffmpeg.private_tempdir_prefix()))
+    tmpdir = tempdirs.create()
     holder: dict[str, BridgeClient] = {}
 
     async def upload(path: str, token: str, file: Path, sha256: str, mime: str) -> int:
