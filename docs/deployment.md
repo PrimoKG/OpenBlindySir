@@ -1,9 +1,13 @@
 # Héberger OpenBlindySir sur son PC
 
+**Choix d'installation** : le [parcours complet Docker](docker.md) inclut serveur,
+interface, Caddy et Bridge/FFmpeg sans installer leurs runtimes sur le PC. Ce guide
+décrit le parcours **manuel**, qui reste disponible avec les mêmes règles de jeu.
+
 Un VPS n'est pas nécessaire. Le serveur, l'interface et le Bridge peuvent tourner
 sur le même PC. Le serveur reste un seul processus, garde la partie en mémoire et
 ne partage pas le dossier musical. Cette procédure utilise le code du dépôt,
-sans Docker ni image publiée.
+avec installation native, sans Docker.
 
 ## Choisir le chemin d'accès
 
@@ -222,4 +226,4 @@ documentent les profils du lanceur ; ils reçoivent leurs variables de celui-ci.
 La validation locale ne garantit pas la configuration de votre box, de votre VPN
 ou de vos appareils. Le mode public n'a pas été déployé sur Internet pendant cette
 intervention. G1/G2, la vraie bibliothèque et les appareils mobiles restent à
-mesurer avant une release ; le déploiement Docker/VPS prévu reste une étape distincte.
+mesurer avant une release ; un déploiement VPS et une soirée réelle restent à faire.

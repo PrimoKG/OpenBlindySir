@@ -795,13 +795,19 @@ Les trois paquets Python restent distincts (`openblindysir_protocol`, `openblind
 
 ## 17. Docker et déploiement
 
-**Image** `ghcr.io/primokg/openblindysir`
-- Multi-stage (build Node, puis `python:3.13-slim`).
-- **Sans FFmpeg.**
-- Utilisateur 10001, endpoint `/healthz`.
-- Multi-architecture amd64 et arm64.
-- Commande par défaut : `openblindysir-server`.
-- Labels OCI : `org.opencontainers.image.title=OpenBlindySir`, `org.opencontainers.image.licenses=MIT`, `org.opencontainers.image.source=https://github.com/PrimoKG/OpenBlindySir`, `org.opencontainers.image.version`.
+**Environnement complet Docker (2026-10-02, GO du mainteneur)**
+- `Dockerfile` multi-stage, cibles `app` et `bridge` ; bases Node 24, Python 3.13
+  et uv fixées par digest multi-architecture, dépendances Python/npm verrouillées.
+- `openblindysir-server:local` : serveur mono-processus et SPA construite,
+  **sans FFmpeg**, utilisateur 10001, `/healthz`, `openblindysir-server serve`.
+- `openblindysir-bridge:local` : Bridge existant et FFmpeg/ffprobe Debian,
+  utilisateur 10001, identité persistée dans `/data`, extraits temporaires en tmpfs.
+- Le contexte de build est une allowlist : aucun secret, musique, cache ou Git.
+- Les bases proposent amd64/arm64 ; le parcours CI est réellement testé sur amd64.
+  Ne pas confondre cette disponibilité des bases avec une validation arm64 complète.
+- Images construites localement et partageables avec `docker image save/load` ;
+  publication GHCR et tags de release ci-dessous **restent prévus**, sans image publiée
+  ou release affirmée avant leur création effective.
 
 **Tags de l'image**
 | Tag | Exemple | Quand |
@@ -810,31 +816,39 @@ Les trois paquets Python restent distincts (`openblindysir_protocol`, `openblind
 | `X.Y.Z-rc.N` | `0.1.0-rc.1` | Pré-release, sans `latest` |
 | `X.Y.Z`, `X.Y`, `latest` | `0.1.0`, `0.1`, `latest` | Releases uniquement. **Aucun `latest` avant une v0.1.0 réellement jouable.** |
 
-**`compose.yaml`**
-- **`name: openblindysir`** : préfixe stable pour les conteneurs et les volumes, quel que soit le dossier de téléchargement.
-- **`app`** :
-  - `image: ghcr.io/primokg/openblindysir`, `env_file: .env` ;
-  - `read_only: true`, `tmpfs: /tmp:size=16m`, `security_opt: no-new-privileges` ;
-  - `restart: unless-stopped`, healthcheck ;
-  - **aucun port publié**.
-- **`caddy`** :
-  - image officielle ;
-  - `command: caddy reverse-proxy --from ${DOMAIN} --to app:8000` ;
-  - ports 80 et 443 ;
-  - volumes **`caddy_data`** (persistant) et `caddy_config`.
+**`compose.yaml` (présent)**
+- **`name: openblindysir`** : préfixe stable ; services `app`, `caddy`, `bridge`.
+- Tous sont en filesystem read-only, capacités réduites, no-new-privileges,
+  tmpfs temporaire et restart unless-stopped. L'app garde un seul processus.
+- Caddy et Bridge partagent l'espace réseau de l'app. Le backend 8000 écoute
+  uniquement en loopback ; HTTP localhost du Bridge reste conforme à ses règles.
+  Les proxies approuvés sont seulement 127.0.0.1 et ::1 ; aucun réseau Docker
+  arbitraire n'est approuvé. Aucun port backend n'est publié.
+- Les ports publiés sur cet espace réseau servent Caddy : HTTPS uniquement sur
+  l'interface privée choisie ; HTTP 80 ajouté par `deploy/compose.public.yaml`
+  pour le mode public sur 80/443. Image Caddy officielle fixée par digest.
+- Profils `deploy/Caddyfile.docker.private/public` ; autorité locale en privé,
+  ACME en public, administration désactivée. Racine exportable, clés en volume.
+- Bibliothèque montée uniquement dans le Bridge, en lecture seule ; le montage
+  refuse de créer un dossier hôte absent. Volumes Caddy et identité Bridge persistants.
 
 **Parcours utilisateur**
-- **Débutant ou VPS** :
-  1. un VPS avec Docker et un domaine. Sans domaine, `1-2-3-4.sslip.io` fonctionne aussi avec Let's Encrypt ;
-  2. télécharger **seulement** `compose.yaml` et `.env.example` depuis la release, sans clone Git ;
-  3. remplir `.env`. Les secrets se génèrent avec `openssl rand` ou avec `docker run --rm ghcr.io/primokg/openblindysir openblindysir-server gen-secrets` ;
-  4. `docker compose up -d` ;
-  5. installer FFmpeg sur le PC et lancer le Bridge ;
-  6. envoyer l'URL et le mot de passe aux amis, puis ouvrir `/host`.
-- **Proxy déjà en place** : `deploy/compose.no-proxy.yaml` (app sur `127.0.0.1:8000`), avec des exemples pour nginx (en-têtes `Upgrade`, timeouts WebSocket) et Traefik.
+- **Docker sur PC, sans autres runtimes applicatifs** :
+  1. Docker avec Compose et moteur Linux, archive du dépôt ou clone ;
+  2. `tools/docker-host.ps1 init` ou `sh tools/docker-host.sh init` avec adresse
+     LAN/VPN ou domaine public et dossier musical ; configuration privée générée
+     dans un conteneur, dans `.local/docker/hosting.env` ;
+  3. `start` construit/démarre tous les services et ouvre `/host` dans le navigateur ;
+  4. en privé, faire approuver le certificat racine exporté ; préparer pare-feu,
+     VPN ou DNS/redirection selon le réseau. Rien de cela n'est modifié automatiquement ;
+  5. partager seulement URL et mot de passe de partie. [Guide Docker](docker.md).
+- **Bridge Docker distant** : `deploy/compose.bridge.yaml` et son override privé
+  pour la racine TLS ; même image, connexion sortante HTTPS, aucun port publié.
+- **Proxy Docker personnalisé et images GHCR** : parcours de distribution encore
+  prévu. Le proxy natif existant reste documenté dans le guide manuel.
 - **Développement** :
   - sans Docker : `DEV_MODE=1 uv run openblindysir-server` pour le serveur, `npm run dev` (proxy Vite vers `/api` et le WebSocket), `uv run openblindysir-bridge --demo` ou le Bridge sur un vrai dossier ;
-  - `compose.dev.yaml` sert uniquement à tester l'image.
+  - le job Docker CI construit les images et joue en HTTPS/WSS avec Bridge démo.
 
 **Hébergement natif sur PC (2026-10-02, demandé par le mainteneur)**
 - Le VPS est une option ; le même serveur mono-processus peut tourner sur le PC
@@ -848,7 +862,8 @@ Les trois paquets Python restent distincts (`openblindysir_protocol`, `openblind
   inchangés. Le lanceur ne modifie pas le pare-feu, la box ou la confiance système.
 - [Guide d'hébergement](deployment.md) et [guide utilisateur](guide-utilisateur.md)
   en français pour l'interface v0.1. Cela ne valide ni G1/G2 ni le déploiement VPS
-  ou une release ; le parcours Docker ci-dessus reste prévu pour l'étape 8.
+  ou une release. Le parcours Docker ci-dessus est disponible en complément ;
+  la distribution GHCR, le VPS et la soirée réelle restent à réaliser.
 
 ---
 
