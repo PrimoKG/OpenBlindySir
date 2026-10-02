@@ -108,3 +108,61 @@
 - La rejouée sur clone propre a révélé que `pytest protocol/tests server/tests` échoue tant que `server/tests` n'existe pas : corrigé en passant par les `testpaths` (`185d406`).
 
 **Prochaine étape** — Cœur du jeu pur (§26 étape 4) : machines à états, réponses et timing, journal `ScoreEvent`, `view_for`, sélection, tests de priorité 1.
+
+## 2026-10-02 — Cœur du jeu pur (§26 étape 4)
+
+**Objectif** — Machines à états, réponses et timing, journal `ScoreEvent`, `view_for` par rôle, sélection, avec les tests de priorité 1 sans réseau (§20.1 points 1 à 7).
+
+**Décisions**
+- Cœur synchrone piloté par `dispatch(commande, instant)` : l'instant est lu par le shell à la réception ; le cœur ne lit jamais d'horloge et ne fait aucune E/S (vérifié par l'AST et par une règle ruff qui interdit `asyncio`, `os`, `time`… dans `game/`). Il renvoie des effets (PLAY, ACK, PREPARE…) que le shell exécute après la mutation.
+- Les transitions temporisées (fin du compte à rebours, timeout du ready check, deadline, fin de lecture, timeout de job) sont dérivées de l'état et appliquées à leur instant exact avant chaque commande : une validation arrivée après la deadline est refusée même si la minuterie n'a pas encore tourné.
+- Un round FAILED ou passé ne consomme pas de numéro ; un morceau n'entre dans `played` qu'à sa première lecture ; le passage en MC Mode est refusé pendant COUNTDOWN/OPEN et le retour en Player Mode refusé en partie (anti-triche).
+- `READY_TIMEOUT` lance le round même avec `auto_start` désactivé (lecture littérale du §9.4) ; après `end_game{score}`, l'hôte publie (reveal) puis passe explicitement à la vérification finale.
+
+**Implémentation** — `server/src/openblindysir_server/game/` : état (§13), commandes et effets, moteur, minuteries, joueurs, rounds, réponses et timing, assets (préchargement, remplacement, rétention), sélection, journal des scores, vérification finale, classement, table de permissions HOST, `view_for`.
+
+**Zones touchées** — server/game, tests du cœur.
+
+**Tests**
+- `uv run pytest` : cœur 251 tests au premier commit, dont une machine à états Hypothesis (profil CI, 250 exemples) vérifiant les invariants globaux (journal, round unique, ordres stricts, `official_start_at` écrit une fois, aucune transition IN_GAME → FINAL_RESULTS, anti-fuite par canaris, compteur de progression).
+- Matrice anti-fuite §20.1-7 : chaque audience (joueur, hôte Player Mode, hôte MC) × chaque phase, sur l'objet sérialisé entier.
+- Relecture adverse du cœur par un agent indépendant : fuzzer de 5 550 graines × 250 pas, sans fuite ni rupture d'invariant ; 5 problèmes réels trouvés et corrigés (`a948155`) avec tests de non-régression : éviction de l'asset courant pendant LOADING (blocage du moteur), N+2 jeté à chaque round avec `prefetch_depth=2`, slot en attente après `QUEUE_FULL` jamais réveillé, désactivation d'`allow_repeats` sans effet sur la file, croissance de `asset_ready` par de faux READY.
+- `ruff`, `pyright` : 0 erreur.
+
+**État** — DONE.
+
+**Problèmes connus** — Aucun bloquant connu.
+
+**Prochaine étape** — Vertical slice n°1 : shell HTTP/WebSocket, Bridge démo, interfaces minimales.
+
+## 2026-10-02 — Vertical slice n°1, partie serveur et Bridge (§26 étape 5)
+
+**Objectif** — Partie complète jusqu'à `FINAL_RESULTS` avec des sons synthétiques : auth, WebSocket, Bridge démo, bots.
+
+**Décisions**
+- **Limitation de débit des connexions** : seules les tentatives **échouées** sont comptées (join 5/min, host 3/min par IP). Compter toutes les connexions bloquait des amis derrière une même box (constaté avec les bots : le 6e joueur était refusé). §12 mis à jour (`3534e89`).
+- Cookie `__Host-openblindysir` en production ; en `DEV_MODE`, cookie distinct `openblindysir_dev` non Secure (le préfixe `__Host-` exige Secure, impossible sur `http://localhost`).
+- `DEV_MODE` refusé si `DOMAIN` n'est pas local ; `HOST_PASSWORD == BLIND_PASSWORD` toujours refusé.
+- Catalogue accepté seulement avec le secret **et** un jeton à usage unique demandé par le Bridge actif ; décompression bornée (protection contre les bombes gzip).
+- Bridge : liste fermée de démultiplexeurs (`-format_whitelist`) et contrôle de durée de l'extrait produit, conformément à l'amendement du §10.
+
+**Implémentation**
+- Shell serveur : configuration et refus de démarrage, CLI (`serve`, `gen-secrets`), sessions hachées, routes de session, en-têtes de sécurité, hub WebSocket joueur (supplantation 4001, kick 4003, STATE regroupés et dédupliqués par destinataire), WebSocket et routes du Bridge, cache audio RAM, diagnostic, journalisation avec masquage.
+- Bridge : scanner, catalogue, sandbox, gabarits FFmpeg, jobs, client sortant, mode `--demo`, console.
+- `tools/bots.py` et test d'intégration (serveur + Bridge démo en sous-processus + 10 bots).
+- CI : jobs `bridge-linux`, `bridge-windows`, `integration`.
+
+**Zones touchées** — server (shell), bridge, tools, CI, docs (§12).
+
+**Tests** (exécutés sur le poste Windows du mainteneur)
+- `uv run pytest` : 472 réussis, 1 ignoré (création de lien symbolique non autorisée sans le mode développeur Windows) ; dont tests du shell (configuration, auth, en-têtes, WebSocket : HELLO, PONG, timestamp client refusé, 4001, 4003, permissions ; Bridge : catalogue gzip, jeton unique, bombe gzip, upload, audio servable), Bridge (junctions Windows, sandbox, gabarit FFmpeg exact, jobs FFmpeg réels sur fixtures lavfi, extrait sans tags en AAC 48 kHz stéréo, **régression de l'évasion ffconcat**).
+- `uv run pytest server/tests/integration -m integration` : 1/1 (partie complète, 10 bots, 2 rounds, 22 validations acceptées, vérification finale, FINAL_RESULTS ; 50 s).
+- Essais manuels : serveur `DEV_MODE` lancé, `/healthz` et en-têtes vérifiés ; refus de démarrage avec mot de passe trop court (code 2, valeur non affichée) ; Bridge démo connecté (catalogue de 12 pistes).
+
+**État** — PARTIAL : serveur, Bridge et partie complète par bots validés ; **interface web (joueur, hôte, moteur audio) pas encore écrite**.
+
+**Problèmes connus**
+- Pas d'interface web : la porte 5 (« interfaces joueur et hôte minimales ») n'est pas franchie.
+- CI GitHub jamais exécutée (pas de remote).
+
+**Prochaine étape** — Interface web : socket, horloge, moteur audio, écrans joueur et hôte.
