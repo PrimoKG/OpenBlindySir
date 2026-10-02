@@ -10,6 +10,8 @@ the version is 0.x, the API and protocol may change between minor versions.
 
 ### Added
 
+- Native PC hosting launcher with private LAN/VPN and public HTTPS profiles,
+  plus French user and hosting guides. A VPS is optional.
 - Project documentation: README, design specification, contribution guidelines,
   security policy and code of conduct.
 - MIT license.

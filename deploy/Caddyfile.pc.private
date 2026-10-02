@@ -1,0 +1,14 @@
+# Used by tools/host_pc.py. HTTPS on the selected LAN/VPN interface only.
+{
+	admin off
+	auto_https disable_redirects
+	skip_install_trust
+	persist_config off
+	storage file_system "{$OPENBLINDYSIR_CADDY_DATA}"
+}
+
+https://{$DOMAIN} {
+	bind {$OPENBLINDYSIR_CADDY_BIND}
+	tls internal
+	reverse_proxy 127.0.0.1:{$PORT}
+}

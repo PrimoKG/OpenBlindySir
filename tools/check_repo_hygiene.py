@@ -92,7 +92,7 @@ FORBIDDEN_DIRS: frozenset[str] = frozenset(
     {
         "node_modules", "dist", "build", ".venv", "venv", "__pycache__", "playwright-report",
         "test-results", "coverage", "htmlcov", ".pytest_cache", ".ruff_cache", ".mypy_cache",
-        ".pyright",
+        ".pyright", ".local",
     }
 )  # fmt: skip
 WALK_SKIP_DIRS: frozenset[str] = FORBIDDEN_DIRS | {".git"}
