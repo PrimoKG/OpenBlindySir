@@ -15,6 +15,7 @@ import contextlib
 import json
 import os
 import random
+import ssl
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -33,14 +34,26 @@ class BotError(RuntimeError):
 
 class Bot:
     def __init__(
-        self, base_url: str, nickname: str, password: str, *, answer_delay_s: float = 0.2
+        self,
+        base_url: str,
+        nickname: str,
+        password: str,
+        *,
+        answer_delay_s: float = 0.2,
+        ssl_context: ssl.SSLContext | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.origin = self.base_url
         self.nickname = nickname
         self.password = password
         self.answer_delay_s = answer_delay_s
-        self.http = httpx.AsyncClient(base_url=self.base_url, timeout=10.0)
+        self.ssl_context = ssl_context
+        self.socket_options: dict[str, Any] = (
+            {"ssl": ssl_context} if self.base_url.startswith("https:") and ssl_context else {}
+        )
+        self.http = httpx.AsyncClient(
+            base_url=self.base_url, timeout=10.0, verify=ssl_context or True
+        )
         self.player_id: str | None = None
         self.view: dict[str, Any] = {}
         self.acks: list[dict[str, Any]] = []
@@ -82,6 +95,7 @@ class Bot:
             ws_url,
             additional_headers={"Cookie": self.cookie_header(), "Origin": self.origin},
             max_size=4 * 1024 * 1024,
+            **self.socket_options,
         )
         await self.send({"t": "HELLO", "client_version": "bot", "protocol": PROTOCOL})
         await self.send({"t": "AUDIO_STATUS", "state": "IDLE", "clock": CLOCK})
@@ -112,7 +126,9 @@ class Bot:
         """A second, unmanaged connection with the same session (another tab)."""
         ws_url = self.base_url.replace("http", "ws", 1) + "/api/ws"
         ws = await websockets.connect(
-            ws_url, additional_headers={"Cookie": self.cookie_header(), "Origin": self.origin}
+            ws_url,
+            additional_headers={"Cookie": self.cookie_header(), "Origin": self.origin},
+            **self.socket_options,
         )
         await ws.send(json.dumps({"t": "HELLO", "client_version": "bot", "protocol": PROTOCOL}))
         return ws
@@ -264,10 +280,14 @@ async def play_game(
     host_password: str,
     final_correction: int = 1,
     on_round: Callable[[int, HostBot, list[Bot]], Any] | None = None,
+    ssl_context: ssl.SSLContext | None = None,
 ) -> dict[str, Any]:
     """Play a full game: join, configure, rounds (ready, play, answers, scoring), final review."""
-    host = HostBot(base_url, "Hôte", password)
-    bots = [Bot(base_url, f"Bot{i:02d}", password) for i in range(1, players + 1)]
+    host = HostBot(base_url, "Hôte", password, ssl_context=ssl_context)
+    bots = [
+        Bot(base_url, f"Bot{i:02d}", password, ssl_context=ssl_context)
+        for i in range(1, players + 1)
+    ]
     everyone: list[Bot] = [host, *bots]
     try:
         for bot in everyone:
