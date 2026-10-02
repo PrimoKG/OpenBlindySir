@@ -38,7 +38,7 @@ Cette sous-section est la seule source pour ces règles.
 Le système a trois composants :
 
 1. **OpenBlindySir Server** tourne sur un petit VPS, dans Docker, derrière Caddy. Il sert l'interface web et garde tout l'état de la partie en RAM : joueurs, rounds, réponses, scores. Le processus *est* la room.
-2. **OpenBlindySir Bridge** tourne sur le PC qui contient la musique. Il scanne un seul dossier autorisé, envoie un catalogue léger au serveur et produit à la demande un **extrait de 20 à 30 s** avec FFmpeg. Il ouvre lui-même une connexion **sortante** vers le serveur. Les fichiers complets ne quittent jamais le PC.
+2. **OpenBlindySir Bridge** tourne sur le PC qui contient la musique. Il scanne un seul dossier autorisé, envoie un catalogue léger au serveur et produit à la demande un **extrait** (20 à 30 s par défaut, 60 s au plus selon `CLIP_MAX_S`) avec FFmpeg. Il ouvre lui-même une connexion **sortante** vers le serveur. Les fichiers complets ne quittent jamais le PC.
 3. **L'interface web OpenBlindySir**, dans le navigateur (joueur ou hôte). Elle télécharge l'extrait entier, le décode, se déclare prête, puis le joue à un instant `startAt` fixé par le serveur, grâce à une horloge synchronisée. La réponse est un texte libre.
 
 **La notation est entièrement humaine.** Le serveur ne sait pas quelle est la bonne réponse et n'évalue jamais le contenu d'une réponse. Il **mesure** le moment de chaque validation et le transmet à l'hôte, qui attribue lui-même les points (+N, 0, −N) avec le barème qu'il veut. **La rapidité est mesurée et affichée, mais elle n'attribue jamais de points automatiquement.**
@@ -538,13 +538,16 @@ Navigateur : fetch (cookie, no-store) → decodeAudioData → AudioBuffer (~11,5
 **Gabarit FFmpeg** (spécification ; arguments passés en liste, jamais via un shell)
 - `-nostdin -hide_banner -loglevel error -threads 1`
 - `-protocol_whitelist file`, et une entrée **préfixée `file:` suivie du chemin absolu résolu**
+- `-format_whitelist mp3,flac,wav,mov,ogg,aiff,asf,aac` (ffprobe **et** ffmpeg, avant `-i`) : liste fermée de démultiplexeurs audio. Sans elle, un fichier à extension audio contenant une playlist `ffconcat` (démultiplexeur choisi d'après le contenu) peut faire lire un fichier hors de la racine, par exemple à travers une junction située dans la bibliothèque ; `-protocol_whitelist` ne bloque pas ce cas (constat du spike S1).
 - `-ss <départ>` placé avant `-i`, puis `-t <durée>`
 - `-map 0:a:0 -vn -sn -dn` : uniquement la première piste audio, **sans pochette**
 - **`-map_metadata -1 -map_chapters -1`** : aucun tag recopié
 - `-ac 2 -ar 48000`, `afade` (entrée 0,3 s, sortie 1,5 s)
 - `-c:a aac -b:a 128k -movflags +faststart`, ou `libopus 96k` si le spike S0 retient Opus
 
-Seules variables : le chemin (issu du catalogue), le départ et la durée (des flottants plafonnés **par le Bridge**), le format (une valeur parmi une liste fixe).
+Seules variables : le chemin (issu du catalogue), le départ et la durée (des flottants plafonnés **par le Bridge**, durée entre 5 et 60 s), le format (une valeur parmi une liste fixe).
+
+**Contrôle de sortie** : avant l'upload, le Bridge mesure la durée réelle de l'extrait produit (ffprobe). En dessous de la moitié de la durée demandée (ou du morceau entier s'il est plus court), le job échoue en `DECODE_ERROR`. Un fichier tronqué dont l'en-tête annonce une durée trop longue produit sinon un conteneur valide mais vide, que les magic bytes ne détectent pas (constat du spike S1).
 
 **Choix du point de départ**
 - Le serveur envoie `start_fraction ∈ [0,1)`. Le Bridge l'applique à la fenêtre valide, qui va de `max(10 s, 8 % de la durée)` à `durée − extrait − max(20 s, 10 % de la durée)`.
@@ -583,7 +586,7 @@ Détail complet : [docs/bridge-security.md](bridge-security.md)
 | CSRF / détournement de WebSocket inter-site | Actions faites au nom d'un joueur | SameSite=Strict, **vérification de l'`Origin`** sur les POST et le WebSocket, corps JSON obligatoire, aucun CORS. | V0.1 |
 | Path traversal depuis le serveur | Lecture de fichiers hors du dossier | `track_id` sert de **clé de dictionnaire, jamais de chemin**. ID inconnu : erreur. | V0.1 |
 | Évasion par symlink ou junction | Idem | Liens ignorés au scan, `realpath` et confinement vérifiés au scan **et** à l'ouverture, tests sur un runner Windows. | V0.1 |
-| Serveur malveillant vu du Bridge | Lecture de fichiers, exécution, saturation du PC | Protocole fermé de 4 messages, aucun argument FFmpeg libre, bornes fixées par le Bridge, file limitée, timeouts, préfixe `file:` et `protocol_whitelist`. Fuite résiduelle (documentée) : arborescence et noms de fichiers. | V0.1 |
+| Serveur malveillant vu du Bridge | Lecture de fichiers, exécution, saturation du PC | Protocole fermé de 4 messages, aucun argument FFmpeg libre, bornes fixées par le Bridge, file limitée, timeouts, préfixe `file:`, `protocol_whitelist` et `format_whitelist`, contrôle de la durée produite. Fuite résiduelle (documentée) : arborescence et noms de fichiers. | V0.1 |
 | Faux Bridge (secret volé) | Diffusion d'audio choisi par l'attaquant, saturation | Secret fort, upload uniquement pour un job en attente (token à usage unique), ≤ 2 Mo, magic bytes, un seul Bridge actif. Rotation par `.env`. Un secret par Bridge en V1. | V0.1 / V1 |
 | Audio malformé | Plantage du décodeur | Décodage dans le bac à sable du navigateur ; en cas d'échec, `ERROR`. Si la majorité des clients échoue, l'asset passe FAILED. | V0.1 |
 | Fichier piégé visant FFmpeg | Exécution de code sur le PC | Fichiers fournis par l'utilisateur (risque faible), vérification de la version de FFmpeg, timeouts, et consigne de ne pas lancer le Bridge en administrateur. | V0.1 (doc) |
