@@ -41,15 +41,18 @@ async def put_asset(asset_id: str, request: Request) -> Response:
         return error(403, ErrorCode.UPLOAD_REJECTED)
     asset = runtime.engine.asset_info(asset_id)
     if asset is None or asset.state not in IN_FLIGHT:
+        log_event(LOG, "upload_rejected", reason="state")
         return error(409, ErrorCode.UPLOAD_REJECTED)
     announced = request.headers.get(UPLOAD_SHA256_HEADER, "")
     if not SHA256.match(announced):
         runtime.dispatch(c.UploadRejected(asset_id))
+        log_event(LOG, "upload_rejected", reason="sha256_header")
         return error(400, ErrorCode.UPLOAD_REJECTED)
     limit = runtime.cache.max_item_bytes
     declared = request.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > limit:
         runtime.dispatch(c.UploadRejected(asset_id))
+        log_event(LOG, "upload_rejected", reason="too_large")
         return error(413, ErrorCode.PAYLOAD_TOO_LARGE)
     body = bytearray()
     async for chunk in request.stream():
