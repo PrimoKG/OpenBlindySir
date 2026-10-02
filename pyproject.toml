@@ -39,6 +39,8 @@ ignore = ["PLR0911", "PLR0912", "PLR0913", "PLR2004", "RUF002", "RUF003", "S101"
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S", "PLR"]
 "tools/**" = ["S603", "S607"]
+# Small, bounded clip files (<= 4 MiB) on the Bridge's own event loop.
+"bridge/src/**" = ["ASYNC240"]
 
 [tool.ruff.format]
 quote-style = "double"
