@@ -24,9 +24,9 @@ following are **out of scope** and pull requests adding them will be declined:
 - **User accounts**, **rooms**, or several simultaneous games on one server.
 - **Streaming or downloading audio** from Spotify, YouTube, Deezer or any other
   platform. Audio only ever comes from the user's own files, through the Bridge.
-- **Automatic speed scoring**: no speed-based points or bonuses, no pre-filled
-  scales, no "apply 3/2/1" buttons. Answer times are measured and shown; points are
-  always awarded by the host.
+- **Automatic scoring**: no speed-based points or bonuses and no "apply 3/2/1"
+  buttons. Answer times are measured and shown; shared title/artist rules and
+  scoring shortcuts still require each decision to be made by the host.
 
 ## Development environment
 
@@ -65,11 +65,12 @@ Checks to run before significant commits (also exercised in CI):
 | Web UI | Biome, `tsc --noEmit`, Vitest |
 | Bridge | `pytest` for the Bridge (Windows path, junction and sandbox tests also run in CI) |
 | Protocol | TypeScript types regenerated from the Python models, with no diff |
-| End to end | Playwright (Chromium) |
+| End to end | Playwright (Chromium and WebKit); audio scenarios require Web Audio support |
 | Docker | `docker build` |
 
 Tests only use sounds generated at run time (sine waves, clicks, silence through
-FFmpeg `lavfi`). `main` must never be knowingly broken.
+FFmpeg `lavfi`). `main` must never be knowingly broken. See
+[the test guide](docs/testing.md) for commands and the manual device checklist.
 
 ## Code style
 
@@ -77,7 +78,7 @@ FFmpeg `lavfi`). `main` must never be knowingly broken.
 - **TypeScript**: Biome for linting and formatting. `dangerouslySetInnerHTML` is not
   allowed.
 - Code, identifiers, comments, log event names and protocol error codes are in
-  **English**. UI text goes through the i18n dictionary (French in v0.1).
+  **English**. UI text goes through the French and English i18n dictionaries.
 - Domain names carry no brand: `Player`, `Round`, `Session`, `Bridge`, `ScoreEvent`.
   The `openblindysir` slug is reserved for package, CLI, image and logger names.
 

@@ -128,9 +128,10 @@ réglages et lancez après le test audio des joueurs. Le
 | Exporter la racine privée | `.\tools\docker-host.ps1 certificate` | `sh tools/docker-host.sh certificate` |
 | Arrêter | `.\tools\docker-host.ps1 stop` | `sh tools/docker-host.sh stop` |
 
-Arrêter ou recréer le serveur **efface la partie et les scores en RAM**. Gardez
-le PC et Docker allumés, sans mise en veille. `stop` conserve les volumes :
-certificats et identité du Bridge. Ne faites pas `docker compose down -v` si vous
+Arrêter ou recréer le serveur restaure la session depuis le volume **app_data**.
+Une manche ouverte interrompue revient en correction avec ses réponses ; la musique
+est régénérée pour les manches à préparer. Gardez le PC allumé pendant le jeu.
+`stop` conserve la session, les certificats et l'identité du Bridge. Ne faites pas `docker compose down -v` si vous
 voulez les conserver. Les services redémarrent avec Docker grâce à leur politique
 `unless-stopped`, sauf si vous les avez arrêtés volontairement.
 

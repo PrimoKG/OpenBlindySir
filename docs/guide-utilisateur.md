@@ -84,13 +84,15 @@ finaux. Des joueurs ex æquo partagent leur rang.
 2. Ouvrez **Commandes hôte** si le panneau est replié. Sur téléphone, le lien du
    même nom dans l'en-tête permet d'y accéder rapidement.
 3. Choisissez votre rôle via **Changer de rôle**, quand le changement est autorisé :
-   **Hôte joueur** pour répondre, **Animateur (MC)** pour animer sans jouer.
+   **Hôte joueur** pour répondre, **Animateur** pour animer sans jouer.
 4. Vérifiez **Bibliothèque connectée** et choisissez les dossiers musicaux. Si
    aucun Bridge n'est connecté, démarrez-le avant de lancer la partie.
-5. Réglez **Nombre de rounds** et **Durée des extraits (s)**. Les **Réglages
-   avancés** donnent accès au délai supplémentaire pour les réponses.
-6. Cliquez sur **Enregistrer**, puis **Lancer la partie**. Le lancement attend
-   l'enregistrement des modifications et les conditions de démarrage du serveur.
+5. Réglez **Nombre de manches**, **Durée des extraits (s)** et le temps pour
+   répondre après l'extrait. Choisissez la consigne, le barème et la politique des
+   brouillons non validés. Le compteur indique les morceaux neufs disponibles.
+6. Utilisez **Enregistrer et lancer** pour appliquer les réglages et démarrer
+   ensemble, ou **Enregistrer** puis **Lancer la partie**. Sans répétitions, réduisez
+   le nombre de manches si la réserve est insuffisante.
 
 L'hôte joueur conserve la surprise du morceau pendant le jeu et répond comme les
 autres. Le MC voit le morceau et peut consulter **À venir** ; pendant la saisie il
@@ -123,6 +125,13 @@ copie pour le dépannage ; ces outils restent secondaires au déroulement du jeu
 
 ### Vérifier et terminer
 
+La revue affiche le titre et l'artiste **uniquement aux hôtes**, après fermeture des
+réponses. **Corriger le titre et l’artiste** permet de préparer un reveal propre.
+Chaque ligne est **À vérifier** jusqu'à une décision explicite, même si elle vaut zéro.
+Le champ ±N conserve votre saisie jusqu'à Entrée ou sortie du champ ; attendez la
+sauvegarde serveur avant de publier. Si des lignes restent non vérifiées, une confirmation
+indique leur nombre. Le total publié et le total provisoire sont affichés séparément.
+
 Dans **VÉRIFICATION FINALE DES SCORES**, comparez le score actuel, la correction
 et le nouveau score. Utilisez les boutons −/+ ou le champ numérique, consultez
 le détail, et réinitialisez les corrections si nécessaire. Les joueurs ne voient
@@ -131,10 +140,28 @@ relisez le récapitulatif et confirmez.
 
 Après les résultats, **Nouvelle partie** retourne au lobby. **Fin de session**,
 après confirmation, renvoie tout le monde à l'entrée. Une nouvelle session sur
-`/host` demande de nouveau l'élévation hôte. Arrêter le programme serveur efface
-la partie : les scores ne sont pas sauvegardés entre deux démarrages.
+`/host` demande de nouveau l'élévation hôte. Le serveur sauvegarde la session
+localement. Après redémarrage, scores et
+réponses sont récupérés ; une manche interrompue revient en correction. Le statut
+de récupération ou d'échec de sauvegarde est affiché dans les commandes hôte.
 
 ## Si quelque chose se passe mal
+
+**Nouvelle partie** remet les scores à zéro et garde les morceaux déjà entendus exclus.
+Pour continuer avec une petite bibliothèque, autorisez les répétitions ou réduisez le
+nombre de manches. Une réserve épuisée propose ces choix explicitement.
+
+Au lobby, **Inviter les joueurs** crée un lien et un QR code depuis l'adresse réseau
+que vous choisissez. Le mot de passe se partage séparément. **Équipes et spectateurs**
+permet de regrouper les scores individuels ou d'écouter sans répondre. Les sélections
+enregistrées restent dans ce navigateur.
+
+**Mettre en pause** suspend son et réponses. **Reprendre la manche** les relance ensemble,
+sans compter la suspension dans les temps de réponse. Les résultats contiennent un
+récapitulatif par joueur et les exports CSV/JSON ; l'hôte retrouve les parties terminées
+dans l'historique. Les fichiers illisibles/silencieux rencontrés sont listés dans
+**Fichiers écartés pendant cette partie**. Les options volume/silence sont dans les
+réglages avancés et nécessitent un Bridge à jour.
 
 | Situation | Que faire |
 |---|---|
@@ -147,7 +174,7 @@ la partie : les scores ne sont pas sauvegardés entre deux démarrages.
 | Retiré de la partie | Contacter l'hôte : celui-ci a retiré le joueur de la session. |
 | Certificat refusé | Faire vérifier l'adresse et installer correctement le certificat privé prévu ; ne pas désactiver la vérification TLS. |
 
-L'application est encore en développement. Les parcours Chromium sont vérifiés
-sur des tailles de téléphone ; cela ne vaut pas validation sur de vrais appareils
-iOS/Android, sur Safari ou sur WebKit. Pour ces appareils, faites un essai avant
-la soirée. Les mesures de synchronisation acoustique restent à réaliser.
+L'application est encore en développement. Les parcours Chromium et l'affichage
+WebKit sont vérifiés sur des tailles de téléphone. Ce moteur WebKit Windows ne
+valide pas la lecture audio. Pour Safari et les vrais appareils iOS/Android,
+faites un essai avant la soirée. Les mesures acoustiques restent à réaliser.

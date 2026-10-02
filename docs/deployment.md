@@ -205,6 +205,13 @@ les étapes du jeu, la notation et la vérification finale.
 
 ## Dépannage de l'hébergement
 
+Le serveur natif sauvegarde ses snapshots privés dans `STATE_DIR` (`.local/state`
+par défaut, relatif au répertoire de lancement). Gardez ce dossier accessible en écriture
+et faites-en une sauvegarde avant une mise à jour. Les réponses et le catalogue y sont
+privés ; aucune musique ni mot de passe en clair n'y est stocké. Une manche OPEN
+interrompue revient en correction, les préparations reprennent via le Bridge.
+Serveur, interface et Bridge doivent utiliser le même protocole (actuellement 2).
+
 | Symptôme | Vérification |
 |---|---|
 | `Caddy introuvable` | Installer le binaire officiel et utiliser PATH ou `--caddy`. |

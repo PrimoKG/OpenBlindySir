@@ -37,7 +37,7 @@ Cette sous-section est la seule source pour ces règles.
 
 Le système a trois composants :
 
-1. **OpenBlindySir Server** tourne sur un petit VPS, dans Docker, derrière Caddy. Il sert l'interface web et garde tout l'état de la partie en RAM : joueurs, rounds, réponses, scores. Le processus *est* la room.
+1. **OpenBlindySir Server** tourne sur un petit VPS, dans Docker, derrière Caddy. Il sert l'interface web et maintient la partie en RAM, avec snapshots JSON privés pour restaurer joueurs, rounds, réponses et scores. Un seul processus anime la soirée.
 2. **OpenBlindySir Bridge** tourne sur le PC qui contient la musique. Il scanne un seul dossier autorisé, envoie un catalogue léger au serveur et produit à la demande un **extrait** (20 à 30 s par défaut, 60 s au plus selon `CLIP_MAX_S`) avec FFmpeg. Il ouvre lui-même une connexion **sortante** vers le serveur. Les fichiers complets ne quittent jamais le PC.
 3. **L'interface web OpenBlindySir**, dans le navigateur (joueur ou hôte). Elle télécharge l'extrait entier, le décode, se déclare prête, puis le joue à un instant `startAt` fixé par le serveur, grâce à une horloge synchronisée. La réponse est un texte libre.
 
@@ -48,12 +48,12 @@ Le système a trois composants :
 **Glossaire**
 | Terme | Sens |
 |---|---|
-| **Session** | Durée de vie du processus serveur, en pratique une soirée. Elle porte les tokens des joueurs. |
+| **Session** | Une soirée, restaurable après redémarrage. Elle porte les tokens des joueurs jusqu'à leur expiration ou la fin de session. |
 | **Partie** | Une suite de rounds qui se termine par la vérification finale puis le classement. Une session peut enchaîner plusieurs parties. |
 | **Round** | Un extrait, les réponses, la notation, le reveal. |
 | **Asset** | Un extrait audio préparé et stocké temporairement en RAM sur le VPS. |
 | **Reveal** | Publication aux joueurs du résultat d'un round : morceau, réponses, temps, rangs, points. |
-| **Host Player Mode** | L'hôte joue et ne voit jamais d'information sur le morceau avant le reveal. |
+| **Host Player Mode** | L'hôte joue sans métadonnées pendant les réponses ; le morceau courant devient visible pour la correction privée en REVIEW. |
 | **MC Mode** | L'hôte anime sans jouer et voit tout (fichier, prochain morceau). |
 
 ---
@@ -63,14 +63,14 @@ Le système a trois composants :
 1. **La solution la plus simple qui fonctionne**, pour 10 à 15 joueurs. Rien n'est conçu pour monter en charge.
 2. **Un processus, une boucle d'événements.** Toutes les mutations d'état sont des fonctions **synchrones** (aucun `await` au milieu) et les entrées/sorties se font après. Il n'y a donc ni verrou ni course entre les mutations.
 3. **Le serveur fait autorité** sur l'identité, les permissions, l'état, l'heure officielle, les réponses acceptées, l'ordre de validation et les scores. Le navigateur et le Bridge ne décident de rien.
-4. **État en RAM, pas de base de données.** Les scores sont la projection d'un **journal d'événements**, jamais un nombre modifiable.
+4. **État en RAM avec snapshots privés, pas de base de données.** Les scores sont la projection d'un **journal d'événements**, jamais un nombre modifiable.
 5. **Vue complète par destinataire.** À chaque changement, le serveur envoie à chaque client sa vue complète, filtrée selon son rôle. Une seule fonction, `view_for()`, décide de ce que voit qui : c'est le seul point de contrôle contre les fuites de spoilers.
 6. **Le Bridge est une frontière de sécurité, et il considère le serveur comme non fiable**, ce qui prépare le cas de plusieurs Bridges appartenant à des personnes différentes.
 7. **Remote-first.** La précision visée est celle qui reste perceptible avec un chat vocal en parallèle, soit quelques dizaines de millisecondes. Le vrai risque n'est pas l'horloge mais le cycle de vie audio sur mobile.
 8. **Anti-spoiler sur tous les vecteurs** :
    - URL audio opaque ;
    - extrait **sans tags ni pochette** ;
-   - aucune métadonnée dans la vue avant le reveal ;
+   - aucune métadonnée dans la vue joueur avant le reveal ; exception privée pour l'hôte dès REVIEW ;
    - console du Bridge et logs du serveur **sans noms de fichiers** par défaut.
 9. **Les brouillons ne sont pas des faits.** Les brouillons de réponse, de notation et d'ajustement final vivent côté serveur et ne deviennent des faits (réponse validée, `ScoreEvent`) que par une action explicite.
 10. **Mono-dev friendly** : peu de dépendances, peu de services, code lisible, tests là où le risque est réel.
@@ -89,7 +89,7 @@ Le système a trois composants :
 | FFmpeg | **Côté Bridge uniquement**. L'image serveur ne contient pas FFmpeg. | Image légère, aucun transcodage sur le VPS. | Transcoder sur le VPS : obligerait à y envoyer les fichiers complets. | — |
 | Format audio | **Par défaut AAC-LC 128 kbps, 48 kHz stéréo, MP4/.m4a faststart.** Opus/WebM 96 kbps reste candidat. Un seul format, réglé par configuration serveur. Le choix final est fait au spike S0. | AAC se décode partout via `decodeAudioData`. Le support d'Opus sur iOS dépend des versions et doit être mesuré. | MP3 : moins efficace, gestion du délai d'encodeur hétérogène. | 0004 |
 | Cache audio | **RAM**, plafond dur (32 Mo au total, 2 Mo par extrait). Éviction selon le rôle (précédent, courant, suivant). | Il n'y a que 2 à 4 Mo utiles, et rien à nettoyer. | tmpfs ou disque : fichiers partiels et nettoyage à gérer, sans bénéfice. | 0005 |
-| Persistance | **Aucune en V0.1.** Un snapshot JSON est candidat pour la V0.2. | La soirée est l'unité de vie. | SQLite : aucune requête ni relation, donc de la cérémonie. | 0005 |
+| Persistance | **Snapshots JSON atomiques privés**, sans audio ni base de données. Voir ADR 0009. | La soirée est l'unité de vie. | SQLite : aucune requête ni relation, donc de la cérémonie. | 0009 |
 | Scores | **Journal `ScoreEvent` comme source de vérité.** `score = Σ` des événements actifs. | Annulable, testable, traçable. | Compteur modifiable : corrections silencieuses, invariants impossibles à vérifier. | 0007 |
 | Temps de réponse | **Horodatage serveur brut** (horloge monotone), sans compensation RTT, affiché au dixième. | Impossible à falsifier pour le client, simple, explicable. | Compensation RTT : gain marginal et nouvelle surface de triche. | 0003 |
 | Auth | Mot de passe de partie → cookie `__Host-` HttpOnly. Élévation hôte par un second mot de passe. Bridge par bearer. | Simple, résistant au vol par XSS, reconnexion transparente. | JWT, ou bearer en `localStorage` (lisible en cas de XSS). | — |
@@ -185,7 +185,7 @@ Le système a trois composants :
 Les préférences locales (volume, et latence à partir de la V0.2) sont stockées dans `localStorage` sous des clés préfixées `openblindysir:`.
 
 **Interface hôte**
-- **Host Player Mode** : la vue joueur plus un **tiroir de contrôle** repliable (lancer, forcer, rejouer, stop, passer, fermer, +temps, noter, publier, terminer). Aucune métadonnée du morceau avant le reveal, ni sur les morceaux à venir.
+- **Host Player Mode** : la vue joueur plus un **tiroir de contrôle** repliable (lancer, forcer, rejouer, stop, passer, fermer, +temps, noter, publier, terminer). Aucune métadonnée pendant les réponses ; morceau courant privé en REVIEW, aucun morceau à venir.
 - **MC Mode** : tableau de bord complet (joueurs, connexions, états audio, RTT, prochain morceau, nom de fichier) et mêmes commandes.
 - **REVIEW**, dans les deux modes : voir §6.4.
 - **FINAL_SCORE_REVIEW** : voir §6.6.
@@ -222,7 +222,8 @@ Les deux modes sont utilisables sur mobile.
 - Le volume `caddy_data` doit être **persistant**, sinon on se heurte aux limites de Let's Encrypt.
 
 ### 5.6 Persistance
-Aucune en V0.1. Voir §14.
+Snapshots JSON atomiques privés, sans base de données ni audio sur disque. Voir §14 et
+[ADR 0009](adr/0009-session-snapshots.md).
 
 ---
 
@@ -254,13 +255,13 @@ Aucune en V0.1. Voir §14.
 ### 6.3 Rapidité : règle canonique
 **Mesure**
 ```
-elapsed = answer_received_at_server − official_start_at
+elapsed = answer_received_at_server − official_start_at − paused_total_ms
 ```
 - `answer_received_at_server` : horloge **monotone** du serveur, lue **à l'entrée du handler** `ANSWER_SUBMIT`, avant tout `await` ou toute validation coûteuse.
 - `official_start_at` : le `start_at` du **premier** `PLAY` du round. **Il ne change jamais**, ni sur un replay, ni après un stop.
 - **Aucun timestamp client n'est accepté.** Le schéma de `ANSWER_SUBMIT` interdit tout champ supplémentaire.
 - **Aucune compensation RTT ou réseau.** Les sources d'erreur sont la latence aller (10 à 200 ms), la synchronisation audio (environ ±60 ms), le Bluetooth (100 à 300 ms) et surtout le temps de réaction humain (plusieurs secondes). Une compensation ne corrigerait que la première, en partie, et ouvrirait une possibilité de triche (gonfler son RTT).
-- La pause, prévue en V0.2, exclura le temps passé en pause.
+- La pause synchronisée exclut de cette mesure la durée de suspension et le délai de reprise.
 
 **Données produites pour chaque réponse validée**
 | Donnée | Définition |
@@ -291,6 +292,16 @@ Vue hôte, triée par ordre de validation, puis les réponses non validées, pui
 ```
 - Chaque ligne a des boutons rapides et un champ libre ±N : entier signé, négatifs autorisés, bornes ±1000.
 - L'hôte se note lui-même comme n'importe quel joueur.
+- Le titre et l'artiste du morceau courant sont visibles uniquement aux hôtes dès
+  REVIEW. Ils peuvent être corrigés avant publication ; les morceaux suivants restent masqués
+  à l'hôte joueur.
+- Chaque ligne distingue **À vérifier** de **Vérifiée**, même pour un zéro volontaire.
+  Une saisie ±N est locale jusqu'à Entrée ou perte du focus, puis attend la confirmation
+  serveur. Publier avec des lignes non vérifiées exige `confirm_unreviewed=true` après
+  une confirmation explicite. Les totaux publiés et provisoires sont séparés.
+- La consigne et le barème titre/artiste sont partagés dès le lobby. La politique
+  `captured_policy` laisse la décision à l'hôte (`manual`) ou impose zéro aux brouillons
+  capturés (`zero`). Aucun point n'est calculé automatiquement.
 - Les points sont un **brouillon côté serveur**, visible uniquement par l'hôte. Il se modifie librement et survit à un rafraîchissement ou à une reconnexion de l'hôte.
 - **Publier** :
   - crée un `ScoreEvent(kind="round")` par joueur dont le delta est non nul ;
@@ -337,6 +348,12 @@ Yo (toi)  15   [−] [ +1 ] [+]   15 → +1 → 16     ▸ détail
 - Podium (trois premiers) puis classement complet, nombre de rounds joués, et **ajustements finaux affichés** en toute transparence (« ajustement final : Ayoub +2 »).
 - **Les scores de la partie sont figés en V0.1** : aucun `ScoreEvent` ne peut plus être ajouté à cette partie.
 - Actions possibles : nouvelle partie (scores à zéro, joueurs conservés) ou fin de session.
+- Récapitulatif publié par joueur : morceau, réponse, statut, temps, rang, points et
+  corrections. Exports CSV (UTF-8, valeurs textuelles protégées des formules) et JSON.
+  L'historique des 50 dernières parties terminées est réservé aux hôtes dans le lobby
+  ou les résultats ; il persiste avec la session.
+- Équipes : somme des scores individuels, classement partagé. Spectateurs : écoute et
+  résultats sans réponse, ready check ni score. L'hôte les configure uniquement au lobby.
 
 ### 6.8 Visibilité des informations
 
@@ -371,7 +388,9 @@ Yo (toi)  15   [−] [ +1 ] [+]   15 → +1 → 16     ▸ détail
 **Métadonnées du morceau**
 | Phase | Joueur | Hôte (Player Mode) | Hôte (MC Mode) |
 |---|---|---|---|
-| Avant REVEALED | ✗ | ✗ | ✓ |
+| QUEUED à OPEN | ✗ | ✗ | ✓ |
+| REVIEW, morceau courant uniquement | ✗ | ✓ | ✓ |
+| REVEALED et récapitulatif final | ✓ | ✓ | ✓ |
 | Morceaux à venir | ✗ | ✗ | ✓ |
 
 **En FINAL_SCORE_REVIEW**
@@ -477,7 +496,7 @@ REQUESTED ─► ENCODING ─► UPLOADING ─► STORED ─► EVICTED
 | Échec FFmpeg, codec invalide, morceau trop court | ✅ | Même mécanisme. Moins de 8 s : FAILED. Plus court que l'extrait demandé : morceau entier. |
 | Upload incomplet ou invalide | ✅ | Jamais `STORED`. Un nouvel essai, puis remplacement. |
 | Mémoire du cache pleine | ✅ | Éviction de tout ce qui n'est ni courant ni suivant, puis refus du job avec un log. |
-| Redémarrage ou crash du conteneur | ⚠️ documenté | Session perdue, les clients reviennent à l'accueil. Le snapshot est candidat pour la V0.2. |
+| Redémarrage ou crash du conteneur | ✅ récupération | Snapshot restauré : joueurs, réponses, scores, réglages et historique. OPEN interrompu passe en REVIEW avec avertissement ; un extrait en préparation est régénéré à la reconnexion du Bridge. L'audio RAM est perdu. |
 | Échec de téléchargement côté joueur | ✅ | 3 essais avec backoff, puis `ERROR` visible par l'hôte, qui peut forcer le départ. |
 | AudioContext suspendu, autoplay bloqué | ✅ | Détecté via `ctx.state` → overlay « Touchez pour réactiver le son » → état `LOCKED` signalé. |
 | Téléphone verrouillé, onglet en arrière-plan | ✅ partiel | Au retour : rafale de synchro, reconnexion, réactivation, rattrapage de position. Lecture en arrière-plan **non garantie sur iOS** (documenté). |
@@ -495,7 +514,7 @@ Règles clés :
 - **HTTP (§8.1)** : `POST /api/session/join {password, nickname}` pose le cookie `__Host-openblindysir` ; élévation hôte par `POST /api/session/host` ; audio servi par `GET /api/audio/{asset_id}` (URL opaque, `no-store`) ; le Bridge envoie son catalogue et ses extraits par `PUT` (secret Bridge, puis upload token à usage unique).
 - **WebSocket joueur `/api/ws` (§8.2)** : cookie + vérification de l'`Origin`. Le serveur envoie `STATE {v, view}`, la vue complète filtrée par `view_for()` selon la matrice du §6.8. Pendant OPEN, la vue joueur et celle de l'hôte en Host Player Mode ne donnent sur les réponses que `progress {validated, expected} | null` (à `null` si `expected < 3`) ; `players[]` ne contient aucun champ lié à la réponse du round en cours.
 - `ANSWER_SUBMIT` est horodaté par le serveur et tout champ supplémentaire est rejeté ; `ANSWER_ACK` ne contient aucune donnée temporelle ; les commandes `HOST` sont refusées hors session hôte et idempotentes (`round_id` / `expected_phase`).
-- **WebSocket Bridge `/api/bridge/ws` (§8.3)** : `Authorization: Bearer BRIDGE_SECRET`. `PREPARE` est la seule commande métier, sans chemin ni argument FFmpeg ; `JOB_FAILED` ne contient jamais de chemin absolu ; les tags renvoyés par `JOB_DONE` servent uniquement au reveal.
+- **WebSocket Bridge `/api/bridge/ws` (§8.3)** : `Authorization: Bearer BRIDGE_SECRET`. `PREPARE` est la seule commande métier, sans chemin ni argument FFmpeg ; `JOB_FAILED` ne contient jamais de chemin absolu ; les tags renvoyés par `JOB_DONE` servent à la correction privée en REVIEW puis au reveal.
 
 Détail complet : [docs/protocol.md](protocol.md)
 
@@ -521,7 +540,7 @@ Détail complet : [docs/sync.md](sync.md)
 D:\Music\Anime\foo.flac (70 Mo)
   │ 1. Bridge reçoit PREPARE{track_id, start_fraction, duration}
   │ 2. lookup track_id → relpath → realpath + confinement + fichier régulier
-  │ 3. ffprobe (timeout 10 s) → durée + tags title/artist (reveal uniquement)
+  │ 3. ffprobe (timeout 10 s) → durée + tags title/artist (REVIEW privé puis reveal)
   │ 4. calcul du point de départ (règle ci-dessous)
   │ 5. ffmpeg (gabarit fixe, 1 thread, timeout 30 s) → fichier temporaire privé
   ▼
@@ -545,14 +564,15 @@ Navigateur : fetch (cookie, no-store) → decodeAudioData → AudioBuffer (~11,5
 - `-ac 2 -ar 48000`, `afade` (entrée 0,3 s, sortie 1,5 s)
 - `-c:a aac -b:a 128k -movflags +faststart`, ou `libopus 96k` si le spike S0 retient Opus
 
-Seules variables : le chemin (issu du catalogue), le départ et la durée (des flottants plafonnés **par le Bridge**, durée entre 5 et 60 s), le format (une valeur parmi une liste fixe).
+Variables autorisées : le chemin issu du catalogue, le départ et la durée plafonnés **par le Bridge** (5 à 60 s), le format parmi une liste fixe et deux booléens pour activer des filtres fixes. Aucun filtre ni argument libre envoyé par le serveur.
 
 **Contrôle de sortie** : avant l'upload, le Bridge mesure la durée réelle de l'extrait produit (ffprobe). En dessous de la moitié de la durée demandée (ou du morceau entier s'il est plus court), le job échoue en `DECODE_ERROR`. Un fichier tronqué dont l'en-tête annonce une durée trop longue produit sinon un conteneur valide mais vide, que les magic bytes ne détectent pas (constat du spike S1).
 
 **Choix du point de départ**
 - Le serveur envoie `start_fraction ∈ [0,1)`. Le Bridge l'applique à la fenêtre valide, qui va de `max(10 s, 8 % de la durée)` à `durée − extrait − max(20 s, 10 % de la durée)`.
 - Si la fenêtre est vide : départ au tiers du morceau. Si le morceau est plus court que l'extrait : morceau entier.
-- V0.2 : `volumedetect` dans la même passe ; en dessous de −45 dB on retente à une autre fraction (2 essais maximum). `loudnorm` pour homogénéiser les volumes.
+- Si `avoid_silence` est activé : analyse bornée de trois fenêtres au maximum avec `silencedetect` et `volumedetect`, timeout de 10 s par fenêtre. Un silence initial est évité ; un signal très faible mais exploitable reste accepté. Si les fenêtres sont silencieuses, erreur `SILENT_AUDIO` et remplacement du morceau.
+- Si `normalize_audio` est activé : filtre fixe `loudnorm=I=-16:TP=-1.5:LRA=11` avant les fondus. Les deux options sont activées par défaut et réglables par l'hôte. Le scan initial n'effectue pas d'audit audio de toute la bibliothèque.
 
 **Pourquoi télécharger l'extrait en entier** : 400 Ko se téléchargent en moins d'une seconde. Le décodage complet garantit un départ précis et rend le replay gratuit. Le streaming réintroduirait un buffering imprévisible.
 
@@ -579,7 +599,7 @@ Détail complet : [docs/bridge-security.md](bridge-security.md)
 |---|---|---|---|
 | Joueur qui envoie des commandes hôte | Triche, sabotage | Rôle stocké côté serveur et vérifié à chaque commande `HOST`. Test paramétré sur toutes les commandes. | V0.1 |
 | Joueur qui falsifie son temps de réponse | Avantage indu si l'hôte tient compte de la vitesse | Horodatage serveur uniquement, `extra="forbid"`, aucune compensation calculée à partir de données client. `late_start_ms` mesuré côté serveur. | V0.1 |
-| Joueur qui découvre le morceau à l'avance (DevTools) | Spoiler | URL aléatoire de 128 bits sans lien avec `track_id`, extrait **sans métadonnées**, `no-store`, préchargement client seulement pendant REVIEW, `view_for()` sans métadonnées avant le reveal. Écouter le morceau suivant quelques secondes plus tôt reste possible : risque accepté. | V0.1 |
+| Joueur qui découvre le morceau à l'avance (DevTools) | Spoiler | URL aléatoire de 128 bits sans lien avec `track_id`, extrait **sans métadonnées**, `no-store`, préchargement client seulement pendant REVIEW, `view_for()` sans métadonnées pour les joueurs avant le reveal et pour l'hôte joueur pendant OPEN. Écouter le morceau suivant quelques secondes plus tôt reste possible : risque accepté. | V0.1 |
 | Token de session volé | Usurpation d'identité | Cookie `__Host-openblindysir`, HttpOnly, Secure, SameSite=Strict ; token de 256 bits **stocké haché** ; expiration avec la session (fin, kick, 24 h d'inactivité). La reconnexion du vrai joueur expulse l'autre. Kick possible. | V0.1 |
 | Force brute sur les mots de passe | Accès au jeu, puis aux droits hôte | Limitation par IP des tentatives **échouées** (join 5/min, host 3/min), plafond global, `hmac.compare_digest` ; les connexions réussies ne sont pas comptées, pour ne pas bloquer des amis derrière la même box. **Démarrage refusé** si un secret manque, est faible (< 12 caractères, `BRIDGE_SECRET` < 32), vaut « changeme », ou si `HOST_PASSWORD == BLIND_PASSWORD`. IP réelle via `--proxy-headers`, uniquement depuis le proxy de confiance. | V0.1 |
 | XSS par pseudo ou réponse | Vol de session | Échappement React, `dangerouslySetInnerHTML` interdit par le lint, CSP stricte (`default-src 'self'`, pas d'inline, `media-src 'self' blob:`, `frame-ancestors 'none'`). Pseudo : NFKC, 1 à 24 caractères, sans caractères de contrôle, zero-width ni **bidi override**. Réponse ≤ 200 caractères. | V0.1 |
@@ -594,7 +614,7 @@ Détail complet : [docs/bridge-security.md](bridge-security.md)
 | MITM / absence de TLS | Vol des secrets | HTTPS obligatoire (Caddy + HSTS), cookie Secure, le Bridge refuse toute connexion non TLS hors localhost. | V0.1 |
 | Secrets dans les logs ou le dépôt | Fuite | Filtre de masquage dans les logs, aucun secret dans une URL. Hygiène Git au §19.7, secret scanning et push protection GitHub. | V0.1 |
 | Chaîne d'approvisionnement | Code malveillant | Lockfiles, Dependabot groupé, actions épinglées par SHA, image de base slim. | V0.1 |
-| Évasion du conteneur | Accès au VPS | Utilisateur non root, `read_only`, `no-new-privileges`, aucun volume monté sur l'app. | V0.1 |
+| Évasion du conteneur | Accès au VPS | Utilisateur non root, `read_only`, `no-new-privileges`, seul volume privé `app_data` monté sur l'app ; bibliothèque réservée au Bridge. | V0.1 |
 | Mot de passe de partie diffusé à des inconnus | Intrusion | Kick, `MAX_PLAYERS`, verrouillage des inscriptions. | V0.2 |
 
 ---
@@ -674,18 +694,25 @@ Détail complet : [docs/bridge-security.md](bridge-security.md)
 
 ## 14. Persistance
 
-| Donnée | Emplacement | Après un redémarrage | Raison |
-|---|---|---|---|
-| Joueurs, tokens hachés, rôles | RAM | Perdus | La session est l'unité de vie ; l'expiration est naturelle |
-| Partie, rounds, réponses, journal des scores, brouillons | RAM | Perdus (V0.1) | Aucune requête, un seul processus |
-| Catalogues | RAM | Perdus | Renvoyés automatiquement à la reconnexion du Bridge |
-| Assets audio | RAM | Perdus | Temporaires par nature |
-| Secrets, limites | `.env` | — | Source de vérité du déploiement |
-| Réglages de partie | RAM, choisis par l'hôte | Perdus | Valeurs par défaut dans le code, bornées par l'environnement |
-| *(V0.2, candidat)* Snapshot | `data/session.json`, écriture atomique à chaque publication et à chaque `final_validate` | Restauré s'il date de moins de 12 h | Survivre à un crash en pleine soirée ; le journal des scores se rejoue tel quel |
-| *(V1)* Historique des morceaux joués | `history.json` | Conservé | Éviter les répétitions d'une soirée à l'autre (Track IDs stables) |
+| Donnée | Emplacement | Après un redémarrage |
+|---|---|---|
+| Joueurs, rôles, hashes des cookies | RAM + snapshot privé | Restaurés ; TTL de session incluant l'interruption |
+| Partie, réponses, brouillons, journal des scores, réglages | RAM + snapshot privé | Restaurés ; OPEN interrompu ferme les réponses pour correction |
+| Catalogues, morceaux déjà entendus, corrections de métadonnées | RAM + snapshot privé | Conservés ; Bridges attendus hors ligne jusqu'à reconnexion |
+| Historique des 50 parties terminées | RAM + snapshot privé | Conservé, réservé aux hôtes |
+| Assets audio | RAM uniquement | Perdus, jamais écrits dans le snapshot |
+| Secrets, limites | `.env` | Configuration actuelle fait autorité ; secrets modifiés invalident les anciens cookies |
 
-**Pas de SQLite**, V1 comprise.
+`STATE_DIR=.local/state` en natif, `/data/state` dans Compose avec volume `app_data`.
+`session.json` est écrit atomiquement avec fsync ; `session.previous.json` fournit un
+repli si le dernier fichier est corrompu. Deux fichiers illisibles empêchent un démarrage
+silencieux avec perte de session. Format JSON versionné, classes autorisées, taille ≤64 MiB,
+sans pickle, audio ni secrets en clair. Les réponses et chemins relatifs du catalogue sont
+privés dans ce dossier : protéger son accès et le sauvegarder. Une erreur d'écriture laisse
+la partie fonctionner et affiche un avertissement à l'hôte. Voir [ADR 0009](adr/0009-session-snapshots.md).
+
+**Pas de SQLite.** Fin de session révoque les cookies et vide la partie et la liste des
+morceaux entendus ; les archives et corrections de métadonnées restent disponibles à l'hôte.
 
 ---
 
@@ -695,9 +722,10 @@ Détail complet : [docs/bridge-security.md](bridge-security.md)
 |---|---|---|
 | Secrets | `.env` | `BLIND_PASSWORD`, `HOST_PASSWORD`, `BRIDGE_SECRET` |
 | Déploiement | `.env` | `DOMAIN` (ex. `openblindysir.example.com`), `TRUSTED_PROXIES`, `LOG_LEVEL`, `LOG_FORMAT=text\|json`, `LOG_TRACK_NAMES=false` |
+| Sauvegarde de soirée | `.env` / Compose | `STATE_DIR=.local/state` en natif, `/data/state` sur le volume `app_data` dans Compose. Fichiers privés, sans audio ni secrets en clair ; voir ADR 0009. |
 | Limites serveur (valeurs par défaut raisonnables) | `.env` | `MAX_PLAYERS=20`, `CLIP_MIN_S=5`, `CLIP_MAX_S=60`, `CLIP_FORMAT=aac`, `CLIP_BITRATE=128`, `AUDIO_CACHE_MB=32`, `MAX_CLIP_MB=2`, `READY_TIMEOUT_S=10`, `ANSWER_MAX_CHARS=200`, `NEAR_TIE_MS=300`, `SESSION_IDLE_TTL_H=24` |
 | Développement | `.env` | `DEV_MODE=1` : cookie non Secure, mots de passe faibles tolérés, logs verbeux. **Jamais en production.** |
-| Réglages de partie | Interface hôte, dans les bornes de l'environnement | Nombre de rounds, durée des extraits, délai de grâce, sources, mode hôte, départ automatique |
+| Réglages de partie | Interface hôte, dans les bornes de l'environnement | Manches, extrait, délai après extrait, sources, rôle, départ automatique, répétitions, consigne/barème, brouillons capturés, loudnorm et silence |
 | Bridge | CLI > env > `config.toml` (§11) | URL du serveur, dossier, secret, nom, chemin de FFmpeg, extensions |
 
 > **Note de nommage.** Dans `BLIND_PASSWORD`, « BLIND » désigne le concept fonctionnel (le mot de passe pour rejoindre le blind test), pas une marque. Ce nom est retenu parce qu'il est court et parlant. Les variables ne portent pas de préfixe de marque : elles vivent dans le `.env` propre au déploiement, donc il n'y a pas de collision possible. C'est pour cette raison que le mode développement s'appelle simplement `DEV_MODE`.
@@ -830,7 +858,8 @@ Les trois paquets Python restent distincts (`openblindysir_protocol`, `openblind
 - Profils `deploy/Caddyfile.docker.private/public` ; autorité locale en privé,
   ACME en public, administration désactivée. Racine exportable, clés en volume.
 - Bibliothèque montée uniquement dans le Bridge, en lecture seule ; le montage
-  refuse de créer un dossier hôte absent. Volumes Caddy et identité Bridge persistants.
+  refuse de créer un dossier hôte absent. Volumes Caddy, identité Bridge et snapshots
+  applicatifs `app_data:/data` persistants.
 
 **Parcours utilisateur**
 - **Docker sur PC, sans autres runtimes applicatifs** :
@@ -922,7 +951,7 @@ Les trois paquets Python restent distincts (`openblindysir_protocol`, `openblind
 | **Français** (conception interne) | `docs/architecture.md`, `docs/protocol.md`, `docs/sync.md`, `docs/bridge-security.md`, `docs/testing.md`, `docs/DEVLOG.md`, `docs/adr/*`, notes techniques internes |
 | **Français** (produit V0.1) | Textes de l'interface web via `i18n/fr.ts` ; messages console du Bridge |
 
-> L'anglais pour l'interface (`en.ts`) et pour le Bridge reste prévu en V0.2 (§25) et **hors MVP** (§24). `SECURITY.md`, en anglais, résume le modèle de menaces et renvoie à `docs/bridge-security.md`, en français.
+> L'interface dispose des dictionnaires complets FR/EN. Les messages console du Bridge restent en français. `SECURITY.md`, en anglais, résume le modèle de menaces et renvoie à `docs/bridge-security.md`, en français.
 
 **Trois traces aux rôles distincts**
 
@@ -1161,7 +1190,7 @@ Prochaine étape recommandée — une seule.
 | Phase | `view_for(player)` | `view_for(host, player_mode)` | `view_for(host, mc)` |
 |---|---|---|---|
 | OPEN | Ni texte ni temps des autres, ni métadonnée du morceau. **Seulement `progress` agrégé**, sans aucun statut par joueur. | Identique à `player`, plus les commandes. **Aucune métadonnée.** | Métadonnées, morceau suivant, statut par joueur |
-| REVIEW | **Ni réponse, ni temps, ni rang des autres** | **Toutes les réponses, statuts, temps, rangs, `near_tie`, `late_start_ms`**. Pas de métadonnée du morceau. | Idem + métadonnées |
+| REVIEW | **Ni réponse, ni temps, ni rang des autres** | **Toutes les réponses, statuts, temps, rangs, `near_tie`, `late_start_ms`**. Métadonnées privées du morceau courant. | Idem + métadonnées |
 | REVEALED | Réponses, temps, rangs, points, morceau | Idem | Idem |
 | FINAL_SCORE_REVIEW | Dernier classement figé. **Ni `draft_delta` ni `score_after`.** | `final_review[]` complet | `final_review[]` complet |
 | Toutes | Jamais de `relpath`, de `track_id`, ni de `draft_last_changed_at` | Jamais de `relpath` ni de `track_id` avant le reveal | — |
@@ -1314,20 +1343,15 @@ Prévoir environ 10 % de plus pour les replays et les retéléchargements. Le We
 
 ## 24. Exclu du MVP
 
-- **Calcul automatique de points ou de bonus de vitesse**, y compris les barèmes pré-remplis ou les boutons « appliquer 3/2/1 ». *La mesure du temps, l'ordre et leur affichage font partie du MVP ; seule l'attribution automatique est exclue, et elle l'est définitivement.*
+- **Calcul automatique de points ou de bonus de vitesse**, y compris les boutons « appliquer 3/2/1 ». Le barème partagé titre/artiste et les boutons de notation restent des décisions manuelles de l'hôte. *La mesure du temps, l'ordre et leur affichage font partie du MVP ; seule l'attribution automatique est exclue, et elle l'est définitivement.*
 - Compensation de latence sur les temps de réponse.
 - Affichage du temps au joueur pendant le round (il est montré au reveal).
 - Affichage de `draft_last_changed_at` dans l'interface principale.
 - Réouverture de la vérification finale après `FINAL_RESULTS`.
 - Plusieurs Bridges, un secret par Bridge.
-- Pause et reprise.
 - Exécutables du Bridge, paquet PyPI, FFmpeg embarqué.
-- Snapshot ou restauration après crash ; historique d'une soirée à l'autre.
-- Détection de silence, normalisation du volume (`loudnorm`).
 - Curseur de latence manuel, code de récupération, verrouillage des inscriptions.
 - Sélection manuelle des morceaux, playlists, équilibrage par dossier.
-- Export des résultats.
-- Traduction anglaise (l'architecture est prête, pas le contenu).
 - Réponses visibles en direct en MC Mode.
 - Chat, avatars, thèmes, effets sonores, waveform, PWA.
 - Import Spotify, Deezer, YouTube ou CSV.
@@ -1340,7 +1364,7 @@ Prévoir environ 10 % de plus pour les replays et les retéléchargements. Le We
 | Version | Nom | Contenu |
 |---|---|---|
 | **V0.1** | « Une vraie soirée » | §23, validée par **une vraie soirée test** entre amis |
-| **V0.2** | « Confort et robustesse » | Pause (temps exclu de `elapsed`), curseur de latence, détection de silence et `loudnorm`, snapshot JSON (à confirmer après la soirée test), code de récupération, verrouillage des inscriptions, export JSON/CSV (avec `draft_last_changed_at`), réponses en direct en MC Mode, équilibrage par dossier, traduction anglaise |
+| **V0.2** | « Confort et robustesse » | Déjà implémentés après retour vidéo : pause/reprise, silence/loudnorm, snapshots, export JSON/CSV, équipes/spectateurs, historique, consigne/barème et traduction FR/EN. À venir : curseur de latence, code de récupération, verrouillage des inscriptions, réponses en direct MC et équilibrage par dossier |
 | **V0.3** | « Distribution » | `uvx openblindysir-bridge` (PyPI), binaires PyInstaller onedir `OpenBlindySir-Bridge-<version>-<os>-<arch>.zip`, assistant de premier lancement, documentation (dépannage, proxies), sélection manuelle en MC Mode |
 | **V1.0** | « Stable » | Protocole figé, **plusieurs Bridges**, un secret par Bridge, historique d'une soirée à l'autre, passe accessibilité, revue de sécurité, retrait du bandeau « early development » |
 

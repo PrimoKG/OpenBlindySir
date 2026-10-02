@@ -35,7 +35,7 @@
 **Exécution des jobs**
 - 1 job à la fois (2 au maximum), file de 4, rejet au-delà.
 - Timeouts : ffprobe 10 s, ffmpeg 30 s (processus tué), upload 60 s.
-- Fichiers temporaires dans un répertoire privé (`tempfile.mkdtemp`, préfixe `openblindysir-bridge-`), supprimés après envoi et purgés au démarrage.
+- Fichiers temporaires dans un répertoire privé (`tempfile.mkdtemp`, préfixe `openblindysir-bridge-`), supprimés après envoi. Le marqueur `owner.pid` identifie le processus propriétaire. Au démarrage, seuls les dossiers dont le propriétaire est prouvé arrêté sont purgés ; instances actives, anciens dossiers sans marqueur, liens et junctions sont conservés. Sous Windows, la vérification utilise `OpenProcess`/`GetExitCodeProcess`, jamais `os.kill(pid, 0)`.
 
 **Avant chaque ouverture de fichier**
 - Nouvelle résolution de `realpath`.
@@ -63,6 +63,7 @@ La fenêtre TOCTOU résiduelle est acceptée : il faudrait un attaquant déjà p
 - S'il manque, message clair avec la commande winget, brew ou apt.
 - **FFmpeg n'est pas embarqué en V0.x**, pour éviter les obligations liées aux builds GPL.
 - Gabarit fixe sans shell. `ffprobe` et `ffmpeg` reçoivent tous les deux `-protocol_whitelist file`, `-format_whitelist mp3,flac,wav,mov,ogg,aiff,asf,aac` et l'entrée `file:` + chemin résolu. Le serveur ne fournit jamais d'argument FFmpeg.
+- Les booléens `normalize_audio` et `avoid_silence` choisissent seulement des gabarits fixes. Normalisation `loudnorm=I=-16:TP=-1.5:LRA=11` avant les fondus ; recherche de silence sur trois fenêtres au maximum, chacune bornée à 10 s. Un extrait entièrement silencieux échoue en `SILENT_AUDIO`, sans rejeter un enregistrement simplement faible. Le catalogue initial reste un scan de fichiers, sans audit audio global.
 - FFmpeg détecte le format par le contenu, pas par l'extension. Sans la liste de démultiplexeurs, une playlist `ffconcat` ou HLS nommée `.mp3` pourrait lire d'autres fichiers, y compris hors de la racine. Voir [ADR 0008](adr/0008-ffmpeg-demuxer-whitelist.md) et les tests de régression associés.
 
 **Mode `--demo`** : catalogue virtuel de morceaux synthétiques (sinusoïdes, mélodies de bips, clics générés par `ffmpeg -f lavfi`). Il sert au développement, à la CI, aux tests E2E et à essayer un déploiement **sans aucun contenu protégé**.

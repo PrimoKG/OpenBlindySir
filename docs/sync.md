@@ -57,7 +57,14 @@ Comme le préchargement a lieu pendant REVIEW, tout le monde est généralement 
 - **Aucune resynchronisation pendant la lecture** : la dérive est négligeable sur moins de 60 s, et une correction serait audible.
 - En cas de (re)connexion pendant OPEN : rafale de synchro, téléchargement et décodage si nécessaire, puis règle « `T` passé ». Le joueur retombe sur la bonne position.
 - Un réveil de téléphone pendant la lecture suit le même chemin.
-- Le stop est immédiat ; le replay envoie un nouveau `PLAY` ; la pause (V0.2) envoie un `PLAY` avec `clip_offset` égal à la position mémorisée.
+- Le stop ordinaire est immédiat ; le replay envoie un nouveau `PLAY`.
+- La pause planifie `STOP {stop_at}` à un instant serveur proche et mémorise la
+  position audio et le temps de réponse restant. Les réponses sont suspendues à cet
+  instant. La reprise planifie un nouveau `PLAY` à cette position, déplace la deadline
+  et exclut toute la suspension de `elapsed_ms`. Départ et arrêt utilisent la même
+  conversion d'horloge et de latence de sortie. La précision acoustique reste à mesurer.
+- Après redémarrage du serveur, aucun audio RAM n'est rejoué. Une manche OPEN est
+  récupérée en REVIEW avec ses réponses ; une préparation est régénérée via le Bridge.
 
 ### 9.7 Déverrouillage audio selon le navigateur
 Comportements à confirmer au spike S0 sur les versions réelles.

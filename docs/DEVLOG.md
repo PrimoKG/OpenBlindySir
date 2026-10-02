@@ -633,3 +633,132 @@ Internet réel, arm64, Bridge réellement distant et vraie bibliothèque à test
 GHCR/VPS, soirée, WebKit, G1/G2 et release restent hors de cette intervention.
 **Prochaine étape recommandée** — Une fois Docker opérationnel, lancer une démo
 locale avec `tools/docker-host.ps1 init -Address localhost:8443 -Demo`, puis `start`.
+
+## 2026-10-03 — Retour vidéo : parcours de soirée, notation et reprise
+
+**Objectif / autorisation** — Après l'analyse des deux enregistrements fournis,
+le mainteneur a donné le GO « implémenter tout ça ». Appliquer les améliorations
+du parcours sans attribuer automatiquement des points : préparation explicite,
+revue exploitable, pause, récupération, résultats détaillés et confort mobile.
+Travail séquentiel local sur `codex/ux-game-night`, depuis `main` `e6b9567`.
+
+**Décisions / principales modifications**
+- Protocole **2** pour serveur, Bridge et web ; modèles Python stricts, types TS
+  et schema lock régénérés. Les trois composants se mettent à jour ensemble.
+- Réserve : morceaux disponibles/neufs, sélection parent/enfant sans doublon,
+  réduction des manches, lancement atomique avec les nouveaux réglages et
+  récupération d'une réserve épuisée. Les scores repartent de zéro à la nouvelle
+  partie ; les morceaux entendus restent exclus pendant la soirée.
+- Revue : morceau courant privé pour l'hôte après fermeture des réponses,
+  nettoyage conservateur et correction titre/artiste, zéro explicitement vérifié,
+  compteur des lignes vérifiées, brouillons numériques locaux et attente de
+  l'accusé serveur. Confirmation nécessaire pour publier des lignes non vérifiées.
+- Consigne, réponse attendue, barème titre/artiste et politique des brouillons
+  partagés ; notation manuelle, sans bonus de vitesse. Permissions de rôle
+  alignées entre commandes affichées et handlers.
+- Pause/reprise du son et du délai sur des instants serveur, avec position
+  conservée et suspension exclue du temps de réponse. Arrêt et départ utilisent
+  la même conversion d'horloge et de latence de sortie.
+- Snapshots JSON atomiques privés avec repli sur la version précédente : cookies
+  hachés, réponses, réglages, scores et historique, sans audio ni secrets en clair.
+  Une manche OPEN interrompue devient REVIEW avec brouillons capturés et alerte.
+  Le conteneur utilise `app_data:/data` ; une erreur de sauvegarde avertit l'hôte.
+- Récapitulatif par manche/joueur, corrections et exports JSON/CSV avec protection
+  des formules CSV ; historique hôte des 50 dernières parties. QR sans mot de
+  passe, sélections favorites locales, équipes par somme des points individuels
+  et spectateurs exclus des réponses, scores et joueurs attendus au départ.
+- Bandeau compact, délai de réponse distinct de la fin audio, focus ordinateur
+  sans ouverture automatique du clavier mobile, défilement de page pour l'hôte,
+  états d'erreur récupérables, cibles tactiles et dictionnaires FR/EN.
+- Bridge : `loudnorm` fixe, évitement du silence sur trois fenêtres bornées,
+  traitement des enregistrements faibles et diagnostic privé des fichiers
+  écartés lorsqu'ils sont rencontrés. Le scan initial reste sans ffprobe global.
+- ADR 0009 remplace la non-persistance de 0005 ; ADR 0010 documente les décisions
+  de produit. Spécification, protocole, synchronisation, sécurité Bridge,
+  CHANGELOG, README et guides mis à jour. Checklist manuelle dans `docs/testing.md`.
+
+**Bugs réellement découverts / corrections**
+- Une petite réserve ou des morceaux déjà entendus pouvaient laisser une nouvelle
+  partie en préparation ; diagnostic explicite et répétitions récupérables.
+  La reconstruction de réserve avec un seul morceau accepte maintenant les répétitions.
+- Le changement de rôle présenté par l'interface ne suivait pas exactement le
+  handler. Un même prédicat gouverne désormais la permission et l'action.
+- Le zéro initial de notation était indiscernable d'une décision explicite ;
+  `reviewed` sépare ces états. Les échos serveur pouvaient perturber une saisie
+  numérique ; la modification reste locale jusqu'à sa validation et son accusé.
+- Un seuil de silence trop strict écartait les morceaux faibles pourtant
+  normalisables. Les essais synthétiques contrôlent le gain obtenu et la
+  conservation d'un signal faible, ainsi que le rejet d'un silence réel.
+- Au démarrage, la purge Bridge supprimait les dossiers temporaires d'une autre
+  instance active. Le problème a été reproduit en lançant plusieurs piles de
+  test. Marqueur PID et détection sûre Windows/POSIX protègent maintenant les
+  processus actifs ; les dossiers anciens sans propriétaire sont conservés.
+- WebKit mobile débordait horizontalement avec l'option longue des brouillons.
+  Sélecteur borné et options raccourcies ; vérification 320/390/1280 px réussie.
+- La relecture visuelle a révélé une consigne demandant à l'animateur de noter sa
+  propre réponse. Le texte dépend maintenant de sa participation effective.
+
+**Tests réellement exécutés**
+- **Python** : `.venv/Scripts/python.exe -m pytest -p no:cacheprovider
+  --basetemp=.local/pytest-ux-complete-4`, FFmpeg/ffprobe dans PATH et Hypothesis
+  profil ci : **585 réussis, 1 ignoré, 8 intégration désélectionnés**, 27,53 s.
+  Le test ignoré nécessite la création de symlinks non autorisée sur ce Windows.
+- **Intégration** : suite complète serveur + Bridge démo : **8/8**, 285,19 s.
+  Après le correctif de purge et la notification des erreurs de snapshot,
+  `pytest server/tests/integration/test_full_game.py -m integration` a reconfirmé
+  la partie complète avec dix bots : **1/1**, 47,90 s.
+- **Bridge** : `pytest bridge/tests -p no:cacheprovider` : **39 réussis, 1 ignoré**,
+  9,24 s. FFmpeg réel, confinement, codecs, normalisation/silence et protection
+  des instances actives. Ces tests sont inclus dans la suite Python complète.
+- **Statique Python/protocole** : Ruff check/format **OK** (162 fichiers), Pyright
+  avec `.venv/Scripts/python.exe` : **0 erreur** ; `tools/gen_ts_types.py --check` :
+  types et schema lock **à jour**. Les bots n'utilisent plus un protocole 1 codé en dur.
+- **Web/Vitest** : `npm run lint` **OK** (46 fichiers), `npm test` : **31/31**, quatre
+  fichiers, sur la version finale. Capacités, clés de réglages, export CSV et
+  comportement de l'application couverts.
+- **Playwright Chromium** : `playwright test --project=chromium` : **22/22**,
+  1,2 min. Trois parties réelles (bureau/mobile/animateur), pause, réponses,
+  reconnexion, confidentialité et résultats, plus 19 scénarios d'interface.
+  Après la dernière correction de texte, parcours animateur reconfirmé : **1/1**,
+  23,4 s. Captures relues visuellement, dont revue MC et corrections finales mobile.
+- **Playwright WebKit** : suite complète **18 réussis, 4 ignorés**, 43,5 s.
+  Probe direct : `AudioContext` et `webkitAudioContext` absents dans ce build
+  Windows. Les trois parties audio et le test de téléchargement audio sont
+  explicitement ignorés par capacité ; les tests d'affichage restent exécutés.
+  Cela ne valide ni Safari réel ni l'audio iOS.
+- **Build** : TypeScript/Vite **OK**, 75 modules, bundle final 349,50 kB brut /
+  107,81 kB gzip. Docker app réellement construit sous Python 3.13.16 depuis un
+  contexte filtré d'environ 844 kB, sans parcourir les caches personnels.
+- **Docker** : image/UI, utilisateur **10001**, snapshot propriétaire 10001 et
+  mode **0600** : **PASS**. Deux conteneurs jetables ont partagé un volume de test ;
+  après SIGKILL et remplacement du premier conteneur, le second a restauré le
+  cookie hôte, l'identité, l'epoch et les réglages. Conteneurs et volume de test
+  supprimés. Ce contrôle cible le backend ; pas de nouveau test Caddy/TLS/VPS.
+- **Hygiène** : `tools/check_repo_hygiene.py` exécuté après staging et avant les
+  commits ; index et `git diff --cached --check` **OK**. Aucun enregistrement vidéo,
+  morceau réel, secret, configuration personnelle ou cache ajouté à Git.
+
+**Échecs / limites observées** — Les premières relances ont identifié des
+locators E2E devenus ambigus et les bots restés en protocole 1 ; corrigés.
+L'environnement a nécessité un interpréteur explicite pour Playwright et des
+répertoires de sortie neufs. Les tests désactivent le cache pytest pour éviter
+les différences d'ACL entre exécutions sandboxées et escaladées. Une fermeture
+volontaire de socket peut produire un callback `ConnectionResetError` Windows
+dans les logs ; les scénarios concernés passent. Aucun masquage du défaut ajouté.
+
+**Git / GitHub** — Branche locale `codex/ux-game-night` ;
+`72532ff fix(bridge): preserve temporary audio owned by live processes`,
+`ecfba4e feat: add resilient game-night controls and scoring UX`.
+Un commit documentaire distinct finalise les guides et ce compte rendu.
+Pas de push, PR, fusion, déploiement ou release dans cette intervention.
+Le HANDOFF historique préexistant est resté intact et ignoré par Git.
+
+**Gates** — G1: PENDING USER MEASUREMENT ; G2: PENDING USER MEASUREMENT.
+**État** — DONE pour l'implémentation et les validations locales disponibles.
+**Restant** — Safari/iPhone/Android réels, AAC de production, vraie bibliothèque,
+réseau/Bridge distant et mesures acoustiques/performances G1/G2. Les snapshots
+contiennent des réponses et des chemins privés et nécessitent des sauvegardes
+protégées ; aucune migration future du format local n'est promise.
+**Prochaine étape recommandée** — Mettre à jour les trois composants et rejouer
+une soirée de test sur les appareils et la bibliothèque du mainteneur selon
+`docs/testing.md`, puis consigner les mesures.

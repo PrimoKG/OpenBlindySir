@@ -64,6 +64,16 @@ side, types a free-text answer, and the host does the scoring.
 | **Web UI** | Each player's browser | React + TypeScript. Downloads and decodes the clip, then starts playback at a time set by the server, using a synchronised clock. |
 | **OpenBlindySir Bridge** | The PC with the music | Python CLI. Folder scanner, sandbox, FFmpeg clip jobs, outbound client. Knows nothing about the game rules. |
 
+Game-night controls include shared instructions and scoring rules, teams and spectators,
+QR invitations, saved folder selections, pause/resume, detailed results and CSV/JSON exports.
+Private local snapshots preserve the session across restarts; audio remains in RAM only.
+The host can inspect and correct the current title/artist after answers close, marks each
+score explicitly (including zero), and confirms any unchecked rows before publication.
+The Bridge can normalize volume and avoid silent excerpts, with excluded files reported
+to the host. See the [user guide](docs/guide-utilisateur.md).
+
+**Protocol 2:** update the server, Bridge and web UI together.
+
 Full Docker Compose hosting is available: server plus built web UI, the official
 Caddy image, and a Bridge image containing FFmpeg. Windows and Unix launchers
 initialize the private configuration, start the services and open `/host` in your
