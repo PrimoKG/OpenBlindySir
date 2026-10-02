@@ -176,3 +176,41 @@ def test_file_deleted_after_scan_is_replaced(bare_stack: Stack) -> None:
     assert "event=track_unavailable" in log
     assert "code=NOT_FOUND" in log
     assert "openblindysir-bridge-demo" not in bare_stack.bridge_log()  # no path on the console
+
+
+# --- early end during OPEN -----------------------------------------------------------------
+
+
+async def _early_end(stack: Stack, mode: str) -> None:
+    async with Table(stack.base_url, 3, BLIND, HOST) as table:
+        table.host.auto_answer = False
+        await table.setup(rounds=3, clip=20, grace=30)
+        await table.start()
+        view = await table.wait_round(1, "OPEN")
+        assert view["round"]["round_id"]
+        await table.bots[0].wait_for(
+            lambda v: ((v.get("round") or {}).get("my_answer") or {}).get("status") == "LOCKED"
+        )
+        await table.host.on_round("end_game", {"current_round": mode})
+        if mode == "score":
+            review = await table.wait_round(1, "REVIEW")
+            assert review["round"]["ending"] is True
+            assert review["audio"]["next"] is None  # prefetch stopped
+            locked = [r["player_id"] for r in review["round"]["answers"] if r["status"] == "LOCKED"]
+            await table.score_and_publish({pid: 1 for pid in locked})
+            final = await table.finish()
+            assert final["final_results"]["rounds_played"] == 1
+            assert sum(table.scores(final["final_results"]).values()) == len(locked)
+        else:
+            await table.wait_host(lambda v: v["phase"] == "FINAL_SCORE_REVIEW")
+            final = await table.finish()
+            assert final["final_results"]["rounds_played"] == 0
+            assert set(table.scores(final["final_results"]).values()) == {0}
+        diag = await table.diagnostics()
+        assert diag["jobs"] == []  # prefetch jobs cancelled
+        assert diag["cache"] == []  # assets evicted
+
+
+@pytest.mark.parametrize("mode", ["score", "abandon"])
+def test_end_game_during_open(stack: Stack, mode: str) -> None:
+    run(_early_end(stack, mode))
