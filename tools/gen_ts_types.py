@@ -88,7 +88,7 @@ def check_keys(schema: Mapping[str, Any]) -> None:
         raise UnsupportedSchemaError(f"unsupported keyword(s) {sorted(unknown)}")
 
 
-def type_expr(schema: Mapping[str, Any]) -> str:  # noqa: PLR0911, PLR0912 - one branch per keyword
+def type_expr(schema: Mapping[str, Any]) -> str:
     """TypeScript type expression of a JSON Schema fragment."""
     check_keys(schema)
     if "$ref" in schema:

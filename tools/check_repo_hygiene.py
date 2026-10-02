@@ -403,7 +403,7 @@ def is_adts_frame(head: bytes) -> bool:
     return (head[2] >> 2) & 0xF < 13
 
 
-def detect_audio_signature(head: bytes) -> str | None:  # noqa: PLR0911 - one return per signature
+def detect_audio_signature(head: bytes) -> str | None:
     """Name the audio container recognised from the first bytes of a file, if any."""
     if head[:3] == b"ID3" and len(head) >= 5 and head[3] in (2, 3, 4) and head[4] != 0xFF:
         return "MP3 (ID3 tag)"
