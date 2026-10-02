@@ -63,3 +63,27 @@
 | B → S | `JOB_DONE {job_id, actual_start, clip_duration, track_duration, bytes, sha256, tags?:{title, artist}}` | Les tags servent **uniquement au reveal** |
 | B → S | `JOB_FAILED {job_id, code}` | Code normalisé, **jamais de chemin absolu** |
 | ↔ | `PING` / `PONG` | Heartbeat |
+
+## 8.4 Registre des choix d'implémentation
+
+La spec fixe les noms de messages, l'enveloppe et les arguments de `end_game`, `score_draft`, `adjust`, `final_set` et `final_validate`. Les choix ci-dessous complètent ce qu'elle laisse ouvert ; ils sont implémentés dans le paquet `openblindysir_protocol` (version de protocole 1). Toute modification du schéma impose d'incrémenter `PROTOCOL_VERSION` (`protocol/schema.lock.json`, vérifié en CI).
+
+| Élément | Choix | Raison |
+|---|---|---|
+| `replay.args.play_id`, `stop.args.play_id` | Dernier `play_id` vu par l'hôte | Idempotence (§7.6) : `round_id` seul ne distingue pas un double clic sur « Rejouer ». |
+| `add_time.args.expected_deadline` | Deadline vue par l'hôte | Un double clic ne doit pas ajouter 30 s. |
+| `adjust.args.op_id` (en plus de `{player_id, delta, round_id?, note?}`) | Clé générée par le client, appliquée une seule fois par partie | `adjust` est le seul incrément sans transition d'état ; le §7.6 exige l'idempotence. |
+| Enveloppe de `set_mode`, `kick`, `rename`, `end_session` | `expected_phase` (n'importe quelle phase) | « Toutes idempotentes grâce à `round_id` ou `expected_phase` » (§8.2), appliqué à la lettre : chaque commande porte exactement une des deux clés. |
+| `undo_publish`, `round_id` | Round REVEALED le plus récent (`host.undo_round_id`), pas le round courant | La fenêtre du §6.5 couvre le moment où le round suivant est déjà courant en QUEUED/PREPARING/LOADING. |
+| Unité de `PLAY.clip_offset` | Secondes | Unité de `AudioBufferSourceNode.start`. |
+| Valeurs de `ANSWER_ACK.reason` | `closed`, `not_open`, `wrong_round`, `already_locked`, `not_participant`, `empty`, `too_long` | Le §8.2 prévoit `reason?` sans liste. Une seconde validation reçoit `already_locked` (« ignorée », §6.2). |
+| Codes de fermeture hors 4001/4003/4004 | Codes standard 1000, 1001, 1008, 1009 uniquement | Aucun nouveau code applicatif. Un Bridge remplacé est fermé en `1000 "replaced"`. |
+| Tableau de l'hôte en REVIEW | `answers[]` comme au §8.2, chaque élément `{player_id, text, status, elapsed_ms, order, near_tie, late_start_ms}` **plus `points_draft`** ; le round porte aussi `ending` | Le brouillon de notation doit survivre à un rafraîchissement de l'hôte (§6.4). |
+| Éléments de `final_review[]` | Champs du §8.2 **plus `adjustments[]`** (événements `adjustment` actifs) | « ▸ détail » du §6.6 liste les corrections. |
+| `STATE.v` | Compteur propre à chaque connexion, incrémenté seulement quand la vue de ce destinataire change | Une version globale révélerait les validations des autres joueurs. |
+| `PlayerOps.late_ms`, `DiagPlayer.browser_family` | Ajouts réservés aux hôtes | Décision de rejouer pendant OPEN (§9.4) ; panneau Diagnostic (§21). |
+| Vues | Trois modèles racine distincts : `PlayerView`, `HostPlayerModeView`, `HostMcView` | Une donnée interdite à une audience n'a aucun champ pour exister dans sa vue ; vérifié sur le JSON Schema (`protocol/tests/test_views_schema_reachability.py`). |
+| Messages serveur → Bridge | Validés côté Bridge comme des entrées non fiables (`extra="forbid"`, mode strict) | Le Bridge considère le serveur comme non fiable (§2, principe 6). |
+| `PREPARE.upload_url` | Chemin `/api/bridge/assets/a_…` uniquement ; le Bridge le joint à **sa propre** URL de serveur | Un serveur malveillant ne peut pas rediriger un upload vers un autre hôte. |
+| Réponse à `CATALOG_CHANGED` | Un nouveau `WELCOME` avec `catalog_needed=true` et un jeton d'upload neuf | Pas de nouveau type de message. |
+| Heartbeat du Bridge | Seul le serveur envoie `PING{c}` (toutes les 15 s), le Bridge répond `PONG{c}` ; lien considéré mort après 45 s sans trame | La liste des commandes acceptées par le Bridge reste exactement WELCOME/PREPARE/CANCEL/PING. |

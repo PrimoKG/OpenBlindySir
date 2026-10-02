@@ -456,7 +456,7 @@ def is_dockerfile(rel: PurePosixPath) -> bool:
 
 
 def is_comment(line: str) -> bool:
-    return line.lstrip("﻿ \t").lower().startswith(COMMENT_PREFIXES)
+    return line.lstrip("\ufeff \t").lower().startswith(COMMENT_PREFIXES)
 
 
 def is_placeholder(value: str) -> bool:
