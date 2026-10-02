@@ -1,0 +1,267 @@
+/* AA contrast tokens, touch targets >= 44 px, reduced motion respected (spec §5.1). */
+:root {
+  --bg: #111418;
+  --surface: #1c2128;
+  --text: #f2f4f7;
+  --muted: #b4bcc8;
+  --accent: #7cc4ff;
+  --accent-text: #0b1520;
+  --danger: #ff8a80;
+  --ok: #8ee6a0;
+  --warn: #ffd479;
+  --radius: 10px;
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+main,
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.center {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.narrow {
+  max-width: 420px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--surface);
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+input {
+  min-height: 44px;
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--muted);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+input[type="checkbox"] {
+  min-height: auto;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--muted);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-small {
+  min-width: 44px;
+  padding: 0.25rem 0.5rem;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:focus-visible,
+input:focus-visible,
+.link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+.badge-off,
+.badge-error {
+  color: var(--danger);
+}
+
+.badge-ready,
+.badge-playing {
+  color: var(--ok);
+}
+
+.badge-locked {
+  color: var(--warn);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.warn,
+.notice {
+  color: var(--warn);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.saved {
+  font-size: 1.4rem;
+  color: var(--ok);
+}
+
+.countdown {
+  font-size: 5rem;
+  font-weight: 800;
+}
+
+.track {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table td {
+  padding: 0.4rem;
+  border-bottom: 1px solid var(--surface);
+  vertical-align: middle;
+}
+
+.points {
+  width: 5rem;
+}
+
+.list {
+  padding-left: 1.25rem;
+}
+
+.tree ul {
+  padding-left: 1.25rem;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 70%);
+  z-index: 10;
+}
+
+.drawer {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  padding: 0.75rem;
+  border-radius: var(--radius) var(--radius) 0 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.warnings {
+  color: var(--warn);
+  padding-left: 1.25rem;
+}
+
+.toast {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--warn);
+}
+
+.dialog {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--muted);
+  border-radius: var(--radius);
+}
+
+.diag {
+  max-height: 20rem;
+  overflow: auto;
+  font-size: 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none;
+    transition: none;
+  }
+}
