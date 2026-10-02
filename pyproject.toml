@@ -60,4 +60,7 @@ markers = [
   "integration: real server + demo Bridge subprocesses (run with -m integration)",
   "slow: > 5 s",
 ]
-filterwarnings = ["error"]
+filterwarnings = [
+  "error",
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
