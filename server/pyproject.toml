@@ -19,7 +19,7 @@ openblindysir-server = "openblindysir_server.cli:main"
 openblindysir-protocol = { workspace = true }
 
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = ["hatchling>=1.32.4"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
