@@ -1,24 +1,82 @@
 // Small accessible building blocks: real buttons, text+icon statuses, native dialogs.
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ButtonHTMLAttributes, type ReactNode, useEffect, useId, useRef } from "react";
 import { t } from "../i18n";
 import type { AudioState, ConnectionState } from "../protocol";
 
-export function Button(props: {
-  readonly children: ReactNode;
-  readonly onClick?: () => void;
-  readonly disabled?: boolean;
-  readonly kind?: "primary" | "secondary" | "danger";
-  readonly type?: "button" | "submit";
-}) {
+export function Button(
+  props: ButtonHTMLAttributes<HTMLButtonElement> & {
+    readonly children: ReactNode;
+    readonly kind?: "primary" | "secondary" | "danger";
+  },
+) {
+  const { kind = "secondary", className = "", children, ...buttonProps } = props;
   return (
     <button
+      {...buttonProps}
       type={props.type ?? "button"}
-      className={`btn btn-${props.kind ?? "secondary"}`}
-      onClick={props.onClick}
-      disabled={props.disabled}
+      className={`btn btn-${kind} ${className}`}
     >
-      {props.children}
+      {children}
     </button>
+  );
+}
+
+/** A record is the shared visual signature; decorative, without an icon dependency. */
+export function RecordMark(props: {
+  readonly size?: "small" | "large";
+  readonly playing?: boolean;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`record record-${props.size ?? "small"} ${props.playing ? "record-playing" : ""}`}
+    />
+  );
+}
+
+export function Brand() {
+  return (
+    <span className="brand">
+      <RecordMark />
+      <strong>{t("app.title")}</strong>
+    </span>
+  );
+}
+
+export function StageMessage(props: {
+  readonly title: string;
+  readonly description?: string | undefined;
+  readonly children?: ReactNode;
+  readonly busy?: boolean;
+}) {
+  return (
+    <section className="stage-message" aria-busy={props.busy || undefined}>
+      <RecordMark size="large" />
+      <LiveRegion>
+        <h1>{props.title}</h1>
+      </LiveRegion>
+      {props.description && <p className="muted stage-description">{props.description}</p>}
+      {props.children}
+    </section>
+  );
+}
+
+export function ConnectionScreen(props: {
+  readonly title: string;
+  readonly description?: string;
+  readonly children?: ReactNode;
+}) {
+  return (
+    <div className="entry-page">
+      <header className="entry-header">
+        <Brand />
+      </header>
+      <main className="connection-screen">
+        <StageMessage title={props.title} description={props.description}>
+          {props.children}
+        </StageMessage>
+      </main>
+    </div>
   );
 }
 
@@ -56,6 +114,8 @@ export function ConfirmDialog(props: {
   readonly onCancel: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const messageId = useId();
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) {
@@ -68,13 +128,20 @@ export function ConfirmDialog(props: {
     }
   }, [props.open]);
   return (
-    <dialog ref={ref} onCancel={props.onCancel} className="dialog">
-      <p>{props.message}</p>
+    <dialog
+      ref={ref}
+      onCancel={props.onCancel}
+      className="dialog"
+      aria-labelledby={titleId}
+      aria-describedby={messageId}
+    >
+      <h2 id={titleId}>{t("hostui.confirmTitle")}</h2>
+      <p id={messageId}>{props.message}</p>
       <div className="row">
+        <Button onClick={props.onCancel}>{t("hostui.cancel")}</Button>
         <Button kind="primary" onClick={props.onConfirm}>
           {t("hostui.confirm")}
         </Button>
-        <Button onClick={props.onCancel}>{t("hostui.cancel")}</Button>
       </div>
     </dialog>
   );
@@ -87,7 +154,10 @@ export function Toast(props: { readonly text: string; readonly onClose: () => vo
   }, [props.onClose]);
   return (
     <div className="toast" role="status">
-      {props.text}
+      <span>{props.text}</span>
+      <Button aria-label={t("app.dismiss")} onClick={props.onClose}>
+        ×
+      </Button>
     </div>
   );
 }
