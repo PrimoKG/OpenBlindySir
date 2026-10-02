@@ -1,0 +1,16 @@
+extend = "../../../../pyproject.toml"
+
+[lint.flake8-tidy-imports.banned-api]
+"asyncio".msg = "game/ is pure and synchronous (spec §2 principle 2)"
+"fastapi".msg = "game/ never imports FastAPI (spec §5.2)"
+"starlette".msg = "game/ never imports web frameworks (spec §5.2)"
+"uvicorn".msg = "game/ never imports web servers (spec §5.2)"
+"websockets".msg = "game/ never does network IO (spec §5.2)"
+"logging".msg = "the core emits Log effects, it does not log"
+"os".msg = "no IO in the core"
+"secrets".msg = "randomness is injected via IdFactory/Random"
+"time".msg = "the clock is injected (only clock.py imports it)"
+
+[lint.per-file-ignores]
+"clock.py" = ["TID251"]
+"ids.py" = ["TID251"]

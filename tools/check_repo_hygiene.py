@@ -280,7 +280,8 @@ class GitBlobReader:
     def read(self, sha: str, limit: int) -> tuple[int, bytes] | None:
         """Return ``(size, data)`` for a blob, or None when the object is missing."""
         stdin, stdout = self._process.stdin, self._process.stdout
-        assert stdin is not None and stdout is not None
+        assert stdin is not None
+        assert stdout is not None
         try:
             stdin.write(sha.encode("ascii") + b"\n")
             stdin.flush()
@@ -402,7 +403,7 @@ def is_adts_frame(head: bytes) -> bool:
     return (head[2] >> 2) & 0xF < 13
 
 
-def detect_audio_signature(head: bytes) -> str | None:
+def detect_audio_signature(head: bytes) -> str | None:  # noqa: PLR0911 - one return per signature
     """Name the audio container recognised from the first bytes of a file, if any."""
     if head[:3] == b"ID3" and len(head) >= 5 and head[3] in (2, 3, 4) and head[4] != 0xFF:
         return "MP3 (ID3 tag)"
@@ -523,6 +524,33 @@ def scan_text(rel: PurePosixPath, text: str) -> list[Finding]:
     return findings
 
 
+USES_LINE = re.compile(r"^\s*(-\s*)?uses:\s*(?P<target>\S+)")
+PINNED_USES = re.compile(r"^\s*(-\s*)?uses:\s*[^@\s]+@[0-9a-f]{40}\s+#\s*v\S+")
+
+
+def is_workflow_file(rel: PurePosixPath) -> bool:
+    """GitHub Actions workflow files, whose actions must be pinned (spec §12 supply chain)."""
+    parts = rel.parts
+    return (
+        len(parts) == 3
+        and parts[:2] == (".github", "workflows")
+        and rel.suffix.lower() in {".yml", ".yaml"}
+    )
+
+
+def check_actions_pinned(rel: PurePosixPath, text: str) -> list[Finding]:
+    """Every non-local ``uses:`` must be pinned to a 40-hex commit SHA with a version comment."""
+    findings: list[Finding] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        match = USES_LINE.match(line)
+        if not match or match.group("target").startswith("./"):
+            continue
+        if not PINNED_USES.match(line):
+            reason = "action not pinned to a full commit SHA with a '# vX.Y.Z' comment"
+            findings.append(Finding(rel.as_posix(), number, reason))
+    return findings
+
+
 def read_content(path: Path, size: int) -> bytes:
     """Read the whole file when it is small enough to scan, otherwise only its magic bytes."""
     with path.open("rb") as handle:
@@ -547,6 +575,8 @@ def check_data(rel: PurePosixPath, size: int, data: bytes) -> list[Finding]:
         text = decode_text(data)
         if text is not None:
             findings.extend(scan_text(rel, text))
+            if is_workflow_file(rel):
+                findings.extend(check_actions_pinned(rel, text))
     return findings
 
 

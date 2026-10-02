@@ -1,0 +1,33 @@
+[project]
+name = "openblindysir-server"
+dynamic = ["version"]
+requires-python = ">=3.12"
+license = "MIT"
+description = "OpenBlindySir Server"
+readme = { text = "Part of OpenBlindySir: https://github.com/PrimoKG/OpenBlindySir", content-type = "text/plain" }
+dependencies = [
+  "openblindysir-protocol",
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.9,<3",
+]
+
+[project.scripts]
+openblindysir-server = "openblindysir_server.cli:main"
+
+[tool.uv.sources]
+openblindysir-protocol = { workspace = true }
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "../VERSION"
+pattern = "(?P<version>.+)"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openblindysir_server"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"../LICENSE" = "openblindysir_server/LICENSE"

@@ -1,0 +1,63 @@
+[project]
+name = "openblindysir-workspace"
+version = "0.0.0"
+requires-python = ">=3.12"
+license = "MIT"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["protocol", "server", "bridge"]
+
+[tool.uv.sources]
+openblindysir-protocol = { workspace = true }
+openblindysir-server = { workspace = true }
+openblindysir-bridge = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "openblindysir-protocol",
+  "openblindysir-server",
+  "openblindysir-bridge",
+  "pytest>=8.3",
+  "hypothesis>=6.112",
+  "ruff>=0.7",
+  "pyright>=1.1.385",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["protocol/src", "server/src", "bridge/src", "tools"]
+extend-exclude = ["web"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "PT", "ASYNC", "S", "TID", "DTZ", "PL"]
+ignore = ["PLR0913", "PLR2004", "S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S", "PLR"]
+"tools/**" = ["S603", "S607"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pyright]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
+include = ["protocol/src", "server/src", "bridge/src", "tools"]
+exclude = ["**/node_modules", "web"]
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+testpaths = ["protocol/tests", "server/tests", "bridge/tests"]
+addopts = "-ra --strict-markers --strict-config -m \"not integration\""
+pythonpath = ["tools"]
+markers = [
+  "ffmpeg: requires ffmpeg/ffprobe on PATH",
+  "windows: runs only on Windows (junctions)",
+  "integration: real server + demo Bridge subprocesses (run with -m integration)",
+  "slow: > 5 s",
+]
+filterwarnings = ["error"]
