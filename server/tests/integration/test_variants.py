@@ -82,3 +82,67 @@ async def _reconnect_scenario(stack: Stack) -> None:
 
 def test_reconnect_during_open_round(stack: Stack) -> None:
     run(_reconnect_scenario(stack))
+
+
+# --- Bridge lost and found ---------------------------------------------------------------
+
+
+async def _bridge_scenario(stack: Stack) -> None:
+    async with Table(stack.base_url, 2, BLIND, HOST) as table:
+        await table.setup(rounds=3, clip=8, grace=5)
+        await table.start()
+        view = await table.wait_round(1, "OPEN")
+        current = view["audio"]["current"]["url"]
+        await table.wait_host(lambda v: v["host"]["bridge"]["jobs_in_flight"] == 0, timeout_s=60)
+
+        stack.stop_bridge()
+        await table.wait_host(lambda v: v["host"]["bridge"]["state"] == "OFFLINE")
+        # Already STORED clips stay playable.
+        assert (await table.bots[0].http.get(current)).status_code == 200
+
+        review = await table.wait_round(1, "REVIEW")
+        assert review["audio"]["next"] is not None  # N+1 was prepared before the loss
+        await table.score_and_publish({})
+        await table.host.on_round("next")
+        await table.wait_round(2, "OPEN", "REVIEW", timeout_s=60)  # round 2 uses the stored clip
+        await table.wait_round(2, "REVIEW")
+        await table.score_and_publish({})
+        await table.host.on_round("next")
+        waiting = await table.wait_round(3, "QUEUED", "PREPARING")
+        assert "bridge_offline" in waiting["host"]["warnings"]
+        diag = await table.diagnostics()
+        assert diag["jobs"] == []  # no zombie job while the Bridge is away
+
+        stack.start_bridge()
+        await table.wait_round(3, "LOADING", "COUNTDOWN", "OPEN", "REVIEW", timeout_s=90)
+        await table.wait_round(3, "REVIEW", timeout_s=60)
+        await table.score_and_publish({})
+        final = await table.finish()
+        assert final["final_results"]["rounds_played"] == 3
+    log = stack.server_log()
+    assert "event=bridge_lost" in log
+    assert log.count("event=bridge_connected") >= 2
+
+
+def test_bridge_killed_and_restarted(stack: Stack) -> None:
+    run(_bridge_scenario(stack))
+
+
+async def _bridge_lost_mid_job(stack: Stack) -> None:
+    async with Table(stack.base_url, 2, BLIND, HOST) as table:
+        await table.setup(rounds=2, clip=8, grace=5)
+        await table.start()
+        await table.wait_host(lambda v: v["host"]["bridge"]["jobs_in_flight"] >= 1)
+        stack.stop_bridge()  # a PREPARE is being encoded (slow-encode fault)
+        await table.wait_host(lambda v: v["host"]["bridge"]["state"] == "OFFLINE")
+        assert (await table.diagnostics())["jobs"] == []
+        stack.start_bridge()
+        await table.wait_round(1, "OPEN", "REVIEW", timeout_s=90)
+        await table.host.on_round("end_game", {"current_round": "abandon"})
+        await table.finish()
+    assert "event=job_failed" in stack.server_log()
+
+
+def test_bridge_lost_while_a_job_is_running(bare_stack: Stack) -> None:
+    bare_stack.start_bridge("slow-encode=4000")
+    run(_bridge_lost_mid_job(bare_stack))
