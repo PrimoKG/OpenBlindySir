@@ -166,3 +166,32 @@
 - CI GitHub jamais exécutée (pas de remote).
 
 **Prochaine étape** — Interface web : socket, horloge, moteur audio, écrans joueur et hôte.
+
+## 2026-10-02 — Vertical slice n°1 : interface web et partie dans le navigateur (§26 étape 5, fin)
+
+**Objectif** — Interfaces joueur et hôte minimales et moteur audio, pour une partie complète jouée dans un vrai navigateur.
+
+**Décisions**
+- Le client n'applique aucune règle de jeu : les boutons de l'hôte sont exactement `view.host.commands` ; chaque commande hôte lit ses clés d'idempotence dans la vue affichée (`undo_publish` utilise `host.undo_round_id`, jamais le round affiché).
+- Moteur audio : un seul `AudioContext`, créé au premier geste ; planification avec `getOutputTimestamp` (repli `outputLatency`/`baseLatency`) ; rattrapage si le départ est passé ; l'extrait N+1 n'est jamais téléchargé pendant la lecture du client.
+- Interface en français ; dictionnaire anglais complet pour garder la parité des clés (la langue reste fixée à `fr` en V0.1).
+- Une réponse validée pendant une coupure réseau est gardée (une seule) et envoyée à la reconnexion si le round est toujours le même ; le serveur l'horodate à la réception.
+
+**Implémentation** — `web/src` : réseau (API, socket, store de vue, backoff, codes de fermeture), audio (horloge, planification, préchargement, rapports, déverrouillage, moteur), i18n, écrans joueur, tiroir hôte / tableau de bord MC (réglages et arborescence de la bibliothèque, ready check, commandes du round, notation, publication, annulation, ajustements, vérification finale avec confirmation, résultats, kick, diagnostic).
+
+**Zones touchées** — web, server (heartbeat), tools (bots).
+
+**Tests**
+- Web : Biome, `tsc --noEmit`, Vitest 21/21 (horloge avec gigue, asymétrie et valeurs aberrantes ; planification ; préchargement ; formats ; parité i18n et couverture des codes ; commandes hôte ; backoff ; codes de fermeture ; store de vue), `vite build` OK.
+- Python : 473 réussis, 1 ignoré ; intégration 1/1 (49 s).
+- **Test manuel** dans le navigateur intégré de l'application Claude (Chromium/Electron), serveur `DEV_MODE` servant le build, Bridge démo, hôte dans le navigateur et bots joueurs : entrée, élévation hôte, déverrouillage audio, réglages et sélection de dossier, lancement, remplacement automatique d'une piste démo trop courte (« Morceau remplacé »), round OPEN avec compteur anonyme « 0/4 ont validé », validation « ✓ Réponse enregistrée » sans temps, notation (« 1. Yo — Sinus 440 — 16,6 s »), publication et reveal (« OpenBlindySir Demo — Mélodie 3 »), round 2, vérification finale (« 3 → 0 → 3 »), confirmation, résultats (« 2 rounds joués »), nouvelle partie. Le son lui-même n'a pas été écouté (pas de sortie audio vérifiable dans cet environnement).
+- **Bug trouvé pendant ce test et corrigé** (`bdf8a62`) : le balayeur de heartbeat fermait les connexions silencieuses sans signaler la déconnexion au cœur ; les joueurs concernés restaient « en ligne » et attendus à chaque ready check. Les bots, qui n'envoyaient pas de PING, en étaient victimes (heartbeat ajouté aux bots, `ebd0ad1`). Test de non-régression ajouté.
+
+**État** — DONE pour la porte 5 (partie complète par bots en intégration, et dans le navigateur avec l'interface).
+
+**Problèmes connus**
+- Pas encore d'E2E Playwright ni des variantes d'intégration du §20.2 (reconnexion d'un bot pendant OPEN, Bridge tué puis relancé, upload corrompu, fichier supprimé après le scan, fin anticipée pendant OPEN) : étape 7.
+- Aucun test sur appareils réels (iOS, Android, Safari) ni mesure de synchronisation : dépend des portes G1/G2 (mainteneur).
+- CI GitHub jamais exécutée (pas de remote).
+
+**Prochaine étape** — Étape 6 (Bridge réel) : déjà en grande partie couverte (scanner, sandbox, sélection de dossiers, préchargement, remplacement ; tests Windows verts en local). Puis étape 7 : variantes d'intégration et E2E Playwright.
