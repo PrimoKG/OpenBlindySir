@@ -49,6 +49,14 @@ ce fichier. `start` construit les images nécessaires, démarre les trois servic
 attend leur démarrage et ouvre **`/host` dans votre navigateur par défaut**.
 Les services continuent à tourner après fermeture du terminal.
 
+Sous Windows, le lanceur prépare un dossier temporaire contenant uniquement les
+sources nécessaires aux images, puis le supprime après la construction. Cela
+évite que Docker tente d'ouvrir des résultats de tests ou des dossiers locaux
+inaccessibles, même lorsqu'ils sont exclus par `.dockerignore`. Aucun outil
+supplémentaire ni changement de droits sur ces dossiers n'est nécessaire.
+`start -NoBuild` réutilise les images déjà construites et refuse de construire
+implicitement depuis le dossier du dépôt.
+
 Pour un premier essai sans bibliothèque musicale :
 
 ```powershell
