@@ -84,8 +84,11 @@ class Bot:
         await self.send({"t": "HELLO", "client_version": "bot", "protocol": PROTOCOL})
         await self.send({"t": "AUDIO_STATUS", "state": "IDLE", "clock": CLOCK})
         self._reader = asyncio.create_task(self._read())
+        self._spawn(self._heartbeat())
 
     async def close(self) -> None:
+        for task in list(self._tasks):
+            task.cancel()
         if self._reader is not None:
             self._reader.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -99,6 +102,15 @@ class Bot:
         await self._ws.send(json.dumps(msg))
 
     async def _read(self) -> None:
+        try:
+            await self._read_loop()
+        except websockets.ConnectionClosed:
+            return
+        except Exception as exc:  # report instead of dying silently
+            print(f"{self.nickname}: reader failed: {exc!r}", file=sys.stderr, flush=True)
+            raise
+
+    async def _read_loop(self) -> None:
         async for raw in self._ws:
             msg = json.loads(raw)
             kind = msg["t"]
@@ -136,6 +148,13 @@ class Bot:
         task = asyncio.create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+    async def _heartbeat(self) -> None:
+        """PING every 5 s like a browser; the server marks silent players OFFLINE."""
+        loop = asyncio.get_running_loop()
+        while True:
+            await asyncio.sleep(5)
+            await self.send({"t": "PING", "c": loop.time() * 1000})
 
     async def _fetch_and_ready(self, ref: dict[str, Any]) -> None:
         response = await self.http.get(ref["url"])
