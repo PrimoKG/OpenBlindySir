@@ -8,9 +8,9 @@ from openblindysir_server.cli import gen_secrets, main
 from openblindysir_server.config import ConfigError, load_settings
 
 GOOD = {
-    "BLIND_PASSWORD": "a-long-blind-password",
-    "HOST_PASSWORD": "a-long-host-password",
-    "BRIDGE_SECRET": "x" * 40,
+    "BLIND_PASSWORD": "example-blind-password",
+    "HOST_PASSWORD": "example-host-password",
+    "BRIDGE_SECRET": "example-bridge-secret-0123456789abcdef",
     "DOMAIN": "openblindysir.example.com",
 }
 
@@ -34,7 +34,7 @@ def test_missing_secret_refused(var: str) -> None:
 
 
 def test_weak_values_refused_in_production() -> None:
-    env = {**GOOD, "BLIND_PASSWORD": "short", "BRIDGE_SECRET": "changeme"}
+    env = {**GOOD, "BLIND_PASSWORD": "example", "BRIDGE_SECRET": "changeme"}  # hygiene: allow
     found = problems(env)
     assert ("BLIND_PASSWORD", "too_short") in found
     assert ("BRIDGE_SECRET", "weak_value") in found
@@ -42,9 +42,9 @@ def test_weak_values_refused_in_production() -> None:
 
 def test_weak_values_tolerated_in_dev_mode() -> None:
     env = {
-        "BLIND_PASSWORD": "dev",
-        "HOST_PASSWORD": "devhost",
-        "BRIDGE_SECRET": "s",
+        "BLIND_PASSWORD": "example",
+        "HOST_PASSWORD": "example-h",
+        "BRIDGE_SECRET": "example-s",
         "DEV_MODE": "1",
     }
     settings = load_settings(env, dotenv=None)
