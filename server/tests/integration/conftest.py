@@ -112,6 +112,9 @@ def bare_stack(tmp_path: Path) -> Iterator[Stack]:
         "BRIDGE_SECRET": SECRET,
         "PORT": str(port),
         "READY_TIMEOUT_S": "5",
+        # Assertions inspect key=value events, regardless of the caller's logging preference.
+        "LOG_FORMAT": "text",
+        "LOG_LEVEL": "INFO",
     }
     env.pop("DOMAIN", None)
     log = (tmp_path / "server.log").open("ab")
