@@ -1,9 +1,12 @@
 import { type FormEvent, useState } from "react";
 import { t, tCode } from "../i18n";
 import { api } from "../net/api";
-import { Button } from "../ui/components";
+import { Brand, Button, RecordMark } from "../ui/components";
 
-export function JoinScreen(props: { readonly onJoined: () => void }) {
+export function JoinScreen(props: {
+  readonly onJoined: () => void;
+  readonly notice?: string | null;
+}) {
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -11,6 +14,8 @@ export function JoinScreen(props: { readonly onJoined: () => void }) {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setError(null);
     setBusy(true);
     const result = await api.join(password, nickname);
     setBusy(false);
@@ -22,50 +27,88 @@ export function JoinScreen(props: { readonly onJoined: () => void }) {
   };
 
   return (
-    <main className="center narrow">
-      <h1>{t("app.title")}</h1>
-      <form onSubmit={submit} className="stack">
-        <h2>{t("join.title")}</h2>
-        <label>
-          {t("join.password")}
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </label>
-        <label>
-          {t("join.nickname")}
-          <input
-            value={nickname}
-            maxLength={24}
-            autoComplete="nickname"
-            onChange={(e) => setNickname(e.target.value)}
-            required
-          />
-        </label>
-        {error && (
-          <p role="alert" className="error">
-            {error}
+    <div className="entry-page">
+      <header className="entry-header">
+        <Brand />
+        <span className="muted">{t("join.tagline")}</span>
+      </header>
+      <main className="entry-layout">
+        <section className="entry-intro">
+          <p className="eyebrow">{t("join.eyebrow")}</p>
+          <h1>{t("join.headline")}</h1>
+          <p className="entry-description">{t("join.description")}</p>
+          <div className="entry-record">
+            <RecordMark size="large" />
+            <span>{t("join.recordLabel")}</span>
+          </div>
+          <ol className="game-steps">
+            <li>{t("join.listen")}</li>
+            <li>{t("join.guess")}</li>
+            <li>{t("join.lockIn")}</li>
+          </ol>
+        </section>
+        <section className="join-panel" aria-labelledby="join-title">
+          {props.notice && (
+            <p className="notice" role="status">
+              {props.notice}
+            </p>
+          )}
+          <form onSubmit={submit} className="stack" aria-busy={busy}>
+            <p className="eyebrow">{t("join.formEyebrow")}</p>
+            <h2 id="join-title">{t("join.title")}</h2>
+            <p className="muted">{t("join.hint")}</p>
+            <label>
+              {t("join.nickname")}
+              <input
+                value={nickname}
+                maxLength={24}
+                autoComplete="nickname"
+                onChange={(e) => setNickname(e.target.value)}
+                required
+                placeholder={t("join.nicknamePlaceholder")}
+              />
+            </label>
+            <label>
+              {t("join.password")}
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </label>
+            {error && (
+              <p role="alert" className="error">
+                {error}
+              </p>
+            )}
+            <Button type="submit" kind="primary" disabled={busy}>
+              {busy ? t("join.busy") : t("join.submit")}
+            </Button>
+          </form>
+          <p className="join-host-link">
+            <a href="/host">{t("join.hostLink")}</a>
           </p>
-        )}
-        <Button type="submit" kind="primary" disabled={busy}>
-          {t("join.submit")}
-        </Button>
-      </form>
-    </main>
+        </section>
+      </main>
+      <footer className="entry-footer">{t("join.footer")}</footer>
+    </div>
   );
 }
 
 export function HostGate(props: { readonly onElevated: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setError(null);
+    setBusy(true);
     const result = await api.elevate(password);
+    setBusy(false);
     if (result.ok) {
       props.onElevated();
     } else {
@@ -74,29 +117,36 @@ export function HostGate(props: { readonly onElevated: () => void }) {
   };
 
   return (
-    <main className="center narrow">
-      <h1>{t("app.title")}</h1>
-      <form onSubmit={submit} className="stack">
-        <h2>{t("host.gateTitle")}</h2>
-        <label>
-          {t("host.password")}
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </label>
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
-        <Button type="submit" kind="primary">
-          {t("host.submit")}
-        </Button>
-        <a href="/">{t("host.backToGame")}</a>
-      </form>
-    </main>
+    <div className="entry-page">
+      <header className="entry-header">
+        <Brand />
+      </header>
+      <main className="host-gate">
+        <form onSubmit={submit} className="stack join-panel" aria-busy={busy}>
+          <p className="eyebrow">{t("host.eyebrow")}</p>
+          <h1>{t("host.gateTitle")}</h1>
+          <p className="muted">{t("host.gateHint")}</p>
+          <label>
+            {t("host.password")}
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </label>
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
+          <Button type="submit" kind="primary" disabled={busy}>
+            {busy ? t("join.busy") : t("host.submit")}
+          </Button>
+          <a href="/">{t("host.backToGame")}</a>
+        </form>
+      </main>
+    </div>
   );
 }
