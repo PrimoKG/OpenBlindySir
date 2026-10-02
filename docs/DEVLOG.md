@@ -513,3 +513,48 @@ mesures G1/G2, vraie bibliothèque, déploiement VPS/Docker et release restent o
 
 **Prochaine étape recommandée** — Suivre `docs/deployment.md` avec l'adresse LAN
 ou VPN réelle du PC, puis faire une partie d'essai avec les appareils des participants.
+
+## 2026-10-02 — Environnement complet Docker (implémentation)
+
+**Objectif** — GO du mainteneur pour isoler serveur, interface construite, Caddy
+et Bridge/FFmpeg dans Docker ; conserver le parcours manuel et ouvrir `/host`
+dans le navigateur avec un lanceur local.
+
+**Décisions / modifications** — Dockerfile multi-stage avec cibles app et bridge,
+bases multi-architecture fixées par digest, dépendances Python/npm verrouillées.
+FFmpeg est uniquement dans le Bridge ; ses paquets Debian sont installés au build.
+L'app est non root, le dossier musical est monté en lecture seule, les secrets
+et données privées restent hors du contexte de build grâce à une allowlist.
+Les services partagent un espace réseau pour conserver le backend en boucle
+locale, le Bridge HTTP localhost autorisé et les proxies approuvés loopback.
+Seuls HTTPS et, en public, HTTP pour certificats/redirection sont publiés.
+Configuration privée générée dans un conteneur sans Python hôte ; lanceurs
+PowerShell et POSIX init/start/stop/status/open/certificate. Les données Caddy
+et l'identité du Bridge persistent en volumes, pas la partie en RAM.
+Les variables du lancement natif ne remplacent pas les réglages du lanceur.
+
+**Tests locaux exécutés** — `pytest test_docker_config.py test_host_pc.py` :
+43/43, dont 11 nouveaux cas Docker. Ruff/format : OK ; Pyright avec le Python
+du venv : 0 erreur. Parsing PowerShell : OK. `docker compose config --quiet`
+avec configuration privée générée : OK. Moteur Docker Desktop arrêté au départ ;
+`docker desktop start` lancé, mais son API ne répond toujours pas. Aucun test
+conteneur local n'est encore déclaré réussi. Validation réelle prévue dans
+le nouveau job Docker CI : init PowerShell, build, services, certificat vérifié,
+UI, origine, cookie Secure, WSS, clips, deux manches et résultats, arrêt POSIX.
+Les bots de test acceptent une autorité TLS explicite, sans désactiver TLS.
+
+**Bugs réellement découverts** — Aucun nouveau bug métier. Pendant cette
+implémentation, publication IPv6 passée en syntaxe longue et typage des options
+WebSocket TLS corrigés avant commit. Le tag Caddy 2.11.6-alpine n'existe pas
+dans le registre ; l'image officielle disponible 2.11.4 est fixée par digest.
+
+**Git / GitHub** — Issue #5, branche `codex/full-docker-hosting` depuis main
+`a2c717b`. Commits granulaires, PR et CI avant rebase-merge et push demandés.
+Le HANDOFF préexistant reste intact et non suivi. Guides et résultat distant
+seront consignés dans une entrée supplémentaire après validation.
+
+**Gates** — G1: PENDING USER MEASUREMENT ; G2: PENDING USER MEASUREMENT.
+**État** — PARTIAL : code et validations statiques prêts, conteneurs/CI et guides
+en cours. Pas de VPS, soirée réelle, mesure acoustique ou release.
+**Restant** — Validation des images/partie Docker, guides, publication Git.
+**Prochaine étape recommandée** — Exécuter la partie Docker synthétique en CI.

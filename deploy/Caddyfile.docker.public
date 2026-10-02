@@ -1,0 +1,8 @@
+{
+    admin off
+    persist_config off
+}
+
+{$TLS_HOST} {
+    reverse_proxy 127.0.0.1:8000
+}
