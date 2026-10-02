@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spike S0 audio</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --fg: #16181d; --muted: #5b6270; --card: #ffffff; --line: #d9dde3;
+    --accent: #2457d6; --ok: #137a3a; --bad: #b42318; --warn: #a15c00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111317; --fg: #e8eaee; --muted: #9aa2b1; --card: #1a1d23; --line: #2c313a;
+            --accent: #6f95ff; --ok: #4ccb7b; --bad: #ff7b6e; --warn: #f0b04f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 4px 0 12px; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          padding: 12px 14px; margin-bottom: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 16px; }
+  .kv { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed var(--line);
+        padding: 2px 0; font-variant-numeric: tabular-nums; }
+  .kv span:first-child { color: var(--muted); }
+  button { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--card);
+           color: var(--fg); padding: 8px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #unlock { width: 100%; font-size: 22px; padding: 18px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+           font-size: 13px; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .scroll { overflow-x: auto; }
+  input[type=number] { width: 90px; font: inherit; padding: 4px; }
+  select { font: inherit; padding: 4px; }
+  #countdown { font-size: 28px; font-weight: 600; min-height: 1.4em; }
+  #log { font: 12px/1.35 ui-monospace, Consolas, monospace; white-space: pre-wrap; max-height: 220px;
+         overflow-y: auto; color: var(--muted); }
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.78); color: #fff; display: none;
+             align-items: center; justify-content: center; text-align: center; font-size: 24px;
+             padding: 24px; z-index: 10; }
+  #overlay.show { display: flex; }
+  small { color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="overlay" role="button" tabindex="0">Touchez pour réactiver le son<br><small id="overlay-state"></small></div>
+<main>
+  <h1>OpenBlindySir — spike S0 (synchro et formats)</h1>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:8px">
+      <span>Voix <b id="voice">?</b> <span id="voice-freq" class="badge">?</span></span>
+      <span>WS <span id="ws-state" class="badge">…</span></span>
+      <span>Audio <span id="audio-state" class="badge">…</span></span>
+    </div>
+    <button id="unlock" class="primary">Tester mon audio</button>
+    <div class="row" style="margin-top:8px">
+      <label>Recette de déverrouillage
+        <select id="recipe">
+          <option value="auto">auto (audioSession si dispo, sinon &lt;audio&gt; silencieux sur iOS)</option>
+          <option value="audioSession">navigator.audioSession.type = "playback"</option>
+          <option value="silent-audio">&lt;audio&gt; silencieux en boucle</option>
+          <option value="both">les deux</option>
+          <option value="none">aucune (resume + bip seulement)</option>
+        </select>
+      </label>
+    </div>
+    <small>iPhone : faire le test bouton silencieux <b>activé</b> puis désactivé, et noter le résultat.
+      Garder l'écran allumé pendant les mesures.</small>
+  </div>
+
+  <div class="card">
+    <h2>Lecture</h2>
+    <div id="countdown">—</div>
+    <div class="grid" id="play-info"></div>
+    <div class="row" style="margin-top:8px">
+      <label>Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8"></label>
+      <label>Latence manuelle (ms) <input id="manual-latency" type="number" step="1" value="0"></label>
+      <button id="stop">Stop</button>
+      <button id="sync">Rafale de synchro</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Horloge (§9.2)</h2>
+    <div class="grid" id="clock-info"></div>
+  </div>
+
+  <div class="card">
+    <h2>AudioContext</h2>
+    <div class="grid" id="ctx-info"></div>
+  </div>
+
+  <div class="card">
+    <h2>Formats (decodeAudioData)</h2>
+    <button id="test-formats" class="primary">Tester les formats</button>
+    <small>Décodage de chaque extrait test ; « décalage marqueur » = position du bip repère après décodage
+      moins sa position d'origine (délai d'encodeur mal compensé si non nul).</small>
+    <div class="scroll"><table id="formats">
+      <thead><tr><th>Format</th><th>Résultat</th><th>Durée (s)</th><th>Décodage (ms)</th>
+        <th>Décalage marqueur (ms)</th><th>canPlayType</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <h2>Environnement</h2>
+    <div class="grid" id="env-info"></div>
+  </div>
+
+  <div class="card">
+    <h2>Journal</h2>
+    <div id="log"></div>
+  </div>
+</main>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

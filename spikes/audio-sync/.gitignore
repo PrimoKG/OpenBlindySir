@@ -1,0 +1,5 @@
+# Spike S0 outputs: generated synthetic clips, collected results, local recordings.
+_generated/
+_results/
+recordings/
+node_modules/
