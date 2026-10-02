@@ -1,0 +1,24 @@
+{
+  "protocol": 1,
+  "roots": {
+    "BridgeToServer": "b70136e9be0572c4735db4df28e2982abdccf505107aa6f1e374409842d4aa12",
+    "CatalogUpload": "4aed566c7b7f9ba2b0b18d97704eb24dd830a54b4bfe51930db3c42715b5a408",
+    "ClientMessage": "c24c5e552027b4deb48675d0a0cb8b4dcbc94c2405c1ccd9bc68d5e9bd4f8f40",
+    "DiagnosticsResponse": "ccda03bb20784a9f4a558d667d9d8c67213e90fd9ab3f18af9160ab5666f32b6",
+    "ErrorResponse": "3db7a89d03eb217b100fce90805abbc53e58eaa2a4aca191b78f1e52fdde1818",
+    "HealthResponse": "5caf1388094bb90cf19a99f0e08b820e2f833b6395ecb065c96ec16be4a4414b",
+    "HostCommand": "74e59b2f78e79c0b6168a197a9708886bbd28dc2aa596a0149be7442827a85aa",
+    "HostElevateRequest": "7774ba43f1bf1c4d6a4e56f9504830f9debf8485d64fd3aa122b942e7d561371",
+    "HostElevateResponse": "58a820190f1fb3337525366453f33ff168ca24db3b3696fd104fbaa54ed86ba9",
+    "HostMcView": "97b8f2627b3846ae2d1620d3dc02c2ea7f5d33db0e84e84a37988a41a7583310",
+    "HostPlayerModeView": "c15b76efd62683d5f889c7bb0e399856919834867ba5ce6559e8d8e976c6a2a1",
+    "JoinRequest": "a981f4a13c536078b3dc8a467e2f00303db8c4cae17b147014aa3e2919d54320",
+    "JoinResponse": "7c1b5502b399e2fb09936d2470dc84d5cba0f11621b65963ba7ac2db95d8d64d",
+    "LibraryResponse": "fb9b803630a729772ad5e522c52216ffb038bc6471b931026c887ef5bc2a9f92",
+    "OkResponse": "12206bbcd1aa34504e8e100380a5701a832fa6962bc0dac758745ccb00a41496",
+    "PlayerView": "7db98be8d6a0131c2ed2f6d44e02c72b01acef57250e7d04901ae01052a15cc6",
+    "ServerMessage": "ef50d1659f1e2397ea3042353f51ebf51c6522cc0195ebb3763ec94b80723d45",
+    "ServerToBridge": "700348afe9fdd62338f8c395ba1145b36c4a878bcde8efd5f24c9448422d9046",
+    "SessionResponse": "e8b9ed78b6fee0643e0f6be1692495fb54a102a3fdf28d1e4e2096f11f5e8133"
+  }
+}
