@@ -31,7 +31,7 @@ def write_docker_config(
     body = (
         "# Private Docker configuration. Never commit or share this file.\n"
         + gen_secrets()
-        + f"DOMAIN={authority}\nTLS_HOST={tls_host}\nHTTPS_PORT={port}\n"
+        + f"DOMAIN={authority}\nTLS_HOST={tls_host}\nTLS_SERVER_NAME={host}\nHTTPS_PORT={port}\n"
         + f"BIND_IP={bind_ip}\nCADDY_PROFILE={mode}\n"
         + f"MUSIC_DIR={dotenv_quote(music_dir)}\nBRIDGE_DEMO={'true' if demo else 'false'}\n"
     )

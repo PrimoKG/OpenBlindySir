@@ -41,6 +41,7 @@ services:
         restart: true
     environment:
       TLS_HOST: ${TLS_HOST:?Run the Docker launcher first}
+      TLS_SERVER_NAME: ${TLS_SERVER_NAME:-${TLS_HOST}}
     volumes:
       - ./deploy/Caddyfile.docker.${CADDY_PROFILE:-private}:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

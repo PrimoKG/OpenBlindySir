@@ -25,6 +25,7 @@ def test_routing_and_secrets(tmp_path: Path, address: str, mode: str, expected: 
     config = read_dotenv(path)
     assert (config["DOMAIN"], config["BIND_IP"], config["HTTPS_PORT"]) == expected
     assert ":8443" not in config["TLS_HOST"]
+    assert config["TLS_SERVER_NAME"] == config["TLS_HOST"].strip("[]")
     assert config["CADDY_PROFILE"] == mode
     assert len(config["BLIND_PASSWORD"]) >= 12
     assert config["BLIND_PASSWORD"] != config["HOST_PASSWORD"]

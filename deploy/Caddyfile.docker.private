@@ -3,6 +3,7 @@
     auto_https disable_redirects
     skip_install_trust
     persist_config off
+    default_sni {$TLS_SERVER_NAME}
 }
 
 https://{$TLS_HOST} {
