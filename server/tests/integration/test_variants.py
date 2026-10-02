@@ -146,3 +146,33 @@ async def _bridge_lost_mid_job(stack: Stack) -> None:
 def test_bridge_lost_while_a_job_is_running(bare_stack: Stack) -> None:
     bare_stack.start_bridge("slow-encode=4000")
     run(_bridge_lost_mid_job(bare_stack))
+
+
+# --- invalid assets and vanished files ------------------------------------------------------
+
+
+async def _first_round_then_abandon(stack: Stack) -> None:
+    async with Table(stack.base_url, 2, BLIND, HOST) as table:
+        await table.setup(rounds=2, clip=8, grace=5)
+        await table.start()
+        await table.wait_round(1, "OPEN", timeout_s=90)
+        await table.host.on_round("end_game", {"current_round": "abandon"})
+        final = await table.finish()
+        assert final["final_results"]["rounds_played"] == 0
+
+
+def test_corrupted_upload_is_rejected_then_retried(bare_stack: Stack) -> None:
+    bare_stack.start_bridge("corrupt-upload=1")
+    run(_first_round_then_abandon(bare_stack))
+    log = bare_stack.server_log()
+    assert "event=upload_rejected reason=sha256" in log
+    assert log.count("event=asset_stored") >= 1
+
+
+def test_file_deleted_after_scan_is_replaced(bare_stack: Stack) -> None:
+    bare_stack.start_bridge("delete-track=1")
+    run(_first_round_then_abandon(bare_stack))
+    log = bare_stack.server_log()
+    assert "event=track_unavailable" in log
+    assert "code=NOT_FOUND" in log
+    assert "openblindysir-bridge-demo" not in bare_stack.bridge_log()  # no path on the console
