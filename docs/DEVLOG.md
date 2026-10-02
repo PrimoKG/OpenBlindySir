@@ -558,3 +558,78 @@ seront consignés dans une entrée supplémentaire après validation.
 en cours. Pas de VPS, soirée réelle, mesure acoustique ou release.
 **Restant** — Validation des images/partie Docker, guides, publication Git.
 **Prochaine étape recommandée** — Exécuter la partie Docker synthétique en CI.
+
+## 2026-10-02 — Docker : partie réelle, distribution locale et guides
+
+**Objectif / décisions** — Finaliser le GO full Docker avec parcours manuel
+conservé, guides d'installation et utilisation du navigateur. Les deux images
+applicatives peuvent être exportées/importées sur des PC de même architecture ;
+chaque hôte conserve ses propres secrets et chemins. Pas de publication GHCR,
+VPS ou release ajoutée. Bridge distant avec Compose et racine TLS en montage
+read-only. Les lanceurs démarrent la pile en arrière-plan et ouvrent `/host` ;
+absence de navigateur traité par affichage de l'URL. Pas d'installation de confiance
+TLS ni modification automatique de pare-feu ou de réseau.
+
+**Modifications** — `docs/docker.md` couvre installation Docker/WSL, ZIP sans Git,
+init/start Windows et POSIX, certificats, LAN/VPN/public, arrêt et perte de l'état
+RAM, partage exact des images, Bridge distant et dépannage. README, guide natif,
+guide utilisateur, CONTRIBUTING, architecture, `.env.example`, CHANGELOG adaptés.
+Les réglages proxy natifs et Docker sont loopback. Deux fichiers Compose pour
+Bridge distant, validation des profils dans le smoke et contrôle public Caddy.
+
+**Bugs réellement découverts / corrections**
+- Sous PowerShell Unix, vider les variables avec l'API .NET les laissait vides
+  dans l'environnement enfant, masquant le fichier Compose. Suppression/restauration
+  via le provider Env ; le lanceur init/start réel est passé ensuite.
+- HTTPS par IP sans SNI ne sélectionnait pas le certificat privé Caddy 2.11.4.
+  `default_sni` utilise le nom/IP du certificat, avec variable séparée pour IPv6.
+  TLS vérifié passe ensuite, sans contournement de certificat.
+- Le smoke attendait un état Bridge dans `/healthz`, qui est volontairement masqué
+  hors développement. L'attente utilise maintenant la vue hôte authentifiée des
+  bots. Aucun changement du endpoint ni des permissions.
+- `docker cp` vers le rootfs read-only refusait même un chemin tmpfs ; le contrôle
+  public écrit par `exec` dans `/tmp`, sans assouplir le filesystem read-only.
+
+**Tests exécutés**
+- Python complet local : `.venv/Scripts/python.exe -m pytest -p no:cacheprovider
+  --basetemp web/test-results/python-docker-full`, FFmpeg local dans PATH et
+  Hypothesis ci : **541 réussis, 1 ignoré, 8 désélectionnés**, 12,19 s.
+  Bridge inclus : **33 réussis + 1 ignoré** (symlink Windows non autorisé).
+- Configuration ciblée : **43/43**, dont 11 Docker ; sélection SNI **11/11**.
+- Ruff/check/format : **OK**, 151 fichiers ; Pyright venv : **0 erreur** ; parser
+  PowerShell : **OK**. Compose privé/public/Bridge distant : **PASS** localement,
+  sans impression de secrets. Protocole/core/audio inchangés.
+- CI run **37047817661** : images app/web et Bridge construites réellement sous
+  Linux amd64 ; Python 3.13 dans les images, FFmpeg Debian **5.1.9**, AAC/Opus/FLAC
+  disponibles. Init PowerShell sans Python hôte, start et export racine **PASS**.
+  `tools/docker_smoke.py` : profils, HTTPS vérifié, UI servie, CSP/HSTS, mauvaise
+  origine 403, cookie Secure/HttpOnly, Bridge connecté, extraits synthétiques,
+  WSS, réponses, deux manches, revue finale et résultats **PASS**.
+  Utilisateur app 10001, FFmpeg absent du serveur, musique montée read-only **PASS**.
+  Ce run a échoué ensuite uniquement sur le `docker cp` du contrôle public,
+  corrigé comme ci-dessus ; validation finale CI à confirmer sur la nouvelle tête.
+- Intégration native CI : **8/8** ; Web/Vitest : **28/28** ; Chromium : **19/19** ;
+  build : **OK**. WebKit **non exécuté**, G1/G2 et vrais appareils non mesurés.
+- Docker Desktop local : démarrage tenté, puis erreur de son Inference manager
+  sur le socket `dockerInference`. Aucun reset, suppression de données Docker
+  ou modification système effectué. Les tests conteneurs sont ceux de CI Linux,
+  pas une affirmation de lancement réussi sur le PC Windows.
+- Hygiène de l'index après git add et avant chaque commit : **OK** ; aucun secret,
+  musique, image Docker, certificat ou cache commité. Une interpolation YAML avec
+  espaces a été citée explicitement pour éviter un faux positif du scanner.
+
+**Git / GitHub** — Issue #5, PR #6 attachée au chat, branche
+`codex/full-docker-hosting`. Commits déjà poussés : `db7adab` feat Docker,
+`e5e70ba` tests, `b7a6884` correction Env, `6af7887` correction SNI,
+`b9c6bcd` Bridge distant/profils ; correctif des checks et guides dans des commits
+séparés. Rebase-merge après CI verte puis sync/push main, autorisés par le mainteneur.
+Résultat distant final rapporté dans la conversation ; HANDOFF laissé intact.
+
+**Gates** — G1: PENDING USER MEASUREMENT ; G2: PENDING USER MEASUREMENT.
+**État** — DONE pour code, guides et partie Docker réelle ; CI finale et fusion
+en cours à l'écriture de cette entrée.
+**Restant** — Docker Desktop de ce PC à rendre opérationnel ; appareils LAN/VPN,
+Internet réel, arm64, Bridge réellement distant et vraie bibliothèque à tester.
+GHCR/VPS, soirée, WebKit, G1/G2 et release restent hors de cette intervention.
+**Prochaine étape recommandée** — Une fois Docker opérationnel, lancer une démo
+locale avec `tools/docker-host.ps1 init -Address localhost:8443 -Demo`, puis `start`.

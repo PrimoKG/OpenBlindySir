@@ -64,10 +64,10 @@ side, types a free-text answer, and the host does the scoring.
 | **Web UI** | Each player's browser | React + TypeScript. Downloads and decodes the clip, then starts playback at a time set by the server, using a synchronised clock. |
 | **OpenBlindySir Bridge** | The PC with the music | Python CLI. Folder scanner, sandbox, FFmpeg clip jobs, outbound client. Knows nothing about the game rules. |
 
-Deployment (planned): one application image plus the official
-[Caddy](https://caddyserver.com/) image in Docker Compose, for automatic HTTPS.
-Caddy is optional if you already run a reverse proxy. There are no rooms: one server
-is one game night.
+Full Docker Compose hosting is available: server plus built web UI, the official
+Caddy image, and a Bridge image containing FFmpeg. Windows and Unix launchers
+initialize the private configuration, start the services and open `/host` in your
+default browser. There are no rooms: one server is one game night.
 
 **PC hosting is available without Docker or a VPS.** The PC launcher starts the
 server and Caddy with HTTPS. Use a LAN address for a local game, a private VPN
@@ -93,6 +93,30 @@ configuration and exact commands.
   traceable and reversible.
 
 ## Quickstart
+
+### Docker (recommended for installation isolation)
+
+Install Docker with Compose and start its Linux engine. Download this repository
+as a ZIP or clone it, then run from its root on Windows:
+
+```powershell
+.\tools\docker-host.ps1 init -Address 192.168.1.42:8443 -MusicDir 'D:\Music'
+.\tools\docker-host.ps1 start
+```
+
+On Linux/macOS:
+
+```sh
+sh tools/docker-host.sh init --address 192.168.1.42:8443 --music-dir '/path/Music'
+sh tools/docker-host.sh start
+```
+
+Replace the example IP and folder with your own. Python, Node.js, Caddy and FFmpeg
+are built into the images; players need only a browser. Follow the
+[Docker guide](docs/docker.md) for private certificate trust, VPN/public access,
+stopping the services and sharing the exact images. No published release is required.
+
+### Native installation
 
 Install Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js 22+,
 [Caddy](https://caddyserver.com/docs/install) and FFmpeg (for the Bridge).
@@ -133,6 +157,7 @@ Real progress is recorded in [docs/DEVLOG.md](docs/DEVLOG.md).
 ## Documentation
 
 - [User guide](docs/guide-utilisateur.md) — players, playing host and MC (French)
+- [Full Docker hosting](docs/docker.md) — all services, browser launchers and image sharing (French)
 - [Hosting on your PC](docs/deployment.md) — LAN, private VPN and Internet (French)
 - [UX notes](docs/UX.md) — interface grammar and local verification
 - [docs/architecture.md](docs/architecture.md) — canonical design specification

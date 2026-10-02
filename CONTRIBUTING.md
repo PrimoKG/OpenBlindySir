@@ -30,9 +30,9 @@ following are **out of scope** and pull requests adding them will be declined:
 
 ## Development environment
 
-The tooling arrives with the corresponding milestones. Setup and run commands will be
-documented here as soon as they actually work; until then, treat this section as a
-plan.
+For a complete isolated runtime, use the [Docker guide](docs/docker.md); Python,
+Node.js and FFmpeg stay in containers. For source development or native hosting,
+use the prerequisites below and the [native hosting guide](docs/deployment.md).
 
 Prerequisites:
 
@@ -44,10 +44,10 @@ Prerequisites:
   tests. The server never uses FFmpeg.
 - **Docker** (optional), to build and test the image.
 
-Planned local workflow, without Docker:
+Local development, without Docker:
 
 ```sh
-DEV_MODE=1 uv run openblindysir-server   # development mode, never in production
+DEV_MODE=1 uv run openblindysir-server serve # development mode, never in production
 npm run dev                              # in web/, proxies /api and the WebSocket
 uv run openblindysir-bridge --demo       # synthetic tracks, no real music needed
 ```
@@ -57,7 +57,7 @@ develop and test without any copyrighted content.
 
 ## Tests and checks
 
-Planned checks, to run before any significant commit (and in CI once it is in place):
+Checks to run before significant commits (also exercised in CI):
 
 | Area | Checks |
 |---|---|

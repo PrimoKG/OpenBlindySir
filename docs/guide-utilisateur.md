@@ -4,6 +4,8 @@ OpenBlindySir permet de jouer à un blind test entre amis, chacun dans son
 navigateur. Une instance accueille une seule partie à la fois. Le serveur peut
 tourner sur le PC de l'hôte ou sur un serveur distant :
 [préparer l'hébergement](deployment.md). Aucun compte à créer.
+Pour éviter d'installer Python, Node.js ou FFmpeg sur le PC, utilisez le
+[lancement complet Docker](docker.md) : il ouvre aussi la page hôte automatiquement.
 
 ## Avant la soirée
 

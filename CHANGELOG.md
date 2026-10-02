@@ -10,6 +10,10 @@ the version is 0.x, the API and protocol may change between minor versions.
 
 ### Added
 
+- Complete Docker Compose hosting for server/web UI, HTTPS and Bridge/FFmpeg, with
+  private and public profiles, read-only music mounts and Windows/Unix browser launchers.
+- Docker installation and image-sharing guide; native installation remains available.
+
 - Native PC hosting launcher with private LAN/VPN and public HTTPS profiles,
   plus French user and hosting guides. A VPS is optional.
 - Project documentation: README, design specification, contribution guidelines,
