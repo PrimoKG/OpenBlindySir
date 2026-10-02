@@ -32,6 +32,8 @@ jobs:
           docker compose --env-file .local/docker/hosting.env exec -T app python -c "import os, shutil; assert os.getuid() == 10001; assert shutil.which('ffmpeg') is None"
           docker compose --env-file .local/docker/hosting.env exec -T bridge python /opt/tools/docker_bridge.py check-ffmpeg
           docker inspect "$(docker compose --env-file .local/docker/hosting.env ps -q bridge)" | python3 -c "import json,sys; assert next(m for m in json.load(sys.stdin)[0]['Mounts'] if m['Destination']=='/music')['RW'] is False"
+          docker compose --env-file .local/docker/hosting.env cp deploy/Caddyfile.docker.public caddy:/tmp/Caddyfile.public
+          docker compose --env-file .local/docker/hosting.env exec -T -e TLS_HOST=blind.example.com caddy caddy validate --config /tmp/Caddyfile.public --adapter caddyfile
       - name: Container diagnostics on failure
         if: failure()
         run: docker compose --env-file .local/docker/hosting.env logs --tail 80

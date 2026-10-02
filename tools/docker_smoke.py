@@ -2,8 +2,10 @@
 
 import argparse
 import asyncio
+import json
 import ssl
-import time
+import subprocess
+import tempfile
 from pathlib import Path
 
 import httpx
@@ -12,24 +14,68 @@ from bots import play_game
 from openblindysir_server.config import read_dotenv
 
 
+def validate_profiles(env_file: Path, ca_file: Path) -> None:
+    """Validate Compose wiring without printing interpolated secrets."""
+
+    def compose(path: Path, *files: str) -> dict:
+        command = ["docker", "compose", "--env-file", str(path)]
+        for file in files:
+            command += ["-f", file]
+        output = subprocess.run(
+            [*command, "config", "--format", "json"], capture_output=True, text=True, check=True
+        )
+        return json.loads(output.stdout)
+
+    private = compose(env_file, "compose.yaml")["services"]
+    assert private["app"]["environment"]["BIND_HOST"] == "127.0.0.1"
+    assert all(port["target"] == 443 for port in private["app"]["ports"])
+    assert private["bridge"]["network_mode"] == "service:app"
+    assert private["bridge"]["volumes"][0]["read_only"]
+    with tempfile.TemporaryDirectory(prefix="docker-profiles-") as temporary:
+        path = Path(temporary) / "profiles.env"
+        lines = env_file.read_text(encoding="utf-8").splitlines()
+        routing = {
+            "DOMAIN",
+            "TLS_HOST",
+            "TLS_SERVER_NAME",
+            "HTTPS_PORT",
+            "BIND_IP",
+            "CADDY_PROFILE",
+        }
+        base = "\n".join(line for line in lines if line.partition("=")[0] not in routing)
+        path.write_text(
+            base + "\nDOMAIN=blind.example.com\nTLS_HOST=blind.example.com\n"
+            "TLS_SERVER_NAME=blind.example.com\nHTTPS_PORT=443\nBIND_IP=0.0.0.0\n"
+            "CADDY_PROFILE=public\nBRIDGE_SERVER=https://blind.example.com\n"
+            f"BRIDGE_CA_FILE='{ca_file.resolve().as_posix()}'\n",
+            encoding="utf-8",
+        )
+        public = compose(path, "compose.yaml", "deploy/compose.public.yaml")["services"]
+        assert {port["target"] for port in public["app"]["ports"]} == {80, 443}
+        remote = compose(path, "deploy/compose.bridge.yaml", "deploy/compose.bridge.private.yaml")[
+            "services"
+        ]["bridge"]
+        assert remote["environment"]["SSL_CERT_FILE"] == "/trust/root.crt"
+        assert not remote.get("ports")
+        assert all(volume["read_only"] for volume in remote["volumes"] if volume["type"] == "bind")
+    print("Compose profiles PASS: private, public, standalone Bridge with TLS root.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, default=Path(".local/docker/hosting.env"))
     parser.add_argument("--ca-file", type=Path, default=Path(".local/docker/root.crt"))
     args = parser.parse_args()
     config = read_dotenv(args.env_file)
+    validate_profiles(args.env_file, args.ca_file)
     context = ssl.create_default_context(cafile=str(args.ca_file))
     base = "https://" + config["DOMAIN"]
     with httpx.Client(base_url=base, verify=context, timeout=5) as client:
-        deadline = time.monotonic() + 90
-        while True:
-            health = client.get("/healthz")
-            health.raise_for_status()
-            if health.json()["bridge"] == "ONLINE":
-                break
-            if time.monotonic() >= deadline:
-                raise TimeoutError("Docker Bridge did not become ONLINE")
-            time.sleep(0.5)
+        health = client.get("/healthz")
+        health.raise_for_status()
+        assert health.json()["status"] == "ok"
+        # Production health deliberately hides Bridge state. play_game waits for
+        # ONLINE in the authenticated host view, not the development health payload.
         page = client.get("/host")
         assert page.status_code == 200
         assert '<div id="root">' in page.text
