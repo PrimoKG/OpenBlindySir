@@ -1509,3 +1509,36 @@ ports/répertoires de test et fournissent les binaires FFmpeg/browsers installé
 Limites : WebKit headless ne valide pas Safari/iOS audio, aucune mesure acoustique,
 lecteur d'écran ou appareils physiques dans cette passe. Aucune release, archive
 native de distribution, publication de package ou tag de version n'est produit.
+
+## 2026-10-04 — Correction des échecs CI sur macOS, Compose et WebKit
+
+Analyse des logs et traces du run GitHub Actions `37156603646` : les six variantes
+CLI macOS échouaient sur le même test NFC/NFD, Docker sur un champ JSON omis par
+une ancienne version de Compose-Go, et WebKit Linux sur la connexion, une assertion
+de confidentialité trop large et le débordement des pseudos longs à 320 px.
+
+- La collision Unicode est testée avec deux entrées distinctes de scanner sur
+  toutes les plateformes. Un second test réel vérifie aussi les systèmes qui
+  donnent une seule identité aux deux graphies. La protection du catalogue reste
+  identique ; le test existant de réouverture des noms NFD reste actif.
+- Le smoke Docker accepte l'omission de `create_host_path:false` par le sérialiseur
+  ancien et refuse toujours `true`. Trois régressions couvrent ces représentations.
+  Les montages de credentials restent en lecture seule et déclarent explicitement
+  `create_host_path:false` dans Compose.
+- Les tests de parties attendent la connexion effective avant de naviguer vers
+  `/host`, afin de ne pas annuler le POST de connexion sur WebKit. Le nettoyage
+  réutilise une identité déjà connectée. La confidentialité vérifie les temps de
+  réponse et les messages WebSocket ; elle n'interdit plus le délai légitime de
+  rattrapage audio, qui faisait attendre le test jusqu'à la fin de la manche.
+- Les pseudos longs peuvent se couper dans les conteneurs flex, et les curseurs
+  audio respectent la largeur disponible, y compris avec le texte à 200 %.
+
+Validation locale Windows : **33 tests Python ciblés réussis, 1 exclusion de
+symlink**, **32 tests Vitest réussis**, **3 parties complètes Chromium réussies**
+(1280/320 px et MC), **6 parcours WebKit ciblés réussis** (mobile, texte à 200 %,
+catalogue MC et Bridges). Ruff, format, Pyright avec l'interpréteur du venv,
+génération protocole, Biome, TypeScript, build, hygiène et profils Compose réels
+réussis. Deux exécutions Playwright partageaient initialement leur dossier de
+traces ; la vérification affectée a été relancée séquentiellement avec des dossiers
+distincts et réussit. Les parties audio WebKit Linux et les variantes macOS sont
+vérifiées par GitHub Actions ; le WebKit Windows local ne fournit pas Web Audio.

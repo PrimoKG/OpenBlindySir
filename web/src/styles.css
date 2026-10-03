@@ -422,6 +422,8 @@ input[type="checkbox"] {
   accent-color: var(--accent);
 }
 input[type="range"] {
+  min-width: 0;
+  max-width: 100%;
   padding: 0;
   border: none;
   min-height: 44px;
@@ -567,6 +569,7 @@ input[type="range"] {
   align-items: baseline;
   gap: 0.3rem 0.45rem;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .player-name small,
 .is-offline {
