@@ -19,10 +19,12 @@ from openblindysir_protocol.client import (
     Ping,
     PlaybackReport,
 )
+from openblindysir_protocol.compatibility import Compatibility, mismatch_reason
 from openblindysir_protocol.errors import CloseCode, ErrorCode
 from openblindysir_protocol.server import ErrorMsg, Pong
 from openblindysir_protocol.settings import WS_PLAYER_MAX_BYTES
 from openblindysir_protocol.version import PROTOCOL_VERSION
+from openblindysir_server import __version__
 from openblindysir_server.auth.cookies import read_token
 from openblindysir_server.game import commands as c
 from openblindysir_server.logging import get, log_event
@@ -63,7 +65,7 @@ async def _send_error_and_close(ws: WebSocket, code: ErrorCode, close: int) -> N
 async def _await_hello(ws: WebSocket) -> bool:
     try:
         raw = await asyncio.wait_for(ws.receive_text(), timeout=HELLO_TIMEOUT_S)
-    except (TimeoutError, WebSocketDisconnect):
+    except (TimeoutError, WebSocketDisconnect, KeyError):
         await _send_error_and_close(ws, ErrorCode.HELLO_REQUIRED, POLICY)
         return False
     msg = parse_client(raw) if len(raw) <= WS_PLAYER_MAX_BYTES else None
@@ -71,7 +73,14 @@ async def _await_hello(ws: WebSocket) -> bool:
         await _send_error_and_close(ws, ErrorCode.HELLO_REQUIRED, POLICY)
         return False
     if msg.protocol != PROTOCOL_VERSION:
-        await _send_error_and_close(ws, ErrorCode.PROTOCOL_MISMATCH, POLICY)
+        await ws.send_text(
+            ErrorMsg(
+                t="ERROR",
+                code=ErrorCode.PROTOCOL_MISMATCH,
+                compatibility=Compatibility(server_version=__version__),
+            ).model_dump_json()
+        )
+        await ws.close(POLICY, mismatch_reason())
         return False
     return True
 
@@ -100,6 +109,11 @@ async def player_ws(ws: WebSocket) -> None:
         if not await _await_hello(ws):
             return
         hello_at = runtime.clock.now().mono_ms
+        if runtime.sessions.resolve(
+            read_token(ws, state.settings), hello_at
+        ) != player_id or not runtime.engine.player_exists(player_id):
+            await _send_error_and_close(ws, ErrorCode.UNAUTHENTICATED, POLICY)
+            return
         conn = PlayerConnection(
             conn_id=runtime.hub.next_conn_id(),
             player_id=player_id,
@@ -135,6 +149,9 @@ async def _read_loop(state: AppState, conn: PlayerConnection) -> None:
         try:
             raw = await conn.ws.receive_text()
         except (WebSocketDisconnect, RuntimeError):
+            return
+        except KeyError:
+            conn.request_close(1003)
             return
         now = runtime.clock.now()  # read HERE, before parsing or any other await
         precise = runtime.clock.mono_ms_precise()

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 
 from openblindysir_protocol.enums import CloseReason, RoundState
-from openblindysir_server.game import assets, rounds
+from openblindysir_server.game import assets, rounds, selection
 from openblindysir_server.game.clock import Instant
 from openblindysir_server.game.effects import EffectSink
 from openblindysir_server.game.state import (
@@ -24,6 +24,9 @@ class DueKind(IntEnum):
     ANSWER_DEADLINE = 2
     PLAY_END = 3
     JOB_TIMEOUT = 4
+    RESUME_END = 5
+    PAUSE_START = 6
+    BRIDGE_WAIT = 7
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -41,14 +44,23 @@ def pending(s: SessionState) -> list[Due]:
             dues.append(Due(r.official_start_at, DueKind.COUNTDOWN_END, r.id))
         if r.state is RoundState.LOADING and r.ready_deadline is not None:
             dues.append(Due(r.ready_deadline, DueKind.READY_TIMEOUT, r.id))
-        if r.state is RoundState.OPEN and r.deadline is not None:
+        if r.state is RoundState.OPEN and r.deadline is not None and r.paused_at is None:
             dues.append(Due(r.deadline, DueKind.ANSWER_DEADLINE, r.id))
+        if r.resume_at is not None:
+            dues.append(Due(r.resume_at, DueKind.RESUME_END, r.id))
+        if r.paused_at is not None and not r.pause_ready:
+            dues.append(Due(r.paused_at, DueKind.PAUSE_START, r.id))
         play = active_play(r)
         if play is not None:
             dues.append(Due(play.ends_at, DueKind.PLAY_END, play.play_id))
     for asset in s.assets.values():
         if asset.state in IN_FLIGHT_ASSET_STATES:
             dues.append(Due(asset.job_deadline, DueKind.JOB_TIMEOUT, asset.asset_id))
+    for slot in selection.live_slots(s):
+        if slot.waiting_bridge and slot.bridge_wait_since is not None:
+            dues.append(
+                Due(slot.bridge_wait_since + assets.BRIDGE_WAIT_MS, DueKind.BRIDGE_WAIT, "")
+            )
     return dues
 
 
@@ -69,10 +81,20 @@ def apply(s: SessionState, due: Due, at: Instant, fx: EffectSink) -> None:
     elif due.kind is DueKind.PLAY_END and r is not None:
         r.ended_play_ids.add(due.ref)
         s.touched = True
+    elif due.kind is DueKind.RESUME_END and r is not None:
+        r.paused_at = None
+        r.resume_at = None
+        r.pause_offset_s = None
+        s.touched = True
+    elif due.kind is DueKind.PAUSE_START and r is not None:
+        r.pause_ready = True
+        s.touched = True
     elif due.kind is DueKind.JOB_TIMEOUT:
         asset = s.assets.get(due.ref)
         if asset is not None:
             assets.expire_job(s, asset, fx)
+    elif due.kind is DueKind.BRIDGE_WAIT:
+        assets.settle_slots(s, at, fx)
 
 
 def advance_to(

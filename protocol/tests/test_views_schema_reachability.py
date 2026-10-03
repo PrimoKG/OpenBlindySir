@@ -47,36 +47,39 @@ def view_defs() -> set[str]:
 
 
 def test_mc_types_reachable_only_from_host_mc_view() -> None:
-    mc_types = {"McTrackInfo", "McPanel", "RoundMcOpen", "McOpenRow"}
+    mc_types = {"McTrackInfo", "McPanel", "RoundMcOpen", "McOpenRow", "ManualTrackChoice"}
     assert mc_types <= reachable("HostMcView")
     assert not mc_types & reachable("PlayerView")
     assert not mc_types & reachable("HostPlayerModeView")
 
 
 @pytest.mark.parametrize("root", VIEW_ROOTS)
-def test_reveal_track_reachable_only_under_round_revealed(root: str) -> None:
+def test_track_metadata_only_under_reveal_private_review_or_recap(root: str) -> None:
     assert "RevealTrack" in reachable(root)
-    without_reveal = reachable(root, avoid=frozenset({"RoundRevealed"}))
+    without_reveal = reachable(
+        root, avoid=frozenset({"RoundRevealed", "ReviewRound", "HistoryEntry"})
+    )
     assert "RevealTrack" not in without_reveal
     assert "RevealRow" not in without_reveal
 
 
-def test_review_and_history_rows_never_reachable_from_player_view() -> None:
+def test_private_host_rows_never_reachable_from_player_view() -> None:
     forbidden = {
         "ReviewRow",
         "RoundHostReview",
         "HostPanel",
-        "FinalReviewRow",
-        "HistoryEntry",
         "PlayerOps",
     }
     assert not forbidden & reachable("PlayerView")
+    assert not {"FinalReviewRow", "HistoryEntry"} & reachable(
+        "PlayerView", avoid=frozenset({"FinalResults"})
+    )
 
 
-def test_history_entry_only_through_host_panel() -> None:
+def test_history_entry_only_through_host_panel_or_final_results() -> None:
     for root in ("HostPlayerModeView", "HostMcView"):
         assert "HistoryEntry" in reachable(root)
-        assert "HistoryEntry" not in reachable(root, avoid=frozenset({"HostPanel"}))
+        assert "HistoryEntry" not in reachable(root, avoid=frozenset({"HostPanel", "FinalResults"}))
 
 
 @pytest.mark.parametrize(
@@ -84,11 +87,21 @@ def test_history_entry_only_through_host_panel() -> None:
 )
 def test_forbidden_property_names_absent(name: str) -> None:
     for def_name in view_defs():
+        if name == "track_id" and def_name == "ManualTrackChoice":
+            continue  # MC-only reference, unreachable from either player schema.
         assert name not in DEFS[def_name].get("properties", {}), def_name
 
 
 def test_view_player_has_only_public_fields() -> None:
-    assert set(DEFS["ViewPlayer"]["properties"]) == {"id", "nickname", "online", "is_host", "is_me"}
+    assert set(DEFS["ViewPlayer"]["properties"]) == {
+        "id",
+        "nickname",
+        "online",
+        "is_host",
+        "is_me",
+        "spectator",
+        "team",
+    }
 
 
 def test_player_review_has_only_my_answer() -> None:

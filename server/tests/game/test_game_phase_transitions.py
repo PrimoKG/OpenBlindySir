@@ -52,36 +52,30 @@ def test_no_path_from_in_game_to_final_results(cmd: str) -> None:
     assert sc.s.game.phase is GamePhase.IN_GAME
 
 
-def test_to_final_review_only_after_last_round() -> None:
+def test_last_closed_round_enters_global_review_automatically() -> None:
     sc = Scenario(rounds=2)
     sc.to_review()
-    sc.publish()
     assert sc.on_round("to_final_review").error is ErrorCode.INVALID_STATE
     sc.to_open()
     sc.to_review()
-    sc.publish()
-    assert sc.on_round("next").error is ErrorCode.INVALID_STATE
-    assert sc.on_round("to_final_review").error is None
     assert sc.s.game.phase is GamePhase.FINAL_SCORE_REVIEW
+    assert sc.on_round("next").error is ErrorCode.STALE_COMMAND
+    assert len(sc.host_view().host.review_rounds) == 2
 
 
 def _reach(sc: Scenario, state: str) -> None:
     if state == "PREPARING":
         sc.auto_serve = False
         sc.start()
-        return
-    if state == "LOADING":
+    elif state == "LOADING":
         sc.start()
-        return
-    if state == "COUNTDOWN":
+    elif state == "COUNTDOWN":
         sc.start()
         sc.ready()
-        return
-    sc.to_open()
-    if state in ("REVIEW", "REVEALED"):
-        assert sc.on_round("close").error is None
-    if state == "REVEALED":
-        sc.publish()
+    else:
+        sc.to_open()
+        if state == "REVIEW":
+            assert sc.on_round("close").error is None
 
 
 EARLY = ["PREPARING", "LOADING", "COUNTDOWN"]
@@ -103,19 +97,18 @@ def test_end_game_before_open_cancels_round(state: str, mode: str) -> None:
 
 
 @pytest.mark.parametrize("state", ["OPEN", "REVIEW"])
-def test_end_game_score_scores_then_final_review(state: str) -> None:
+def test_end_game_score_enters_global_review_immediately(state: str) -> None:
     sc = Scenario()
     _reach(sc, state)
     r = sc.current()
     assert sc.on_round("end_game", {"current_round": "score"}).error is None
-    assert sc.s.game.phase is GamePhase.IN_GAME
-    assert r.state is RoundState.REVIEW
-    assert sc.on_round("next").error is ErrorCode.INVALID_STATE
-    sc.publish({sc.player_ids[0]: 2})
-    assert r.state is RoundState.REVEALED
-    assert sc.on_round("next").error is ErrorCode.INVALID_STATE
-    assert sc.on_round("to_final_review").error is None
     assert sc.s.game.phase is GamePhase.FINAL_SCORE_REVIEW
+    assert r.state is RoundState.REVIEW
+    assert sc.on_round("next").error is ErrorCode.STALE_COMMAND
+    sc.score({sc.player_ids[0]: 2})
+    assert sc.s.journal.events() == ()
+    sc.finalize()
+    assert r.state is RoundState.REVEALED
 
 
 @pytest.mark.parametrize("state", ["OPEN", "REVIEW"])
@@ -130,12 +123,14 @@ def test_end_game_abandon_cancels_without_points(state: str) -> None:
 
 
 @pytest.mark.parametrize("mode", ["score", "abandon"])
-def test_end_game_on_revealed_goes_to_final_review(mode: str) -> None:
-    sc = Scenario()
-    _reach(sc, "REVEALED")
+def test_end_game_in_global_review_is_idempotent(mode: str) -> None:
+    sc = Scenario(rounds=1)
+    sc.to_review()
     r = sc.current()
+    sc.score({sc.player_ids[0]: -2})
     assert sc.on_round("end_game", {"current_round": mode}).error is None
-    assert r.state is RoundState.REVEALED
+    assert r.state is RoundState.REVIEW
+    assert r.score_draft[sc.player_ids[0]] == -2
     assert sc.s.game.phase is GamePhase.FINAL_SCORE_REVIEW
 
 
@@ -159,15 +154,14 @@ def test_final_validate_reaches_results_and_new_game_resets_scores() -> None:
     sc = Scenario(rounds=1)
     sc.to_review()
     a = sc.player_ids[0]
-    sc.publish({a: 3})
-    sc.on_round("to_final_review")
-    assert sc.on_phase("final_validate").error is None
+    sc.score({a: 3})
+    sc.finalize()
     assert sc.s.game.phase is GamePhase.FINAL_RESULTS
     old_game = sc.s.game.game_id
     assert sc.on_phase("new_game").error is None
     assert sc.s.game.phase is GamePhase.LOBBY
     assert sc.s.game.game_id != old_game
-    assert all(row.score == 0 for row in sc.view(a).standings)
+    assert sc.view(a).standings == []
     assert a in sc.s.players
 
 

@@ -1,5 +1,5 @@
 # 0007 — Journal d'événements de score comme source de vérité
-Statut : Accepté   ·   Date : 2026-10-01
+Statut : Accepté ; règles de publication remplacées par [0011](0011-global-review-and-private-replay.md) en V0.2 · Date : 2026-10-01
 
 ## Contexte
 Dans OpenBlindySir, la notation est entièrement humaine ([0003](0003-server-side-answer-timing.md)). L'hôte :
@@ -56,3 +56,13 @@ Option C. **Le journal `ScoreEvent` est l'unique source de vérité des scores.*
 - Le snapshot candidat de la V0.2 pourra rejouer le journal tel quel ([0005](0005-no-database-v01.md)).
 - Événements de log associés : `round_published`, `publish_undone`, `score_adjusted`, `final_review_started`, `final_validated(corrections=n)`.
 - Tests obligatoires (§20.1, points 4 et 5) : invariant vérifié après chaque opération ; `publish` crée un `round` par delta non nul ; `undo_publish` crée un `revoke`, restaure le brouillon et devient impossible une fois le round suivant en COUNTDOWN ; `adjust` fonctionne, hôte compris ; deltas négatifs et bornes respectés ; aucun brouillon ne crée d'événement ; `final_set` ne crée pas d'événement ; `final_validate` crée exactement un `final_adjustment` par delta non nul et reste idempotent ; brouillon conservé après la reconnexion de l'hôte ; tout ajout refusé après `FINAL_RESULTS`. Le test de permissions (point 6) couvre aussi `final_set` et `final_validate`.
+
+## Complément V0.5
+
+[ADR 0015](0015-v05-private-bridges-history-compatibility.md) conserve le journal en
+ajout seul **dans la partie active**. Après validation finale, l'archive contient une
+projection figée des scores, réponses et corrections. Nouvelle partie libère le
+journal précédent ; ses IDs sont strictement croissants dans ce journal, pas pour
+toute la durée du processus. Cela borne la mémoire sans modifier les archives.
+La règle historique « aucun score stocké nulle part » concerne le calcul courant ;
+la projection publiée est conservée dans l'archive immuable sans audio.

@@ -4,7 +4,7 @@ from builders import Scenario
 
 from openblindysir_protocol.enums import ConnectionState
 from openblindysir_protocol.errors import CloseCode, ErrorCode
-from openblindysir_server.game import CoreConfig
+from openblindysir_server.game import CoreConfig, players
 from openblindysir_server.game import commands as c
 from openblindysir_server.game import effects as e
 
@@ -36,7 +36,10 @@ def test_offline_player_stays_in_standings() -> None:
     a = sc.player_ids[0]
     sc.d(c.Disconnected(a))
     view = sc.view(sc.player_ids[1])
-    assert any(row.player_id == a for row in view.standings)
+    assert view.standings == []
+    sc.on_phase("end_game", {"current_round": "score"})
+    sc.finalize()
+    assert any(row.player_id == a for row in sc.view(sc.player_ids[1]).standings)
     assert not next(p for p in view.players if p.id == a).online
 
 
@@ -64,3 +67,24 @@ def test_leave_revokes_token() -> None:
     outcome = sc.d(c.Leave(a))
     assert e.RevokeTokens((a,)) in outcome.effects
     assert not sc.engine.player_exists(a)
+
+
+def test_repeated_join_leave_has_a_total_identity_cap_and_new_game_reclaims_it(monkeypatch):
+    sc = Scenario()
+    monkeypatch.setattr(players, "MAX_SESSION_IDENTITIES", 10)
+    for _ in range(6):
+        outcome = sc.d(c.Join("Synthetic churn"))
+        assert outcome.error is None
+        assert sc.d(c.Leave(outcome.value)).error is None
+    assert len(sc.s.players) == 10
+    for _ in range(100):
+        assert sc.d(c.Join("Synthetic churn")).error is ErrorCode.GAME_FULL
+    assert len(sc.s.players) == 10
+    sc.to_open()
+    sc.on_phase("end_game", {"current_round": "score"})
+    sc.finalize()
+    archive = sc.s.archives[0]
+    assert sc.on_phase("new_game").error is None
+    assert len(sc.s.players) == 4
+    assert sc.s.archives == [archive]
+    assert sc.d(c.Join("Synthetic churn")).error is None

@@ -13,7 +13,7 @@ from conftest import FAKE_M4A, Harness, bridge_hello, catalog, put_asset, put_ca
 from openblindysir_protocol.bridge import UPLOAD_TOKEN_TTL_S
 from openblindysir_protocol.enums import AssetState
 
-HELLO = json.dumps({"t": "HELLO", "client_version": "0.1.0", "protocol": 1})
+HELLO = json.dumps({"t": "HELLO", "client_version": "0.1.0", "protocol": 5})
 
 
 def receive(ws: Any, t: str) -> dict[str, Any]:
@@ -201,3 +201,32 @@ def test_rejections_never_log_the_token(job: Job, caplog: pytest.LogCaptureFixtu
     assert "upload_rejected" in text
     assert job.token not in text
     assert "example-wrong-token" not in text
+
+
+@pytest.mark.parametrize("revocation", ["cancel", "replacement", "disconnect"])
+def test_upload_rechecks_owner_after_streaming(
+    job: Job, monkeypatch: pytest.MonkeyPatch, revocation: str
+) -> None:
+    from fastapi import Request  # noqa: PLC0415
+
+    from openblindysir_server.ws.bridge_link import ActiveBridge  # noqa: PLC0415
+
+    original = Request.stream
+
+    async def stream(request: Request):
+        async for chunk in original(request):
+            yield chunk
+        link = job.harness.runtime.bridge
+        bridge = link.active
+        assert bridge is not None
+        if revocation == "cancel":
+            link.cancel(job.prepare["job_id"])
+        elif revocation == "disconnect":
+            link.deactivate(bridge)
+        else:
+            link.activate(ActiveBridge(bridge.bridge_id, bridge.name, bridge.ws, 0))
+
+    monkeypatch.setattr(Request, "stream", stream)
+    assert _put(job, FAKE_M4A).status_code == 409
+    assert job.state() is not AssetState.STORED
+    assert job.served() == 404

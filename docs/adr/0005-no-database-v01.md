@@ -1,5 +1,5 @@
 # 0005 — Aucune base de données en V0.1
-Statut : Accepté   ·   Date : 2026-10-01
+Statut : Remplacé pour la persistance par [0009](0009-session-snapshots.md) ; cache audio RAM maintenu. · Date initiale : 2026-10-01
 
 ## Contexte
 Pour OpenBlindySir, l'unité de vie est **la soirée** : une session correspond à la durée de vie du processus serveur, qui est unique ([0001](0001-single-process-in-memory-server.md)). Les données manipulées (`docs/architecture.md` §13, §14) sont :

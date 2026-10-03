@@ -10,12 +10,18 @@ from openblindysir_protocol.enums import (
     RoundState,
 )
 from openblindysir_protocol.errors import CloseCode, ErrorCode
-from openblindysir_protocol.host_commands import HostKick, HostRename, HostSetMode
+from openblindysir_protocol.host_commands import (
+    HostKick,
+    HostParticipation,
+    HostRename,
+    HostSetMode,
+)
 from openblindysir_protocol.text import nickname_key, normalize_nickname
 from openblindysir_server.game import commands as c
 from openblindysir_server.game import rounds
 from openblindysir_server.game.clock import Instant
 from openblindysir_server.game.effects import CloseConnection, EffectSink, RevokeTokens
+from openblindysir_server.game.permissions import rule_ok
 from openblindysir_server.game.rejections import Rejected, require
 from openblindysir_server.game.state import (
     Listen,
@@ -30,6 +36,8 @@ from openblindysir_server.game.state import (
 )
 
 LISTENING_STATES = frozenset({RoundState.COUNTDOWN, RoundState.OPEN})
+# Removed identities remain necessary for current scores/answers until the next game.
+MAX_SESSION_IDENTITIES = 1000
 
 
 def get_active(s: SessionState, player_id: str) -> Player:
@@ -51,8 +59,10 @@ def _check_nickname(s: SessionState, raw: str, *, exclude: str | None = None) ->
 
 
 def handle_join(s: SessionState, cmd: c.Join, at: Instant, fx: EffectSink) -> str:
+    require(not s.joins_locked, ErrorCode.JOIN_LOCKED)
     nickname = _check_nickname(s, cmd.nickname)
     require(len(active_players(s)) < s.config.max_players, ErrorCode.GAME_FULL)
+    require(len(s.players) < MAX_SESSION_IDENTITIES, ErrorCode.GAME_FULL)
     s.join_seq += 1
     p = Player(
         id=s.ids.player_id(),
@@ -223,16 +233,25 @@ def h_set_mode(
     mode = msg.args.mode
     if mode is issuer.host_mode:
         return
-    in_game = s.game.phase is GamePhase.IN_GAME
-    if mode is HostMode.MC:
-        r = current_round(s.game)
-        playing = r is not None and r.state in LISTENING_STATES
-        require(not (in_game and playing), ErrorCode.INVALID_STATE)
-    else:
-        require(not in_game, ErrorCode.INVALID_STATE)
+    require(rule_ok("set_mode", s, issuer), ErrorCode.INVALID_STATE)
     issuer.host_mode = mode
+    if mode is HostMode.PLAYER and s.game.phase is GamePhase.LOBBY and s.game.manual_tracks:
+        s.game.manual_tracks.clear()
+        s.game.selection_revision += 1
     s.touched = True
     fx.log("host_mode_changed", player_id=issuer.id, mode=mode.value)
+
+
+def h_participation(
+    s: SessionState, issuer: Player, msg: HostParticipation, at: Instant, fx: EffectSink
+) -> None:
+    del at, fx
+    require(msg.expected_phase == s.game.phase, ErrorCode.STALE_COMMAND)
+    require(rule_ok("participation", s, issuer), ErrorCode.INVALID_STATE)
+    target = get_active(s, msg.args.player_id)
+    target.spectator = msg.args.spectator
+    target.team = msg.args.team.strip() or None if msg.args.team else None
+    s.touched = True
 
 
 def h_kick(s: SessionState, issuer: Player, msg: HostKick, at: Instant, fx: EffectSink) -> None:

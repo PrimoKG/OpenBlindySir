@@ -80,6 +80,9 @@ class BridgeConnected:
     version: str
     catalog_hash: str
     track_count: int
+    protocol: int = 5
+    formats: tuple[str, ...] = ("aac",)
+    allow_full_review: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +96,9 @@ class CatalogLoaded:
     bridge_name: str
     catalog_hash: str
     entries: Mapping[str, CatalogEntryData]
+    scanned_folders: tuple[str, ...] = ("",)
+    source_error: str | None = None
+    ambiguous_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

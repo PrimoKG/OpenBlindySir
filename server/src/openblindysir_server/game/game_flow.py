@@ -15,6 +15,7 @@ from openblindysir_protocol.enums import (
 )
 from openblindysir_protocol.errors import CloseCode, ErrorCode
 from openblindysir_protocol.host_commands import (
+    EmptyArgs,
     HostAdjust,
     HostConfigure,
     HostEndGame,
@@ -22,6 +23,7 @@ from openblindysir_protocol.host_commands import (
     HostFinalReset,
     HostFinalSet,
     HostFinalValidate,
+    HostJoinLock,
     HostNewGame,
     HostStartGame,
     HostToFinalReview,
@@ -59,6 +61,7 @@ BLOCKER_CODES = {
     "no_sources": ErrorCode.NO_SOURCES,
     "bridge_offline": ErrorCode.BRIDGE_OFFLINE,
     "no_competitors": ErrorCode.NO_COMPETITORS,
+    "pool_exhausted": ErrorCode.POOL_EXHAUSTED,
 }
 
 
@@ -82,6 +85,7 @@ def h_start_game(
     require(not blockers, BLOCKER_CODES[blockers[0].value] if blockers else ErrorCode.INVALID_STATE)
     g = s.game
     g.phase = GamePhase.IN_GAME
+    g.started_wall_ms = at.wall_ms
     g.queue = selection.build_queue(s, include_played=g.settings.allow_repeats)
     s.touched = True
     fx.log("game_started", rounds=g.settings.rounds, pool=len(selection.pool(s)))
@@ -91,12 +95,12 @@ def h_start_game(
 def h_configure(
     s: SessionState, issuer: Player, msg: HostConfigure, at: Instant, fx: EffectSink
 ) -> None:
-    del at
     require_phase(s, msg.expected_phase)
     require_rule("configure", s, issuer)
     patch = msg.args
     given = {name for name in type(patch).model_fields if getattr(patch, name) is not None}
     g = s.game
+    require(not msg.start_game or g.phase is GamePhase.LOBBY, ErrorCode.INVALID_STATE)
     if g.phase is GamePhase.IN_GAME:
         require(given <= IN_GAME_CONFIGURABLE, ErrorCode.INVALID_STATE)
     if patch.clip_seconds is not None:
@@ -107,7 +111,8 @@ def h_configure(
     if patch.sources is not None:
         known = set(s.catalogs) | set(s.bridges)
         require(all(src.bridge_id in known for src in patch.sources), ErrorCode.INVALID_ARGS)
-    settings = g.settings
+    previous = g.settings
+    settings = g.settings.copy()
     if patch.rounds is not None:
         settings.rounds = patch.rounds
     if patch.clip_seconds is not None:
@@ -121,14 +126,46 @@ def h_configure(
     if patch.prefetch_depth is not None:
         settings.prefetch_depth = patch.prefetch_depth
     if patch.allow_repeats is not None:
-        changed = patch.allow_repeats != settings.allow_repeats
         settings.allow_repeats = patch.allow_repeats
+    for name in (
+        "answer_mode",
+        "title_points",
+        "artist_points",
+        "instructions",
+        "captured_policy",
+        "normalize_audio",
+        "avoid_silence",
+        "balance_folders",
+    ):
+        value = getattr(patch, name)
+        if value is not None:
+            setattr(settings, name, value)
+    g.settings = settings
+    if msg.start_game:
+        blockers = start_blockers(s)
+        if blockers:
+            g.settings = previous
+            require(False, BLOCKER_CODES[blockers[0].value])
+    if patch.allow_repeats is not None:
+        changed = previous.allow_repeats != settings.allow_repeats
         if changed and g.phase is GamePhase.IN_GAME:
             g.queue = selection.build_queue(s, include_played=patch.allow_repeats)
             if not patch.allow_repeats:
                 selection.drop_played_from_idle_slots(s)
+    if g.phase is GamePhase.LOBBY:
+        selection.prune_manual_plans(s)
     s.touched = True
     fx.log("game_configured", fields=",".join(sorted(given)))
+    if msg.start_game:
+        h_start_game(
+            s,
+            issuer,
+            HostStartGame(
+                t="HOST", cmd="start_game", expected_phase=GamePhase.LOBBY, args=EmptyArgs()
+            ),
+            at,
+            fx,
+        )
 
 
 # --- end of game ----------------------------------------------------------------------------
@@ -136,6 +173,8 @@ def h_configure(
 
 def enter_final_review(s: SessionState, fx: EffectSink) -> None:
     g = s.game
+    if g.phase is GamePhase.FINAL_SCORE_REVIEW:
+        return
     r = current_round(g)
     if r is not None:
         rounds.stop_play(r, fx)
@@ -154,19 +193,22 @@ def h_end_game(
     s: SessionState, issuer: Player, msg: HostEndGame, at: Instant, fx: EffectSink
 ) -> None:
     """Early end (spec §7.1 table): always through FINAL_SCORE_REVIEW."""
-    r = rounds.current_by_key(s, msg.round_id)
+    if s.game.phase in {GamePhase.FINAL_SCORE_REVIEW, GamePhase.FINAL_RESULTS}:
+        return  # repeated stop leaves all review drafts intact
+    if msg.expected_phase is not None:
+        require_phase(s, msg.expected_phase)
+    elif s.game.phase is GamePhase.IN_GAME:
+        rounds.current_by_key(s, msg.round_id or "")
+    elif not any(r.id == msg.round_id for r in s.game.rounds):
+        require(False, ErrorCode.STALE_COMMAND)
     require_rule("end_game", s, issuer)
+    r = current_round(s.game)
     mode = msg.args.current_round
-    if r.state is RoundState.REVEALED:
-        enter_final_review(s, fx)
-    elif mode is EndGameMode.ABANDON or r.state in EARLY_STATES:
-        rounds.cancel_round(s, r, CancelReason.END_GAME, fx)
-        enter_final_review(s, fx)
-    elif r.state is RoundState.OPEN:
+    if r is not None and r.state is RoundState.OPEN:
         rounds.close_round(s, r, at, CloseReason.END_GAME, fx)
-        s.game.ending = EndGameMode.SCORE
-    else:  # REVIEW: publish then final review
-        s.game.ending = EndGameMode.SCORE
+    if r is not None and (mode is EndGameMode.ABANDON or r.state in EARLY_STATES):
+        rounds.cancel_round(s, r, CancelReason.END_GAME, fx)
+    enter_final_review(s, fx)
     s.touched = True
     fx.log("game_end_requested", mode=mode.value)
 
@@ -215,6 +257,31 @@ def h_final_validate(
     require_phase(s, msg.expected_phase)
     require_rule("final_validate", s, issuer)
     g = s.game
+    eligible = [r for r in g.rounds if r.included and r.official_start_at is not None]
+    require(
+        all(set(rounds.review_player_ids(s, r)) <= r.score_reviewed for r in eligible)
+        or msg.args.confirm_unreviewed,
+        ErrorCode.UNREVIEWED_SCORES,
+    )
+    for r in eligible:
+        events = []
+        for pid in rounds.review_player_ids(s, r):
+            points = r.score_draft.get(pid, 0)
+            if points:
+                event = s.journal.append(
+                    game_id=g.game_id,
+                    player_id=pid,
+                    delta=points,
+                    kind=ScoreKind.ROUND,
+                    by=issuer.id,
+                    at_wall_ms=at.wall_ms,
+                    round_id=r.id,
+                )
+                events.append(event.id)
+        r.published_event_ids = tuple(events)
+        r.published_at = at.mono_ms
+        r.reveal = rounds.build_reveal(s, r)
+        r.state = RoundState.REVEALED
     present = set(standings_player_ids(s))
     corrections = 0
     for player_id, delta in g.final_draft.items():
@@ -231,9 +298,25 @@ def h_final_validate(
     s.journal.freeze(g.game_id)
     g.final_draft = {}
     g.finalized_at = at.mono_ms
+    g.finalized_wall_ms = at.wall_ms
     g.phase = GamePhase.FINAL_RESULTS
+    from openblindysir_server.game import views  # noqa: PLC0415 - build the final snapshot
+
+    s.archives.append(views.game_record(s, at.wall_ms).model_dump(mode="json"))
+    from openblindysir_server.game.history import retained  # noqa: PLC0415
+
+    s.archives = retained(s.archives, at.wall_ms)
     s.touched = True
     fx.log("final_validated", corrections=corrections)
+
+
+def h_join_lock(
+    s: SessionState, issuer: Player, msg: HostJoinLock, at: Instant, fx: EffectSink
+) -> None:
+    del issuer, at, fx
+    require_phase(s, msg.expected_phase)
+    s.joins_locked = msg.args.locked
+    s.touched = True
 
 
 def h_new_game(
@@ -242,6 +325,12 @@ def h_new_game(
     del issuer, at
     require_phase(s, msg.expected_phase)
     s.game = GameState(game_id=s.ids.game_id(), settings=s.game.settings.copy())
+    # Completed results are self-contained in the bounded archive, not a growing journal.
+    s.journal = ScoreJournal()
+    s.players = {p.id: p for p in active_players(s)}
+    s.assets = {}
+    s.jobs = {}
+    s.asset_ready = {}
     s.touched = True
     fx.log("game_created", game_id=s.game.game_id)
 
@@ -261,6 +350,7 @@ def h_end_session(
     fx.add(ResetSession())
     s.epoch = s.ids.epoch()
     s.players = {}
+    s.joins_locked = False
     s.game = GameState(game_id=s.ids.game_id(), settings=s.game.settings.copy())
     s.journal = ScoreJournal()
     s.played = set()
@@ -318,9 +408,15 @@ def handle_bridge_connected(
         state=BridgeState.ONLINE if synced else BridgeState.SYNCING,
         catalog_hash=cmd.catalog_hash,
         track_count=cmd.track_count,
+        protocol=cmd.protocol,
+        formats=cmd.formats,
+        allow_full_review=cmd.allow_full_review,
+        source_error=catalog.source_error if catalog else None,
     )
     if catalog is not None:
         catalog.bridge_name = cmd.name
+    if synced and s.game.phase is GamePhase.IN_GAME:
+        s.game.queue = selection.build_queue(s, include_played=s.game.settings.allow_repeats)
     assets.wake_waiting_slots(s, cmd.bridge_id)
     s.touched = True
     fx.log("bridge_connected", bridge_id=cmd.bridge_id, synced=synced)
@@ -343,17 +439,23 @@ def handle_catalog_loaded(
     s: SessionState, cmd: c.CatalogLoaded, at: Instant, fx: EffectSink
 ) -> None:
     del at
+    previous = s.catalogs.get(cmd.bridge_id)
     s.catalogs[cmd.bridge_id] = Catalog(
         bridge_id=cmd.bridge_id,
         bridge_name=cmd.bridge_name,
         catalog_hash=cmd.catalog_hash,
         entries=dict(cmd.entries),
+        scanned_folders=list(cmd.scanned_folders),
+        source_error=cmd.source_error,
+        ambiguous_paths=cmd.ambiguous_paths,
+        scan_revision=(previous.scan_revision if previous else 0) + 1,
     )
     info = s.bridges.get(cmd.bridge_id)
     if info is not None and info.state is not BridgeState.OFFLINE:
         info.state = BridgeState.ONLINE
         info.catalog_hash = cmd.catalog_hash
         info.track_count = len(cmd.entries)
+        info.source_error = cmd.source_error
     if s.game.phase is GamePhase.IN_GAME:
         s.game.queue = selection.build_queue(s, include_played=s.game.settings.allow_repeats)
     assets.wake_waiting_slots(s, cmd.bridge_id)

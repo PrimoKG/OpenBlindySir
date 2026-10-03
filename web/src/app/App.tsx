@@ -4,6 +4,7 @@ import { HostApp } from "../host/HostApp";
 import { t, tCode } from "../i18n";
 import { api } from "../net/api";
 import { PlayerApp } from "../player/PlayerApp";
+import type { Compatibility } from "../protocol";
 import { Button, ConnectionScreen } from "../ui/components";
 import { GameController } from "./controller";
 import { GameContext, useGame, useUi, useView } from "./hooks";
@@ -94,6 +95,8 @@ function GameScreens(props: { readonly onRejoin: (reason: "rejoin" | "session_en
     }
   }, [ui.socket, onRejoin]);
 
+  if (ui.socket === "incompatible") return <Incompatible initial={ui.compatibility} />;
+
   if (ui.socket === "superseded") {
     return (
       <ConnectionScreen title={t("closed.superseded")}>
@@ -116,4 +119,34 @@ function GameScreens(props: { readonly onRejoin: (reason: "rejoin" | "session_en
   }
   const view = snapshot.view;
   return view.kind === "player" ? <PlayerApp view={view} /> : <HostApp view={view} />;
+}
+
+function Incompatible({ initial }: { readonly initial: Compatibility | null }) {
+  const [info, setInfo] = useState(initial);
+  useEffect(() => {
+    if (initial) return;
+    let active = true;
+    void api.compatibility().then((result) => {
+      if (active && result.ok) setInfo(result.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [initial]);
+  return (
+    <ConnectionScreen title={t("error.protocol_mismatch")} description={t("compatibility.action")}>
+      {info && (
+        <p role="status">
+          {t("compatibility.required", {
+            version: info.server_version,
+            min: info.protocol_min,
+            max: info.protocol_max,
+          })}
+        </p>
+      )}
+      <Button kind="primary" onClick={() => location.reload()}>
+        {t("compatibility.reload")}
+      </Button>
+    </ConnectionScreen>
+  );
 }

@@ -1,4 +1,4 @@
-"""HOST commands: exactly the 23 commands of spec §8.2, each with one idempotency key."""
+"""HOST commands: canonical command set, each with one idempotency key."""
 
 import json
 
@@ -11,6 +11,7 @@ from openblindysir_protocol.host_commands import HOST_COMMAND_EXAMPLES, HOST_COM
 CLIENT = TypeAdapter(ClientMessage)
 
 SPEC_COMMANDS = {
+    "select_track",
     "configure",
     "set_mode",
     "start_game",
@@ -34,6 +35,11 @@ SPEC_COMMANDS = {
     "final_validate",
     "kick",
     "rename",
+    "pause",
+    "resume",
+    "track_metadata",
+    "participation",
+    "join_lock",
 }
 
 
@@ -41,8 +47,8 @@ def host(cmd: str, **fields: object) -> object:
     return CLIENT.validate_json(json.dumps({"t": "HOST", "cmd": cmd, **fields}))
 
 
-def test_union_has_exactly_the_23_spec_commands() -> None:
-    assert len(HOST_COMMAND_NAMES) == 23
+def test_union_has_exactly_the_29_spec_commands() -> None:
+    assert len(HOST_COMMAND_NAMES) == 29
     assert set(HOST_COMMAND_NAMES) == SPEC_COMMANDS
 
 

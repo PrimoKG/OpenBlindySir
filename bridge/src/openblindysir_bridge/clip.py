@@ -24,18 +24,35 @@ class ClipRequest:
     bitrate_kbps: int
     max_bytes: int
     clip_format: ClipFormat
+    normalize_audio: bool = True
+    avoid_silence: bool = True
+    exact_start_s: float | None = None
+    fade_audio: bool = True
 
 
 def clamp_request(prepare: Prepare, welcome: Welcome) -> ClipRequest:
     """Bound everything the server asks, even against an inverted or absurd WELCOME."""
     lo = min(max(welcome.limits.clip_min_s, BRIDGE_CLIP_MIN_S), BRIDGE_CLIP_MAX_S)
     hi = min(max(welcome.limits.clip_max_s, lo), BRIDGE_CLIP_MAX_S)
-    duration = min(max(prepare.duration, lo), hi)
+    duration = min(
+        max(prepare.duration, 0.1 if prepare.review_mode else lo),
+        30 if prepare.review_mode == "full" else hi,
+    )
     fraction = min(max(prepare.start_fraction, 0.0), MAX_FRACTION)
     eligible = [b for b in ALLOWED_BITRATES if b <= welcome.bitrate]
     bitrate = max(eligible) if eligible else ALLOWED_BITRATES[0]
     max_bytes = min(BRIDGE_MAX_CLIP_BYTES, welcome.limits.max_clip_bytes)
-    return ClipRequest(duration, fraction, bitrate, max_bytes, welcome.clip_format)
+    return ClipRequest(
+        duration,
+        fraction,
+        bitrate,
+        max_bytes,
+        welcome.clip_format,
+        prepare.normalize_audio,
+        prepare.avoid_silence,
+        prepare.exact_start if prepare.review_mode else None,
+        prepare.review_mode != "full",
+    )
 
 
 def compute_start(track_s: float, clip_s: float, fraction: float) -> tuple[float, float]:

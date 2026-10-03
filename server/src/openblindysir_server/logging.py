@@ -8,11 +8,14 @@ import json
 import logging
 import sys
 import time
+import unicodedata
+from collections import OrderedDict
 from collections.abc import Iterable
 from typing import Any
 
 ROOT = "openblindysir"
 REDACTED = "***"
+MAX_TRANSIENT_SECRETS = 4096
 FORBIDDEN_KEYS = frozenset(
     {
         "password",
@@ -34,8 +37,9 @@ def _format_value(value: object) -> str:
     text = (
         "null" if value is None else str(value).lower() if isinstance(value, bool) else str(value)
     )
-    if any(ch in text for ch in ' ="') or not text:
-        return json.dumps(text, ensure_ascii=False)
+    controls = any(unicodedata.category(ch) in {"Cc", "Cf"} for ch in text)
+    if controls or any(ch.isspace() or ch in '= "' for ch in text) or not text:
+        return json.dumps(text, ensure_ascii=controls)
     return text
 
 
@@ -44,17 +48,25 @@ class RedactingFilter(logging.Filter):
 
     def __init__(self, secrets: Iterable[str] = ()) -> None:
         super().__init__()
-        self._secrets: set[str] = {s for s in secrets if s}
+        self._permanent: set[str] = {s for s in secrets if s}
+        self._secrets: OrderedDict[str, None] = OrderedDict()
 
-    def add_secret(self, value: str) -> None:
+    def add_secret(self, value: str, *, permanent: bool = False) -> None:
         if value:
-            self._secrets.add(value)
+            if permanent:
+                self._permanent.add(value)
+                return
+            self._secrets[value] = None
+            self._secrets.move_to_end(value)
+            if len(self._secrets) > MAX_TRANSIENT_SECRETS:
+                self._secrets.popitem(last=False)
 
     def discard_secret(self, value: str) -> None:
-        self._secrets.discard(value)
+        self._secrets.pop(value, None)
+        self._permanent.discard(value)
 
     def _clean(self, text: str) -> str:
-        for secret in self._secrets:
+        for secret in (*self._permanent, *self._secrets):
             if secret in text:
                 text = text.replace(secret, REDACTED)
         return text
@@ -120,7 +132,7 @@ def redaction() -> RedactingFilter:
 
 def setup_logging(level: str, fmt: str, secrets: Iterable[str]) -> None:
     for secret in secrets:
-        _FILTER.add_secret(secret)
+        _FILTER.add_secret(secret, permanent=True)
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter() if fmt == "json" else KeyValueFormatter())
     handler.addFilter(_FILTER)

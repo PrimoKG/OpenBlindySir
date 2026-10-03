@@ -4,12 +4,19 @@ import { useCallback, useEffect, useState } from "react";
 import * as cmd from "../app/commands";
 import { useGame, useUi } from "../app/hooks";
 import { t, tCode } from "../i18n";
-import { formatDelta, formatLate, formatRank, formatSeconds } from "../i18n/format";
+import { formatDelta, formatLate } from "../i18n/format";
 import { api } from "../net/api";
 import { nameOf, PlayerApp } from "../player/PlayerApp";
-import type { FolderNode, HostView, LibraryResponse } from "../protocol";
+import { PlayerHistory } from "../player/Recap";
+import type { HostView } from "../protocol";
 import { readLocal, writeLocal } from "../storage";
-import { AudioBadge, Button, ConfirmDialog, LiveRegion } from "../ui/components";
+import { AudioBadge, Button, ConfirmDialog } from "../ui/components";
+import { NumericDraft } from "../ui/NumericDraft";
+import { BridgeConnections } from "./BridgeConnections";
+import { LibraryManager } from "./LibraryManager";
+import { Invite, LibraryIssues, Participation, PartyHistory } from "./PartyTools";
+import { ReviewRound } from "./ReviewRound";
+import { SetupPanel } from "./SetupPanel";
 
 export function HostApp(props: { readonly view: HostView }) {
   const { view } = props;
@@ -27,7 +34,7 @@ function Drawer(props: { readonly view: HostView }) {
     setOpen(!open);
   };
   return (
-    <aside className="drawer" id="host-controls" aria-label={t("hostui.drawer")}>
+    <aside className="drawer" id="host-controls" tabIndex={-1} aria-label={t("hostui.drawer")}>
       <button
         type="button"
         className="drawer-toggle"
@@ -53,17 +60,27 @@ function useSend() {
 }
 
 function HostControls(props: { readonly view: HostView }) {
+  const [selecting, setSelecting] = useState(false);
   const { view } = props;
   const ui = useUi();
   const can = (name: string) => view.host.commands.includes(name);
   return (
-    <fieldset className="stack host" disabled={ui.socket !== "open"}>
+    <fieldset className="stack host" disabled={ui.socket !== "open" || selecting}>
       <legend className="sr-only">{t("hostui.drawer")}</legend>
+      {view.session.persistence_status === "failed" && (
+        <p className="error" role="alert">
+          {t("ux.persistenceFailed")}
+        </p>
+      )}
+      {view.session.recovered && <p className="notice">{t("ux.sessionRecovered")}</p>}
       <ModeSwitch key={`${view.kind}:${view.phase}`} view={view} />
-      <Warnings view={view} />
-      {view.kind === "host_mc" && <McPanel view={view} />}
-      {view.phase === "LOBBY" && <Setup view={view} />}
-      {view.round?.state === "REVIEW" && "answers" in view.round && <ReviewTable view={view} />}
+      <SessionControls view={view} />
+      {view.phase !== "LOBBY" && <Warnings view={view} />}
+      {view.kind === "host_mc" && view.round?.state !== "REVIEW" && <McPanel view={view} />}
+      {view.phase === "LOBBY" && <SetupPanel view={view} />}
+      {(view.phase !== "IN_GAME" || view.kind === "host_mc") && (
+        <LibraryManager view={view} onSelectionPending={setSelecting} />
+      )}
       {view.phase === "IN_GAME" && <RoundControls view={view} />}
       {view.phase === "FINAL_SCORE_REVIEW" && <FinalReview view={view} />}
       {view.phase === "FINAL_RESULTS" && <EndActions view={view} />}
@@ -73,6 +90,15 @@ function HostControls(props: { readonly view: HostView }) {
           <Adjustments view={view} />
         </details>
       )}
+      {view.phase === "LOBBY" && (
+        <>
+          <Invite />
+          <Participation view={view} />
+        </>
+      )}
+      <PartyHistory view={view} />
+      {(view.phase !== "IN_GAME" || view.kind === "host_mc") && <BridgeConnections view={view} />}
+      {view.phase !== "LOBBY" && <LibraryIssues view={view} />}
       <PlayerOps view={view} />
       <Diagnostics />
     </fieldset>
@@ -86,7 +112,9 @@ function ModeSwitch(props: { readonly view: HostView }) {
   return (
     <div className="host-mode">
       <strong>{mc ? t("hostui.modeMc") : t("hostui.modePlayer")}</strong>
-      <p className="muted">{mc ? t("hostui.modeHintMc") : t("hostui.modeHintPlayer")}</p>
+      {view.round?.state !== "REVIEW" && view.phase !== "FINAL_SCORE_REVIEW" && (
+        <p className="muted">{mc ? t("hostui.modeHintMc") : t("hostui.modeHintPlayer")}</p>
+      )}
       <details className="mode-options">
         <summary>{t("hostui.modeSettings")}</summary>
         <Button
@@ -95,6 +123,9 @@ function ModeSwitch(props: { readonly view: HostView }) {
         >
           {mc ? t("hostui.switchToPlayer") : t("hostui.switchToMc")}
         </Button>
+        {!view.host.commands.includes("set_mode") && (
+          <p className="muted">{t(mc ? "ux.modeUnavailable" : "ux.modeAfterAnswers")}</p>
+        )}
       </details>
     </div>
   );
@@ -117,205 +148,25 @@ function Warnings(props: { readonly view: HostView }) {
   );
 }
 
-function Setup(props: { readonly view: HostView }) {
-  const { view } = props;
-  const send = useSend();
-  const settings = view.host.settings;
-  const [rounds, setRounds] = useState(settings.rounds);
-  const [clip, setClip] = useState(settings.clip_seconds);
-  const [grace, setGrace] = useState(settings.answer_grace_s);
-  const [library, setLibrary] = useState<LibraryResponse | null>(null);
-  const [libraryError, setLibraryError] = useState<string | null>(null);
-  const [libraryLoading, setLibraryLoading] = useState(true);
-  const [libraryRetry, setLibraryRetry] = useState(0);
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(settings.sources.map((s) => `${s.bridge_id}|${s.folder_prefix}`)),
-  );
-
-  // Reload the folder tree whenever the Bridge state or its catalogue changes.
-  const libraryKey = `${view.host.bridge.state}:${view.host.bridge.track_count}:${libraryRetry}`;
-  useEffect(() => {
-    let active = true;
-    if (libraryKey) {
-      setLibraryLoading(true);
-      setLibraryError(null);
-      void api.library().then((result) => {
-        if (!active) return;
-        setLibraryLoading(false);
-        if (result.ok) setLibrary(result.data);
-        else setLibraryError(tCode("error", result.error));
-      });
-    }
-    return () => {
-      active = false;
-    };
-  }, [libraryKey]);
-
-  const savedSources = settings.sources.map((s) => `${s.bridge_id}|${s.folder_prefix}`);
-  const dirty =
-    rounds !== settings.rounds ||
-    clip !== settings.clip_seconds ||
-    grace !== settings.answer_grace_s ||
-    selected.size !== savedSources.length ||
-    savedSources.some((s) => !selected.has(s));
-
-  const toggle = (key: string) => {
-    const next = new Set(selected);
-    if (next.has(key)) {
-      next.delete(key);
-    } else {
-      next.add(key);
-    }
-    setSelected(next);
-  };
-
-  const save = () => {
-    const sources = [...selected].map((key) => {
-      const [bridge_id = "", folder_prefix = ""] = key.split("|");
-      return { bridge_id, folder_prefix };
-    });
-    send(cmd.configure(view, { rounds, clip_seconds: clip, answer_grace_s: grace, sources }));
-  };
-
-  return (
-    <form
-      className="stack setup"
-      onSubmit={(event) => {
-        event.preventDefault();
-        save();
-      }}
-    >
-      <h2>{t("hostui.setup")}</h2>
-      <div className="setup-fields">
-        <label>
-          {t("hostui.rounds")}
-          <input
-            type="number"
-            min={1}
-            max={200}
-            value={rounds}
-            onChange={(e) => setRounds(Number(e.target.value))}
-          />
-        </label>
-        <label>
-          {t("hostui.clipSeconds")}
-          <input
-            type="number"
-            min={view.host.limits.clip_min_s}
-            max={view.host.limits.clip_max_s}
-            value={clip}
-            onChange={(e) => setClip(Number(e.target.value))}
-          />
-        </label>
-      </div>
-      <details className="disclosure">
-        <summary>{t("hostui.advanced")}</summary>
-        <label>
-          {t("hostui.grace")}
-          <input
-            type="number"
-            min={0}
-            max={120}
-            value={grace}
-            onChange={(e) => setGrace(Number(e.target.value))}
-          />
-        </label>
-      </details>
-      <h3>{t("hostui.library")}</h3>
-      <p className="muted">
-        {view.host.bridge.state === "ONLINE" ? t("hostui.bridgeOnline") : t("hostui.bridgeOffline")}
-      </p>
-      <p className="muted">{t("hostui.libraryHint")}</p>
-      {libraryLoading ? (
-        <p role="status">{t("hostui.libraryLoading")}</p>
-      ) : libraryError ? (
-        <div>
-          <p role="alert" className="error">
-            {libraryError}
-          </p>
-          <Button onClick={() => setLibraryRetry((n) => n + 1)}>{t("app.retry")}</Button>
-        </div>
-      ) : library && library.bridges.length > 0 ? (
-        library.bridges.map((bridge) => (
-          <ul className="tree" key={bridge.bridge_id}>
-            <Folder
-              node={bridge.root}
-              bridgeId={bridge.bridge_id}
-              selected={selected}
-              onToggle={toggle}
-            />
-          </ul>
-        ))
-      ) : (
-        <p className="muted">{t("hostui.libraryEmpty")}</p>
-      )}
-      <div className="row setup-actions">
-        <Button type="submit" disabled={!dirty}>
-          {t("hostui.save")}
-        </Button>
-        <Button
-          kind="primary"
-          disabled={dirty || !view.host.commands.includes("start_game")}
-          onClick={() => send(cmd.startGame())}
-        >
-          {t("hostui.start")}
-        </Button>
-      </div>
-      <LiveRegion>
-        {dirty ? (
-          <p className="muted">{t("hostui.unsaved")}</p>
-        ) : (
-          <p className="muted">{t("hostui.saved")}</p>
-        )}
-      </LiveRegion>
-    </form>
-  );
-}
-
-function Folder(props: {
-  readonly node: FolderNode;
-  readonly bridgeId: string;
-  readonly selected: ReadonlySet<string>;
-  readonly onToggle: (key: string) => void;
-}) {
-  const key = `${props.bridgeId}|${props.node.prefix}`;
-  return (
-    <li>
-      <label className="folder-option">
-        <input
-          type="checkbox"
-          checked={props.selected.has(key)}
-          onChange={() => props.onToggle(key)}
-        />
-        <span>
-          {props.node.name} <small className="muted">({props.node.track_count})</small>
-        </span>
-      </label>
-      {props.node.children.length > 0 && (
-        <ul>
-          {props.node.children.map((child) => (
-            <Folder
-              key={child.prefix}
-              node={child}
-              bridgeId={props.bridgeId}
-              selected={props.selected}
-              onToggle={props.onToggle}
-            />
-          ))}
-        </ul>
-      )}
-    </li>
-  );
-}
-
 function RoundControls(props: { readonly view: HostView }) {
   const { view } = props;
   const send = useSend();
   const can = (name: string) => view.host.commands.includes(name);
   const [confirmEnd, setConfirmEnd] = useState<"score" | "abandon" | null>(null);
   const check = view.host.ready_check;
+  const exhausted = view.round?.state === "QUEUED" && view.round.wait_reason === "pool_exhausted";
   return (
     <section className="stack round-controls">
+      {exhausted && (
+        <div className="stack empty-pool">
+          <h2>{t("ux.noPlayableTracks")}</h2>
+          <p>{t("ux.poolRecovery")}</p>
+          <Button kind="primary" onClick={() => send(cmd.configure(view, { allow_repeats: true }))}>
+            {t("ux.enableRepeats")}
+          </Button>
+          <Button onClick={() => setConfirmEnd("score")}>{t("hostui.toFinal")}</Button>
+        </div>
+      )}
       {(check || ["replay", "stop", "add_time", "close", "next", "to_final_review"].some(can)) && (
         <h2>{t("hostui.nextAction")}</h2>
       )}
@@ -330,6 +181,14 @@ function RoundControls(props: { readonly view: HostView }) {
         </p>
       )}
       <div className="row wrap">
+        {can("pause") && (
+          <Button onClick={() => send(cmd.roundCmd(view, "pause"))}>{t("ux.pause")}</Button>
+        )}
+        {can("resume") && (
+          <Button kind="primary" onClick={() => send(cmd.roundCmd(view, "resume"))}>
+            {t("ux.resume")}
+          </Button>
+        )}
         {can("replay") && (
           <Button onClick={() => send(cmd.replay(view))}>{t("hostui.replay")}</Button>
         )}
@@ -362,21 +221,16 @@ function RoundControls(props: { readonly view: HostView }) {
               <Button onClick={() => send(cmd.undoPublish(view))}>{t("hostui.undo")}</Button>
             )}
             {can("end_game") && (
-              <>
-                <Button kind="danger" onClick={() => setConfirmEnd("score")}>
-                  {t("hostui.endScore")}
-                </Button>
-                <Button kind="danger" onClick={() => setConfirmEnd("abandon")}>
-                  {t("hostui.endAbandon")}
-                </Button>
-              </>
+              <Button kind="danger" onClick={() => setConfirmEnd("abandon")}>
+                {t("hostui.endAbandon")}
+              </Button>
             )}
           </div>
         </details>
       )}
       <ConfirmDialog
         open={confirmEnd !== null}
-        message={confirmEnd === "abandon" ? t("hostui.endAbandon") : t("hostui.endScore")}
+        message={confirmEnd === "abandon" ? t("session.abandonHint") : t("session.stopHint")}
         onConfirm={() => {
           if (confirmEnd) {
             send(cmd.endGame(view, confirmEnd));
@@ -389,100 +243,133 @@ function RoundControls(props: { readonly view: HostView }) {
   );
 }
 
-function ReviewTable(props: { readonly view: HostView }) {
-  const { view } = props;
-  const send = useSend();
-  const round = view.round;
-  if (round?.state !== "REVIEW" || !("answers" in round)) {
-    return null;
-  }
-  return (
-    <section className="stack review-section">
-      <h2>{t("reveal.answers")}</h2>
-      <table className="table review">
-        <caption className="sr-only">{t("hostui.reviewTitle")}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{t("reveal.order")}</th>
-            <th scope="col">{t("reveal.player")}</th>
-            <th scope="col">{t("reveal.answer")}</th>
-            <th scope="col">{t("reveal.time")}</th>
-            <th scope="col">{t("hostui.points")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {round.answers.map((row) => {
-            const late = formatLate(row.late_start_ms);
-            return (
-              <tr key={row.player_id}>
-                <td className="answer-rank">{formatRank(row.order, row.near_tie)}</td>
-                <td className="answer-player">{nameOf(view, row.player_id)}</td>
-                <td className="answer-text">
-                  {row.text ?? t("round.noAnswer")}{" "}
-                  {row.status === "CAPTURED" && t("round.notValidated")}
-                </td>
-                <td className="answer-time">
-                  {row.elapsed_ms !== null ? formatSeconds(row.elapsed_ms) : "—"}
-                  {late && <span className="late-notice">{late}</span>}
-                </td>
-                <td className="score-cell">
-                  <div className="score-controls">
-                    {[0, 1, 2, 3].map((points) => (
-                      <button
-                        type="button"
-                        key={points}
-                        className={`btn btn-small ${row.points_draft === points ? "btn-primary" : "btn-secondary"}`}
-                        aria-pressed={row.points_draft === points}
-                        onClick={() => send(cmd.scoreDraft(view, row.player_id, points))}
-                      >
-                        {points === 0 ? "0" : `+${points}`}
-                      </button>
-                    ))}
-                    <input
-                      type="number"
-                      aria-label={t("hostui.pointsFor", { name: nameOf(view, row.player_id) })}
-                      className="points"
-                      min={-1000}
-                      max={1000}
-                      value={row.points_draft}
-                      onChange={(e) =>
-                        send(cmd.scoreDraft(view, row.player_id, Number(e.target.value) || 0))
-                      }
-                    />
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <div className="publish-action">
-        <p className="muted">{t("hostui.publishHint")}</p>
-        <Button
-          kind="primary"
-          disabled={!view.host.commands.includes("publish")}
-          onClick={() => send(cmd.roundCmd(view, "publish"))}
-        >
-          {t("hostui.publish")}
-        </Button>
-      </div>
-    </section>
-  );
-}
-
 function FinalReview(props: { readonly view: HostView }) {
   const { view } = props;
   const send = useSend();
   const rows = view.host.final_review ?? [];
   const [confirm, setConfirm] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+  const [pending, setPending] = useState<Map<string, number>>(new Map());
+  const [saveError, setSaveError] = useState(false);
+  const [roundBusy, setRoundBusy] = useState(false);
+  useEffect(() => {
+    setPending((old) => {
+      const next = new Map(old);
+      for (const row of rows)
+        if (next.get(row.player_id) === row.draft_delta) next.delete(row.player_id);
+      return next.size === old.size ? old : next;
+    });
+  }, [rows]);
+  useEffect(() => {
+    if (!pending.size) return;
+    const timer = window.setTimeout(() => {
+      setPending(new Map());
+      setSaveError(true);
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [pending]);
+  const setCorrection = (pid: string, value: number) => {
+    if (rows.find((row) => row.player_id === pid)?.draft_delta === value) return true;
+    const sent = send(cmd.finalSet(pid, value));
+    setSaveError(!sent);
+    if (sent) setPending((old) => new Map(old).set(pid, value));
+    return sent;
+  };
+  const resetCorrections = () => {
+    const sent = send(cmd.finalReset());
+    setSaveError(!sent);
+    if (sent)
+      setPending(
+        new Map(rows.filter((row) => row.draft_delta !== 0).map((row) => [row.player_id, 0])),
+      );
+  };
+  const saving = busy.size > 0 || pending.size > 0 || roundBusy;
+  const rounds = view.host.review_rounds ?? [];
+  const [selected, setSelected] = useState(
+    () => readLocal(`review:${view.game?.game_id}`) ?? rounds[0]?.round_id ?? "",
+  );
+  const [query, setQuery] = useState("");
+  const active = rounds.find((r) => r.round_id === selected) ?? rounds[0];
+  const index = active ? rounds.indexOf(active) : 0;
+  const unchecked = rounds
+    .filter((r) => r.included)
+    .reduce((sum, r) => sum + r.answers.filter((a) => !a.reviewed).length, 0);
+  const choose = (id: string) => {
+    setSelected(id);
+    writeLocal(`review:${view.game?.game_id}`, id);
+  };
   const corrections = rows.filter((r) => r.draft_delta !== 0);
-  const summary = corrections
-    .map((r) => `${nameOf(view, r.player_id)} ${formatDelta(r.draft_delta)}`)
+  const teams = new Map<string, number>();
+  for (const row of rows) {
+    const team = view.players.find((p) => p.id === row.player_id)?.team;
+    if (team) teams.set(team, (teams.get(team) ?? 0) + row.score_after);
+  }
+  const summary = rows
+    .map(
+      (r) =>
+        `${nameOf(view, r.player_id)} : ${r.score_after} ${t("hostui.points")} (${formatDelta(r.draft_delta)})`,
+    )
     .join(", ");
   return (
     <section className="stack final-review">
       <h2>{t("final.title")}</h2>
+      <p className="muted">{t("review.privateHint")}</p>
+      <p role="status">{t("review.remaining", { count: unchecked })}</p>
+      <div className="global-review-layout">
+        <nav className="review-navigation" aria-label={t("review.rounds")}>
+          <label>
+            {t("library.search")}
+            <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </label>
+          <ol className="list">
+            {rounds
+              .filter((r) =>
+                `${r.number} ${r.track?.display_name ?? ""}`
+                  .toLocaleLowerCase()
+                  .includes(query.toLocaleLowerCase()),
+              )
+              .map((r) => (
+                <li key={r.round_id}>
+                  <Button
+                    disabled={roundBusy}
+                    aria-current={r.round_id === active?.round_id ? "step" : undefined}
+                    onClick={() => choose(r.round_id)}
+                  >
+                    {r.number}. {r.track?.title ?? r.track?.display_name ?? "—"} ·{" "}
+                    {r.included
+                      ? `${r.answers.filter((a) => a.reviewed).length}/${r.answers.length}`
+                      : t("review.cancelledShort")}
+                  </Button>
+                </li>
+              ))}
+          </ol>
+        </nav>
+        <div className="stack">
+          <div className="row wrap">
+            <Button
+              disabled={roundBusy || index === 0}
+              onClick={() => choose(rounds[index - 1]?.round_id ?? "")}
+            >
+              {t("review.previous")}
+            </Button>
+            <strong>
+              {active
+                ? t("round.header", { n: active.number, total: rounds.length })
+                : t("review.empty")}
+            </strong>
+            <Button
+              disabled={roundBusy || index >= rounds.length - 1}
+              onClick={() => choose(rounds[index + 1]?.round_id ?? "")}
+            >
+              {t("hostui.next")}
+            </Button>
+          </div>
+          {active && (
+            <ReviewRound key={active.round_id} round={active} view={view} onBusy={setRoundBusy} />
+          )}
+        </div>
+      </div>
       <table className="table final-table">
         <caption className="sr-only">{t("final.title")}</caption>
         <thead>
@@ -502,21 +389,38 @@ function FinalReview(props: { readonly view: HostView }) {
               <td className="final-correction">
                 <div className="score-controls">
                   <Button
+                    disabled={
+                      busy.has(row.player_id) ||
+                      pending.has(row.player_id) ||
+                      row.draft_delta <= -1000
+                    }
                     aria-label={t("final.decrease", { name: nameOf(view, row.player_id) })}
-                    onClick={() => send(cmd.finalSet(row.player_id, row.draft_delta - 1))}
+                    onClick={() => setCorrection(row.player_id, row.draft_delta - 1)}
                   >
                     −
                   </Button>
-                  <input
-                    type="number"
-                    className="points"
-                    aria-label={t("final.correctionFor", { name: nameOf(view, row.player_id) })}
+                  <NumericDraft
+                    label={t("final.correctionFor", { name: nameOf(view, row.player_id) })}
                     value={row.draft_delta}
-                    onChange={(e) => send(cmd.finalSet(row.player_id, Number(e.target.value) || 0))}
+                    disabled={pending.has(row.player_id)}
+                    onCommit={(value) => setCorrection(row.player_id, value)}
+                    onBusy={(value) =>
+                      setBusy((old) => {
+                        const next = new Set(old);
+                        if (value) next.add(row.player_id);
+                        else next.delete(row.player_id);
+                        return next;
+                      })
+                    }
                   />
                   <Button
+                    disabled={
+                      busy.has(row.player_id) ||
+                      pending.has(row.player_id) ||
+                      row.draft_delta >= 1000
+                    }
                     aria-label={t("final.increase", { name: nameOf(view, row.player_id) })}
-                    onClick={() => send(cmd.finalSet(row.player_id, row.draft_delta + 1))}
+                    onClick={() => setCorrection(row.player_id, row.draft_delta + 1)}
                   >
                     +
                   </Button>
@@ -535,46 +439,85 @@ function FinalReview(props: { readonly view: HostView }) {
                 >
                   {t("final.detail")}
                 </button>
-                {detail === row.player_id && (
-                  <ul className="list">
-                    {row.history.map((h) => (
-                      <li key={h.round_id}>
-                        #{h.number} {h.text ?? "—"}{" "}
-                        {h.elapsed_ms !== null ? formatSeconds(h.elapsed_ms) : ""}{" "}
-                        {formatRank(h.order, h.near_tie)} {formatDelta(h.points)}
-                      </li>
-                    ))}
-                    {row.adjustments.map((a, index) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: adjustments have no id
-                      <li key={`adj-${index}`}>
-                        {formatDelta(a.delta)} {a.note ?? ""}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {detail === row.player_id && <PlayerHistory row={row} />}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {teams.size > 0 && (
+        <table className="table provisional-teams">
+          <caption>{t("review.teamTotals")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("ux.team")}</th>
+              <th scope="col">{t("final.after")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...teams]
+              .sort((a, b) => b[1] - a[1])
+              .map(([team, total]) => (
+                <tr key={team}>
+                  <td>{team}</td>
+                  <td>{total}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      )}
+      {saveError && (
+        <p role="alert" className="error">
+          {t("ux.saveTimeout")}
+        </p>
+      )}
+      {pending.size > 0 && (
+        <p role="status" className="muted">
+          {t("ux.waitingScores")}
+        </p>
+      )}
       <div className="row">
-        <Button onClick={() => send(cmd.finalReset())}>{t("final.reset")}</Button>
-        <Button kind="primary" onClick={() => setConfirm(true)}>
+        <Button disabled={saving} onClick={resetCorrections}>
+          {t("final.reset")}
+        </Button>
+        <Button kind="primary" disabled={saving} onClick={() => setConfirm(true)}>
           {t("final.validate")}
         </Button>
       </div>
       <ConfirmDialog
         open={confirm}
-        message={
-          corrections.length
-            ? t("final.confirm", { count: corrections.length, list: summary })
-            : t("final.confirmNone")
-        }
+        message={`${t("ux.confirmFinal", { list: summary, count: corrections.length })} ${unchecked ? t("ux.confirmUnchecked", { count: unchecked }) : ""}`}
         onConfirm={() => {
-          send(cmd.finalValidate());
+          send(cmd.finalValidate(unchecked > 0));
           setConfirm(false);
         }}
         onCancel={() => setConfirm(false)}
+      />
+    </section>
+  );
+}
+
+function SessionControls({ view }: { readonly view: HostView }) {
+  const send = useSend();
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <section className="row wrap session-controls">
+      <Button onClick={() => send(cmd.joinLock(view, !view.host.joins_locked))}>
+        {t(view.host.joins_locked ? "session.unlock" : "session.lock")}
+      </Button>
+      {view.host.commands.includes("end_game") && (
+        <Button kind="danger" onClick={() => setConfirm(true)}>
+          {t("session.stop")}
+        </Button>
+      )}
+      <ConfirmDialog
+        open={confirm}
+        message={t("session.stopHint")}
+        onCancel={() => setConfirm(false)}
+        onConfirm={() => {
+          send(cmd.endGame(view, "score"));
+          setConfirm(false);
+        }}
       />
     </section>
   );
@@ -731,9 +674,11 @@ function Diagnostics() {
   const [data, setData] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
   const load = () => {
     setBusy(true);
     setError(null);
+    setCopied(false);
     void api.diagnostics().then((result) => {
       setBusy(false);
       if (result.ok) {
@@ -744,6 +689,7 @@ function Diagnostics() {
   return (
     <details className="disclosure" onToggle={(e) => (e.currentTarget.open ? load() : undefined)}>
       <summary>{t("hostui.diagnostics")}</summary>
+      <p className="muted">{t("hostui.diagnosticsPrivacy")}</p>
       {busy && <p role="status">{t("app.loading")}</p>}
       {error && (
         <div>
@@ -755,8 +701,17 @@ function Diagnostics() {
       )}
       {data && (
         <>
-          <Button onClick={() => void navigator.clipboard?.writeText(data)}>
-            {t("hostui.copyDiagnostics")}
+          <Button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(data);
+                setCopied(true);
+              } catch {
+                setError(t("ux.copyDiagnosticsFallback"));
+              }
+            }}
+          >
+            {copied ? t("ux.copyDiagnosticsDone") : t("hostui.copyDiagnostics")}
           </Button>
           <pre className="diag">{data}</pre>
         </>

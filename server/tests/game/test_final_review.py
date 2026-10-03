@@ -10,8 +10,7 @@ from openblindysir_server.game import commands as c
 def at_final_review(points: dict[int, int] | None = None) -> Scenario:
     sc = Scenario(rounds=1)
     sc.to_review()
-    sc.publish({sc.player_ids[i]: pts for i, pts in (points or {}).items()})
-    sc.on_round("to_final_review")
+    sc.score({sc.player_ids[i]: pts for i, pts in (points or {}).items()})
     assert sc.s.game.phase is GamePhase.FINAL_SCORE_REVIEW
     return sc
 
@@ -22,7 +21,7 @@ def test_final_set_is_a_draft_value_not_an_event() -> None:
     sc.on_phase("final_set", {"player_id": a, "delta": 2})
     sc.on_phase("final_set", {"player_id": a, "delta": 2})
     assert sc.s.game.final_draft == {a: 2}
-    assert len(sc.s.journal.events()) == 1
+    assert len(sc.s.journal.events()) == 0
     row = next(r for r in sc.host_view().host.final_review if r.player_id == a)  # type: ignore[union-attr]
     assert (row.score_before, row.draft_delta, row.score_after) == (3, 2, 5)
 
@@ -35,7 +34,7 @@ def test_final_validate_creates_one_event_per_non_zero_delta_including_host() ->
     sc.on_phase("final_set", {"player_id": b, "delta": -1})
     sc.on_phase("final_set", {"player_id": sc.host_id, "delta": 1})
     sc.on_phase("final_set", {"player_id": b, "delta": 0})
-    assert sc.on_phase("final_validate").error is None
+    sc.finalize()
     finals = [ev for ev in sc.s.journal.events() if ev.kind is ScoreKind.FINAL_ADJUSTMENT]
     assert {(ev.player_id, ev.delta) for ev in finals} == {(a, 2), (sc.host_id, 1)}
     assert all(ev.round_id is None for ev in finals)
@@ -45,7 +44,9 @@ def test_final_validate_creates_one_event_per_non_zero_delta_including_host() ->
 def test_final_validate_is_idempotent() -> None:
     sc = at_final_review()
     sc.on_phase("final_set", {"player_id": sc.player_ids[0], "delta": 2})
-    first = sc.host("final_validate", expected_phase="FINAL_SCORE_REVIEW", args={})
+    first = sc.host(
+        "final_validate", expected_phase="FINAL_SCORE_REVIEW", args={"confirm_unreviewed": True}
+    )
     second = sc.host("final_validate", expected_phase="FINAL_SCORE_REVIEW", args={})
     assert first.error is None
     assert second.error is ErrorCode.STALE_COMMAND
@@ -72,7 +73,7 @@ def test_draft_survives_host_reconnection() -> None:
 
 def test_scores_frozen_after_final_results() -> None:
     sc = at_final_review()
-    sc.on_phase("final_validate")
+    sc.finalize()
     game_id = sc.s.game.game_id
     assert sc.s.journal.is_frozen(game_id)
     adjust = {"player_id": sc.player_ids[0], "delta": 1, "op_id": "op-0000009"}
@@ -82,7 +83,7 @@ def test_scores_frozen_after_final_results() -> None:
 def test_final_results_show_adjustments_and_shared_ranks() -> None:
     sc = at_final_review({0: 2, 1: 2})
     sc.on_phase("final_set", {"player_id": sc.player_ids[2], "delta": 2})
-    sc.on_phase("final_validate")
+    sc.finalize()
     results = sc.view(sc.player_ids[0]).final_results
     assert results is not None
     assert [row.rank for row in results.standings][:3] == [1, 1, 1]
@@ -96,4 +97,10 @@ def test_players_see_frozen_standings_and_no_draft() -> None:
     player_json = sc.view(sc.player_ids[1]).model_dump_json()
     assert "draft_delta" not in player_json
     assert "score_after" not in player_json
-    assert sc.view(sc.player_ids[1]).standings[0].score == 3
+    assert sc.view(sc.player_ids[1]).standings == []
+    assert (
+        next(
+            row for row in sc.host_view().host.final_review if row.player_id == sc.player_ids[0]
+        ).score_after
+        == 8
+    )

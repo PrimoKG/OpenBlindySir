@@ -1,17 +1,47 @@
 // HOST message builders (spec §8.2): every idempotency key is read from the DISPLAYED view,
 // so a double click or a second host device sends a stale key and changes nothing.
-import type { AnyView, ClientMessage, HostView, SettingsPatch } from "../protocol";
+import type { AnyView, ClientMessage, HostView, MusicalMetadata, SettingsPatch } from "../protocol";
 
 type Host = Extract<ClientMessage, { t: "HOST" }>;
-type RoundCmd = "next" | "force_start" | "skip" | "close" | "publish" | "to_final_review";
+type RoundCmd =
+  | "next"
+  | "force_start"
+  | "skip"
+  | "close"
+  | "publish"
+  | "to_final_review"
+  | "pause"
+  | "resume";
 
 function roundId(view: AnyView): string {
   return view.round?.round_id ?? "";
 }
 
-export function configure(view: AnyView, patch: SettingsPatch): Host {
+export function configure(view: AnyView, patch: SettingsPatch, start = false): Host {
   const phase = view.phase === "FINAL_SCORE_REVIEW" ? "LOBBY" : view.phase;
-  return { t: "HOST", cmd: "configure", expected_phase: phase, args: patch };
+  return { t: "HOST", cmd: "configure", expected_phase: phase, args: patch, start_game: start };
+}
+
+export function publish(view: AnyView, confirm = false): Host {
+  return {
+    t: "HOST",
+    cmd: "publish",
+    round_id: roundId(view),
+    args: { confirm_unreviewed: confirm },
+  };
+}
+
+export function trackMetadata(roundId: string, metadata: MusicalMetadata): Host {
+  return { t: "HOST", cmd: "track_metadata", round_id: roundId, args: metadata };
+}
+
+export function participation(playerId: string, spectator: boolean, team: string | null): Host {
+  return {
+    t: "HOST",
+    cmd: "participation",
+    expected_phase: "LOBBY",
+    args: { player_id: playerId, spectator, team },
+  };
 }
 
 export function setMode(view: AnyView, mode: "player" | "mc"): Host {
@@ -48,10 +78,11 @@ export function roundCmd(view: AnyView, cmd: RoundCmd): Host {
 }
 
 export function endGame(view: AnyView, currentRound: "score" | "abandon"): Host {
+  const key = view.round ? { round_id: roundId(view) } : { expected_phase: view.phase };
   return {
     t: "HOST",
     cmd: "end_game",
-    round_id: roundId(view),
+    ...key,
     args: { current_round: currentRound },
   };
 }
@@ -89,11 +120,11 @@ export function addTime(view: AnyView): Host {
   };
 }
 
-export function scoreDraft(view: AnyView, playerId: string, points: number): Host {
+export function scoreDraft(round: AnyView | string, playerId: string, points: number): Host {
   return {
     t: "HOST",
     cmd: "score_draft",
-    round_id: roundId(view),
+    round_id: typeof round === "string" ? round : roundId(round),
     args: { player_id: playerId, points },
   };
 }
@@ -127,6 +158,33 @@ export function finalReset(): Host {
   return { t: "HOST", cmd: "final_reset", expected_phase: "FINAL_SCORE_REVIEW", args: {} };
 }
 
-export function finalValidate(): Host {
-  return { t: "HOST", cmd: "final_validate", expected_phase: "FINAL_SCORE_REVIEW", args: {} };
+export function finalValidate(confirmUnreviewed = false): Host {
+  return {
+    t: "HOST",
+    cmd: "final_validate",
+    expected_phase: "FINAL_SCORE_REVIEW",
+    args: { confirm_unreviewed: confirmUnreviewed },
+  };
+}
+
+export function joinLock(view: AnyView, locked: boolean): Host {
+  return { t: "HOST", cmd: "join_lock", expected_phase: view.phase, args: { locked } };
+}
+
+export function selectTrack(
+  view: Extract<HostView, { kind: "host_mc" }>,
+  roundNumber: number,
+  track: { bridge_id: string; track_id: string } | null,
+): Host {
+  return {
+    t: "HOST",
+    cmd: "select_track",
+    expected_phase: view.phase === "LOBBY" ? "LOBBY" : "IN_GAME",
+    args: {
+      round_number: roundNumber,
+      expected_revision: view.mc.selection_revision ?? 0,
+      bridge_id: track?.bridge_id ?? null,
+      track_id: track?.track_id ?? null,
+    },
+  };
 }

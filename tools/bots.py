@@ -23,7 +23,9 @@ from typing import Any
 import httpx
 import websockets
 
-PROTOCOL = 1
+from openblindysir_protocol.version import PROTOCOL_VERSION
+
+PROTOCOL = PROTOCOL_VERSION
 CLOCK = {"offset": 0.0, "rtt_min": 5.0}
 Predicate = Callable[[dict[str, Any]], bool]
 
@@ -312,34 +314,37 @@ async def play_game(
         for number in range(1, rounds + 1):
             view = await host.wait_for(
                 lambda v, n=number: (
-                    (v.get("round") or {}).get("number") == n
-                    and round_state(v) in ("OPEN", "REVIEW")
+                    v["phase"] == "FINAL_SCORE_REVIEW"
+                    or (
+                        (v.get("round") or {}).get("number") == n
+                        and round_state(v) in ("OPEN", "REVIEW")
+                    )
                 ),
                 timeout_s=90,
             )
             if on_round is not None:
                 await on_round(number, host, bots)
             if round_state(view) == "OPEN":
-                await host.wait_for(lambda v: round_state(v) == "REVIEW", timeout_s=90)
-            review = host.view["round"]
-            for row in review["answers"]:
-                points = 3 if row["order"] == 1 else 1 if row["status"] == "LOCKED" else 0
-                if points:
-                    await host.on_round(
-                        "score_draft", {"player_id": row["player_id"], "points": points}
-                    )
-            await host.wait_for(
-                lambda v: (
-                    sum(1 for r in v["round"]["answers"] if r["points_draft"]) >= 1
-                    or not any(r["status"] == "LOCKED" for r in v["round"]["answers"])
+                await host.wait_for(
+                    lambda v: round_state(v) == "REVIEW" or v["phase"] == "FINAL_SCORE_REVIEW",
+                    timeout_s=90,
                 )
-            )
-            await host.on_round("publish")
-            await host.wait_for(lambda v: round_state(v) == "REVEALED")
             if number < rounds:
                 await host.on_round("next")
-        await host.on_round("to_final_review")
         await host.wait_for(lambda v: v["phase"] == "FINAL_SCORE_REVIEW")
+        for review in host.view["host"]["review_rounds"]:
+            for row in review["answers"]:
+                points = 3 if row["order"] == 1 else 1 if row["status"] == "LOCKED" else 0
+                await host.host(
+                    "score_draft",
+                    {"player_id": row["player_id"], "points": points},
+                    round_id=review["round_id"],
+                )
+        await host.wait_for(
+            lambda v: all(
+                row["reviewed"] for r in v["host"]["review_rounds"] for row in r["answers"]
+            )
+        )
         await host.on_phase("final_set", {"player_id": host.player_id, "delta": final_correction})
         await host.wait_for(
             lambda v: any(r["draft_delta"] for r in v["host"]["final_review"] or [])

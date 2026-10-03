@@ -36,6 +36,32 @@ class SessionRegistry:
     def __init__(self, idle_ttl_ms: int) -> None:
         self.idle_ttl_ms = idle_ttl_ms
         self._by_hash: dict[str, SessionRecord] = {}
+        self._recovery: dict[str, str] = {}
+
+    def recovery_code(self, player_id: str) -> str:
+        self._recovery = {k: v for k, v in self._recovery.items() if v != player_id}
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        while True:
+            code = "".join(secrets.choice(alphabet) for _ in range(6))
+            digest = hash_token(code)
+            if digest not in self._recovery:
+                break
+        self._recovery[digest] = player_id
+        redaction().add_secret(code)
+        return code
+
+    def recover(self, code: str) -> str | None:
+        return self._recovery.pop(hash_token(code), None)
+
+    def recovery_snapshot(self) -> dict[str, str]:
+        return dict(self._recovery)
+
+    def restore_recovery(self, rows: dict[str, str], players: set[str]) -> None:
+        self._recovery = {
+            k: v
+            for k, v in rows.items()
+            if len(k) == 64 and v in players and all(c in "0123456789abcdef" for c in k)
+        }
 
     def issue(self, player_id: str, now_ms: int) -> str:
         token = new_token()
@@ -63,11 +89,13 @@ class SessionRegistry:
 
     def revoke(self, player_ids: tuple[str, ...]) -> None:
         targets = set(player_ids)
+        self._recovery = {k: v for k, v in self._recovery.items() if v not in targets}
         for key in [k for k, r in self._by_hash.items() if r.player_id in targets]:
             del self._by_hash[key]
 
     def revoke_all(self) -> None:
         self._by_hash.clear()
+        self._recovery.clear()
 
     def expire_idle(self, now_ms: int) -> None:
         stale = [
@@ -75,3 +103,23 @@ class SessionRegistry:
         ]
         for key in stale:
             del self._by_hash[key]
+
+    def snapshot(self, now_ms: int) -> list[dict[str, str | int]]:
+        return [
+            dict(token_hash=key, player_id=r.player_id, idle_ms=max(0, now_ms - r.last_seen_mono))
+            for key, r in self._by_hash.items()
+        ]
+
+    def restore(
+        self, records: list[dict], now_ms: int, downtime_ms: int, players: set[str]
+    ) -> None:
+        self._by_hash.clear()
+        for row in records:
+            key, pid, age = row["token_hash"], row["player_id"], row["idle_ms"] + downtime_ms
+            if (
+                len(key) == 64
+                and all(c in "0123456789abcdef" for c in key)
+                and pid in players
+                and 0 <= age <= self.idle_ttl_ms
+            ):
+                self._by_hash[key] = SessionRecord(pid, now_ms - age, now_ms - age)

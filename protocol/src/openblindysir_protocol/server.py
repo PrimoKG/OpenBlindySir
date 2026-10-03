@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from openblindysir_protocol.base import AssetId, OutboundModel, PlayId, RoundId
+from openblindysir_protocol.compatibility import Compatibility
 from openblindysir_protocol.enums import AnswerAckStatus
 from openblindysir_protocol.errors import AnswerRejectReason, ErrorCode
 from openblindysir_protocol.views import AnyView
@@ -39,6 +40,7 @@ class PlayMsg(OutboundModel):
 class StopMsg(OutboundModel):
     t: Literal["STOP"]
     play_id: PlayId
+    stop_at: int | None = None
 
 
 class AnswerAck(OutboundModel):
@@ -53,6 +55,7 @@ class AnswerAck(OutboundModel):
 class ErrorMsg(OutboundModel):
     t: Literal["ERROR"]
     code: ErrorCode
+    compatibility: Compatibility | None = None
 
 
 ServerMessage = Annotated[

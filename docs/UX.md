@@ -1,102 +1,119 @@
-# Passe UX/UI — 2026-10-02
+# Parcours UX/UI — V0.5, 2026-10-03
 
-Cette intervention améliore l'application existante selon les contraintes de
-[la spécification](architecture.md), sans modifier le protocole, les permissions,
-les scores, les transitions métier ou le moteur audio. Aucune dépendance ajoutée.
+Protocole 4. Décisions : [ADR 0011](adr/0011-global-review-and-private-replay.md),
+[ADR 0012](adr/0012-dynamic-sources-and-metadata.md),
+[ADR 0013](adr/0013-bridge-distribution.md) et
+[ADR 0014](adr/0014-manual-mc-selection.md). Les règles et permissions
+viennent du serveur ; le navigateur affiche les actions permises.
 
-## Inspection et frictions
+## Préparer et gérer les sources
 
-Le frontend repose sur React, des composants locaux (`Button`, `AudioBadge`,
-`LiveRegion`, `ConfirmDialog`, `Toast`) et une feuille CSS commune. Les écrans
-suivent déjà les vues filtrées du serveur. Il n'existe pas de bibliothèque de
-composants à remplacer ni de système d'icônes à étendre.
+La sélection de dossiers affiche total/disponible/neuf et élimine le double
+comptage parent/enfant. Recherche d'arbre au clavier, presets locaux, barème/consigne,
+équipes/spectateurs, QR privé sans mot de passe, réglages et lancement atomique.
+La bibliothèque repliable distingue montage accessible, dossiers scannés et
+sélection de partie. Ajout/retrait/rescan par Bridge, retours de demande puis
+comptes reçus, filtre Bridge/dossier/type/disponibilité, recherche, pagination,
+états vide/chargement/erreur et diagnostics d'import par ligne.
 
-Les frictions retenues sont la juxtaposition des commandes hôte et des réglages
-techniques, la faible hiérarchie entre les états d'une manche, le déverrouillage
-audio qui recouvre le jeu, les tableaux difficiles à lire sur téléphone et le
-manque de repères lors d'une erreur ou d'une reconnexion.
+Le scan ne peut pas étendre la racine autorisée ; le message d'un dossier
+inaccessible explique le montage et la recréation du seul Bridge. L'hôte joueur
+perd l'accès aux noms de morceaux à venir pendant IN_GAME. Le MC voit les réponses
+en direct et ne participe pas au score.
 
-## Direction visuelle et plan appliqué
+## Choisir une manche en animateur
 
-1. Définir une grammaire dans le CSS commun et factoriser les repères utiles.
-2. Prioriser l'entrée, le test audio et le cycle de réponse du joueur.
-3. Placer les commandes hôte dans le contexte de la manche, avec la notation et
-   la publication au premier plan lors de la revue.
-4. Regrouper les réglages, options de manche et diagnostics dans des disclosures
-   natifs, puis vérifier les parcours réels et les cas limites d'affichage.
+Dans la bibliothèque, choisir un numéro de manche puis rechercher/filtrer les
+pistes. Chaque résultat montre sa source, son dossier, ses métadonnées disponibles,
+son format et sa durée mesurée, ainsi que les états joué/réservé/indisponible.
+Un choix manuel contourne explicitement l'alternance aléatoire des dossiers ;
+les règles de répétition et de sources restent appliquées.
 
-La palette associe un fond papier `#f6f3eb`, des surfaces blanches, une encre sombre
-`#292c26` et un accent terre cuite `#b74728`. L'accent signale l'action principale
-et le focus. Les erreurs et avertissements disposent aussi d'un texte explicite.
-Le corps est à 17 px ; les titres utilisent Georgia, présente sur le système.
-Un disque dessiné en CSS sert de signature commune à l'entrée, à l'audio et à la
-révélation. Son animation cesse avec `prefers-reduced-motion`.
+Le choix attend l'accusé serveur avec une échéance fixe de dix secondes.
+Pendant cette attente, les commandes de lancement restent désactivées. La liste
+numérotée affiche ensuite « Choix enregistré » ; une manche manuelle prête attend
+« Lancer maintenant ». L'extrait demandé verrouille le choix, y compris en
+préchargement. Un échec conserve le choix et propose remplacement, retour au
+hasard, passage ou arrêt. Aucun remplacement n'est automatique.
 
-Le jeu occupe une surface principale. Sur ordinateur, l'hôte conserve ses
-commandes à côté du jeu ; sur téléphone elles suivent le jeu avec un lien
-d'accès direct. La revue et la vérification finale prennent toute la largeur.
-Les tableaux restent sémantiques, avec des lignes réorganisées pour le mobile.
-Les boutons visibles ont une cible d'au moins 44 × 44 px. Les confirmations
-utilisent le dialogue natif, un titre accessible et un focus initial sur Annuler.
+La liste et la recherche réutilisent composants, labels et focus visibles sur
+mobile. Les contrôles sont testés au clavier à 320 px, avec confirmation,
+verrouillage, expiration de l'accusé et traduction anglaise. Ces informations
+restent dans la vue MC ; joueurs et hôte joueur ne les reçoivent pas en jeu.
 
-## Parcours et informations autorisées
+## Configurer et diagnostiquer le Bridge
 
-| Étape | Joueur | Hôte joueur / MC |
-|---|---|---|
-| Entrée | Pseudo, mot de passe partagé, erreur explicite, attente de connexion | Accès hôte et formulaire d'élévation distincts |
-| Lobby | Test sonore, confirmation entendue, volume, participants et attente | Réglages essentiels et dossiers ; lancement après enregistrement |
-| Préparation / chargement | État et consigne d'attente | État du jeu et commandes permises ; démarrage forcé si autorisé |
-| Compte à rebours | Départ annoncé visuellement et au lecteur d'écran | Même repère temporel |
-| OPEN | Lecture ou fin de l'extrait, délai restant, brouillon modifiable et validation définitive | Hôte joueur : même saisie ; MC : progression par joueur sans texte de réponse |
-| REVIEW | Sa propre réponse seulement, mention du brouillon capturé, attente | Réponses, temps, quasi-ex æquo, retard audio et notation manuelle ; publier après la table |
-| REVEALED | Morceau, réponses, temps, points et classement reçu du serveur | Suite de la partie selon les commandes disponibles |
-| Vérification finale | Attente et classement publié, sans brouillon de correction | Score actuel, correction, résultat, détail et confirmation |
-| Résultats / fin | Podium utilisant les rangs du serveur, totaux et corrections | Nouvelle partie ou fin de session confirmée |
+Une seule entrée CLI pour uvx et les archives. L'assistant français demande serveur,
+racine musicale, secret masqué et nom, puis résume les champs sans révéler le secret.
+Il demande confirmation pour sauvegarder, puis annonce et demande les contrôles
+FFmpeg, le scan des noms et l'enregistrement hors partie. Aucun extrait n'est créé.
+Une configuration existante reçoit une sauvegarde privée avant remplacement.
 
-Le compteur anonyme est affiché seulement si la vue serveur le fournit. Le test
-réel MC avec deux compétiteurs confirme son absence. Les réponses, temps et
-métadonnées restent absents des trames joueur avant la révélation. Les réglages
-techniques, les connexions, l'exclusion, les ajustements manuels, le replay, l'arrêt,
-le délai supplémentaire, le saut, l'annulation de publication et la fin anticipée
-gardent leurs commandes existantes et leurs contrôles de permission.
+Aide/version/check-config ne créent rien ; doctor local ne scanne pas. Le test de
+connexion explicite se ferme ensuite et indique de lancer run. Les erreurs donnent
+un code stable, une action et le guide. Les sorties guidées s'adaptent aux terminaux
+étroits ; un terminal sans saisie masquée refuse l'assistant. Les diagnostics JSON
+copiables excluent adresse, UUID, chemins, noms de fichiers et secrets.
 
-Les erreurs de session, de bibliothèque et de diagnostic proposent une relance.
-Une erreur audio laisse la réponse et les commandes hôte accessibles. La
-reconnexion explique l'attente et désactive les mutations hôte jusqu'au retour du
-transport. La reprise d'une session ouverte ailleurs et l'exclusion disposent
-d'un écran explicite.
+## Jouer et terminer
 
-## Zones modifiées
+Pause/reprise synchronisées, distinction fin de son/deadline, validation définitive
+et propre réponse restaurée. Chaque fermeture garde les réponses sans notation ni
+reveal. L'arrêt confirmé reste visible dans toutes les phases, préserve les manches
+entendues et mène à la revue globale ; aucun point n'est publié automatiquement.
+Les commandes obsolètes de publication par manche sont refusées.
 
-- `web/src/styles.css` et `web/src/ui/components.tsx` : grammaire, repères,
-  confirmations et états communs.
-- `web/src/app/{App,JoinScreen}.tsx` : entrée, élévation, session et erreurs.
-- `web/src/player/{PlayerApp.tsx,presentation.ts}` : phases, audio et réponses.
-- `web/src/host/HostApp.tsx` : préparation, revue, corrections et commandes.
-- `web/src/i18n/{fr,en}.ts` : textes fonctionnels dans les deux dictionnaires.
-- `web/tests/presentation.test.ts`, `web/e2e/{game,ui}.spec.ts` : progression de
-  l'extrait, parcours réels, affichage et états dégradés.
+## Revue globale
 
-## Vérifications
+Navigation par manche avec titre, numéro et progression de vérification, recherche,
+précédent/suivant ; colonne dédiée sur ordinateur et liste compacte sur mobile.
+Le morceau garde son contexte, les réponses leurs statuts, réception serveur,
+temps/rang validés et retard audio. Les absences restent explicites. Une manche
+entendue annulée est conservée avec points désactivés.
 
-Les largeurs 320, 390 et 1280 px sont contrôlées sous Chromium. Les assertions
-portent sur les titres par phase, les informations autorisées, les cibles tactiles,
-le focus, les dialogues, les textes longs, les tableaux, les réglages son avec
-pseudos courts et longs et l'absence de débordement horizontal. Une vérification
-numérique couvre les contrastes des paires de couleurs textuelles principales
-(au moins 4,5:1). Ce contrôle n'est pas un audit WCAG complet.
+Boutons rapides et entier signé ±1000, zéro explicite, sauvegarde après Entrée ou
+sortie du champ. La navigation/publication attend le serveur ; timeout et échec
+affichés avec possibilité de nouvelle saisie. Les totaux provisoires par joueur
+et équipe et corrections finales se mettent à jour avec les vues autoritaires.
+La confirmation finale récapitule totaux et lignes non vérifiées. Les résultats
+figent les notes et alimentent récapitulatif, historique et CSV/JSON.
 
-La suite Chromium comprend trois parcours avec le vrai serveur et le Bridge démo
-(deux parties de deux manches, une partie MC) et seize scénarios d'interface avec
-vues synthétiques injectées. Ces derniers complètent les tests réels ; ils ne
-modifient aucune règle dans l'application. Les captures sont produites dans
-`web/test-results/`, ignoré par Git, et relues visuellement.
+Le lecteur privé charge seulement à la demande ; pause, progression, durée,
+navigation, volume et erreurs accessibles. Extrait exact vérifié par hash,
+mode complet explicite avec retour à l'extrait, segments ≤30 s. Aucun message
+de lecture aux joueurs ; changer de manche annule le transfert et libère le Blob.
 
-Le [DEVLOG](DEVLOG.md) consigne les commandes, les nombres exacts et les défauts
-corrigés. Les extraits de test sont synthétiques et en Opus : Chromium headless
-ne valide pas le format AAC de production ni la synchronisation acoustique.
+## Préférences et récupération
 
-WebKit et les appareils iOS/Android réels restent à valider. G1 et G2 demeurent
-`PENDING USER MEASUREMENT`. Le problème connu du compteur sous WebKit Linux n'a
-pas été analysé ici ; l'isolation des sessions de test a toutefois été améliorée
-pour les relances. Le déploiement et la release restent hors de cette intervention.
+Français/English et latence manuelle ±500 ms persistées localement. Latence positive
+avance la prochaine lecture, n'affecte pas celle en cours ni le timing officiel.
+Code de récupération privé à six caractères, avec mot de passe, usage unique,
+sans élévation hôte. Verrou d'inscription distinct de la reconnexion.
+Snapshots : notes et bibliothèque retrouvées ; interruption signalée, audio régénéré.
+
+## Accessibilité et limites
+
+Boutons natifs, labels, focus visible, dialogues de confirmation, statuts textuels
+et régions de notification ; styles communs papier/encre/terre cuite. Les tableaux
+s'adaptent au mobile, cibles 44 px minimum, navigation utilisable au clavier.
+Tests sur 320, 390 et 1280 px, textes longs, confirmations, anti-spoiler et erreurs.
+Voir [DEVLOG](DEVLOG.md) pour les checks réellement exécutés. Les navigateurs
+headless ne valident ni une sortie sonore physique ni la synchro acoustique ;
+WebKit Windows ne remplace pas un iPhone. Aucun audit WCAG complet revendiqué.
+
+## Parcours et accessibilité V0.5
+
+Historique privé chargé à la demande : liste datée, archive, export, suppression et
+purge confirmées, états chargement/vide/erreur/sauvegarde indisponible. Bridges :
+connexion/capacités/erreurs par UUID, consignes hors ligne et révocation ciblée.
+Les noms de sources et archives restent masqués à l'hôte joueur pendant IN_GAME.
+Le diagnostic contient des informations privées : avertir avant toute copie publique.
+
+Liens d'évitement vers la scène et commandes hôte, annonces discrètes de phase,
+focus après transition seulement si le contrôle actif disparaît, libellés explicites
+du volume et de la position audio. Confirmations : focus initial sur Annuler,
+Échap annule, retour au déclencheur connecté. Focus visible, retours à la ligne,
+contrastes existants conservés, mouvements réduits et boutons adaptés au tactile.
+Tests navigateur : clavier/Échap, focus, rôle/nom/état, 320 px et texte à 200 %.
+Recette manuelle NVDA/VoiceOver, zoom navigateur et appareils physiques à terminer ;
+ne pas présenter les contrôles automatisés comme une certification WCAG.

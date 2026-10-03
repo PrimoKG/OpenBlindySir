@@ -4,13 +4,16 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
-from openblindysir_protocol.errors import ErrorCode
+from openblindysir_protocol.enums import Role
+from openblindysir_protocol.errors import CloseCode, ErrorCode
 from openblindysir_protocol.http import (
     HostElevateRequest,
     HostElevateResponse,
     JoinRequest,
     JoinResponse,
     OkResponse,
+    RecoveryCode,
+    RecoveryRequest,
     SessionResponse,
 )
 from openblindysir_protocol.text import normalize_nickname
@@ -61,6 +64,8 @@ async def join(request: Request) -> Response:
     now = state.runtime.clock.now().mono_ms
     if state.join_limiter.blocked(ip, now):  # counts failed password attempts only
         return error(429, ErrorCode.RATE_LIMITED)
+    if not state.join_activity_limiter.allow(ip, now):
+        return error(429, ErrorCode.RATE_LIMITED)
     body = await read_json_body(request)
     if isinstance(body, Response):
         return body
@@ -68,6 +73,9 @@ async def join(request: Request) -> Response:
         payload = JoinRequest.model_validate_json(body)
     except ValidationError as exc:
         return invalid_body(exc, "join")
+    now = state.runtime.clock.now().mono_ms
+    if state.join_limiter.blocked(ip, now):
+        return error(429, ErrorCode.RATE_LIMITED)
     if current_player(request, state) is not None:
         return error(409, ErrorCode.ALREADY_JOINED)
     if not verify_password(payload.password, state.settings.blind_password):
@@ -86,8 +94,62 @@ async def join(request: Request) -> Response:
     player_id = outcome.value
     assert isinstance(player_id, str)
     token = state.runtime.sessions.issue(player_id, now)
+    state.runtime.save_snapshot()
     p = state.runtime.engine.state.players[player_id]
     response = _json(JoinResponse(player_id=p.id, nickname=p.nickname, role=p.role))
+    set_session_cookie(response, token, state.settings)
+    return response
+
+
+@router.post("/api/session/recovery-code")
+async def recovery_code(request: Request) -> Response:
+    state = app_state(request)
+    if not check_origin(request.headers.get("origin"), state.settings):
+        return error(403, ErrorCode.FORBIDDEN_ORIGIN)
+    pid = current_player(request, state)
+    if pid is None:
+        return error(401, ErrorCode.UNAUTHENTICATED)
+    if not state.recovery_limiter.allow(pid, state.runtime.clock.now().mono_ms):
+        return error(429, ErrorCode.RATE_LIMITED)
+    code = state.runtime.sessions.recovery_code(pid)
+    state.runtime.save_snapshot()
+    return _json(RecoveryCode(code=code))
+
+
+@router.post("/api/session/recover")
+async def recover(request: Request) -> Response:
+    state = app_state(request)
+    runtime = state.runtime
+    if not check_origin(request.headers.get("origin"), state.settings):
+        return error(403, ErrorCode.FORBIDDEN_ORIGIN)
+    now = runtime.clock.now().mono_ms
+    ip = client_ip(request)
+    if state.join_limiter.blocked(ip, now):
+        return error(429, ErrorCode.RATE_LIMITED)
+    state.join_limiter.record(ip, now)
+    body = await read_json_body(request)
+    if isinstance(body, Response):
+        return body
+    try:
+        payload = RecoveryRequest.model_validate_json(body)
+    except ValidationError as exc:
+        return invalid_body(exc, "recover")
+    if current_player(request, state) is not None:
+        return error(409, ErrorCode.ALREADY_JOINED)
+    if not verify_password(payload.password, state.settings.blind_password):
+        return error(401, ErrorCode.RECOVERY_INVALID)
+    pid = runtime.sessions.recover(payload.code)
+    if pid is None or not runtime.engine.player_exists(pid):
+        return error(401, ErrorCode.RECOVERY_INVALID)
+    runtime.sessions.revoke((pid,))
+    runtime.hub.close(pid, int(CloseCode.SUPERSEDED))
+    runtime.dispatch(c.Disconnected(pid))
+    # A recovery code restores participation, never host privileges.
+    runtime.engine.state.players[pid].role = Role.PLAYER
+    token = runtime.sessions.issue(pid, now)
+    runtime.hub.mark_dirty()
+    runtime.save_snapshot()
+    response = _json(_session_response(state, pid))
     set_session_cookie(response, token, state.settings)
     return response
 
@@ -124,6 +186,11 @@ async def elevate(request: Request) -> Response:
         payload = HostElevateRequest.model_validate_json(body)
     except ValidationError as exc:
         return invalid_body(exc, "host")
+    if current_player(request, state) != player_id:
+        return error(401, ErrorCode.UNAUTHENTICATED)
+    now = state.runtime.clock.now().mono_ms
+    if state.host_limiter.blocked(ip, now):
+        return error(429, ErrorCode.RATE_LIMITED)
     if not verify_password(payload.host_password, state.settings.host_password):
         state.host_limiter.record(ip, now)
         log_event(LOG, "login_failed", kind="host", ip=truncate_ip(ip))
@@ -148,6 +215,8 @@ async def leave(request: Request) -> Response:
     body = await read_json_body(request)
     if isinstance(body, Response):
         return body
+    if current_player(request, state) != player_id:
+        return error(401, ErrorCode.UNAUTHENTICATED)
     state.runtime.dispatch(c.Leave(player_id))
     response = _json(OkResponse(ok=True))
     clear_session_cookie(response, state.settings)

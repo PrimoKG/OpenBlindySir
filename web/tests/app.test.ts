@@ -83,7 +83,13 @@ describe("network helpers", () => {
 function fakeView(overrides: Record<string, unknown> = {}): AnyView {
   return {
     kind: "player",
-    session: { epoch: "e1", protocol: 1, server_version: "0" },
+    session: {
+      epoch: "e1",
+      protocol: 2,
+      server_version: "0",
+      recovered: false,
+      persistence_status: "disabled",
+    },
     me: { player_id: "p_0001", nickname: "A", role: "player", host_mode: null, participant: true },
     phase: "IN_GAME",
     players: [],
@@ -92,6 +98,9 @@ function fakeView(overrides: Record<string, unknown> = {}): AnyView {
     audio: { current: null, next: null },
     play: { play_id: "pl_000002", asset_id: "a_x", start_at: 1, clip_offset: 0 },
     final_results: null,
+    rules: null,
+    paused: null,
+    team_standings: [],
     round: {
       state: "OPEN",
       round_id: "r_000001",

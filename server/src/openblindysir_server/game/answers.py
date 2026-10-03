@@ -31,7 +31,11 @@ def handle_draft(s: SessionState, cmd: c.DraftIn, at: Instant, fx: EffectSink) -
     r = current_round(s.game)
     if p is None or not is_participant(p) or r is None:
         return
-    if r.id != cmd.msg.round_id or r.state is not RoundState.OPEN:
+    if (
+        r.id != cmd.msg.round_id
+        or r.state is not RoundState.OPEN
+        or (r.paused_at is not None and at.mono_ms >= r.paused_at)
+    ):
         return
     answer = r.answers.get(p.id)
     if answer is not None and answer.status in (AnswerStatus.LOCKED, AnswerStatus.CAPTURED):
@@ -44,10 +48,11 @@ def handle_draft(s: SessionState, cmd: c.DraftIn, at: Instant, fx: EffectSink) -
         answer = r.answers[p.id] = Answer(player_id=p.id)
     answer.draft_text = text
     answer.draft_last_changed_at = at.mono_ms
+    answer.draft_last_changed_wall_ms = at.wall_ms
     answer.status = AnswerStatus.DRAFT if text else AnswerStatus.NONE
 
 
-def _reject_reason(s: SessionState, cmd: c.SubmitIn) -> AnswerRejectReason | None:
+def _reject_reason(s: SessionState, cmd: c.SubmitIn, at: Instant) -> AnswerRejectReason | None:
     p = s.players.get(cmd.player_id)
     if p is None or not is_participant(p):
         return AnswerRejectReason.NOT_PARTICIPANT
@@ -58,6 +63,8 @@ def _reject_reason(s: SessionState, cmd: c.SubmitIn) -> AnswerRejectReason | Non
     if r is None or cmd.msg.round_id != r.id:
         return AnswerRejectReason.CLOSED
     if r.state in NOT_OPEN_STATES:
+        return AnswerRejectReason.NOT_OPEN
+    if r.paused_at is not None and at.mono_ms >= r.paused_at:
         return AnswerRejectReason.NOT_OPEN
     if r.state is not RoundState.OPEN:
         return AnswerRejectReason.CLOSED
@@ -75,7 +82,7 @@ def _reject_reason(s: SessionState, cmd: c.SubmitIn) -> AnswerRejectReason | Non
 
 def handle_submit(s: SessionState, cmd: c.SubmitIn, at: Instant, fx: EffectSink) -> None:
     """Definitive validation, always acknowledged; the ack carries no timing data."""
-    reason = _reject_reason(s, cmd)
+    reason = _reject_reason(s, cmd, at)
     if reason is not None:
         fx.add(SendAck(cmd.player_id, cmd.msg.round_id, AnswerAckStatus.REJECTED, reason))
         return
@@ -106,12 +113,12 @@ def lock_answer(s: SessionState, r: Round, player_id: str, text: str, at: Instan
     answer.text = text
     answer.received_at = at.mono_ms
     answer.received_at_wall_ms = at.wall_ms
-    answer.elapsed_ms = at.mono_ms - r.official_start_at
+    answer.elapsed_ms = at.mono_ms - r.official_start_at - r.paused_total_ms
     answer.order = order
     answer.near_tie = (
         previous is not None
-        and previous.received_at is not None
-        and at.mono_ms - previous.received_at < s.config.near_tie_ms
+        and previous.elapsed_ms is not None
+        and answer.elapsed_ms - previous.elapsed_ms < s.config.near_tie_ms
     )
     s.touched = True
 
@@ -125,6 +132,7 @@ def capture_drafts(r: Round) -> tuple[int, int]:
         elif answer.status is AnswerStatus.DRAFT and answer.draft_text:
             answer.status = AnswerStatus.CAPTURED
             answer.text = answer.draft_text
+            answer.received_at_wall_ms = answer.draft_last_changed_wall_ms
             captured += 1
         elif answer.status is AnswerStatus.DRAFT:
             answer.status = AnswerStatus.NONE

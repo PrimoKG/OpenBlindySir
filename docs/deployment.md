@@ -27,7 +27,7 @@ du navigateur, les mots de passe ou les contrôles d'origine d'OpenBlindySir.
 
 ## Installer les prérequis
 
-Sur le PC hôte : Git, Python 3.12 ou plus récent, [uv](https://docs.astral.sh/uv/),
+Sur le PC hôte : Git, Python 3.12 à 3.14, [uv](https://docs.astral.sh/uv/),
 Node.js 22 ou plus récent et [Caddy](https://caddyserver.com/docs/install).
 Le binaire Caddy standard suffit ; aucun module supplémentaire requis. Placez-le
 dans le PATH, ou passez son chemin avec `--caddy` dans les commandes ci-dessous.
@@ -133,8 +133,10 @@ d'autres interfaces. Le profil public sert le domaine en HTTPS. L'API
 d'administration Caddy est désactivée dans ces profils.
 
 Gardez ce terminal ouvert et le PC allumé, relié au réseau, sans mise en veille.
-**Ctrl+C arrête les deux services. La partie et ses scores sont alors perdus**,
-car ils ne sont pas persistés. Si un des services s'arrête, le lanceur arrête l'autre.
+**Ctrl+C arrête les deux services.** La session est restaurable grâce au dossier
+`STATE_DIR` (défaut `.local/state`) si celui-ci et les secrets sont conservés ;
+l'audio en RAM est perdu et une manche interrompue revient en revue.
+Si un des services s'arrête, le lanceur arrête l'autre.
 Il ne modifie ni le pare-feu, ni la box, ni les certificats approuvés du système.
 
 ## Certificat du mode privé
@@ -205,6 +207,13 @@ les étapes du jeu, la notation et la vérification finale.
 
 ## Dépannage de l'hébergement
 
+Le serveur natif sauvegarde ses snapshots privés dans `STATE_DIR` (`.local/state`
+par défaut, relatif au répertoire de lancement). Gardez ce dossier accessible en écriture
+et faites-en une sauvegarde avant une mise à jour. Les réponses et le catalogue y sont
+privés ; aucune musique ni mot de passe en clair n'y est stocké. Une manche OPEN
+interrompue revient en correction, les préparations reprennent via le Bridge.
+Serveur, interface et Bridge doivent utiliser le même protocole (actuellement 2).
+
 | Symptôme | Vérification |
 |---|---|
 | `Caddy introuvable` | Installer le binaire officiel et utiliser PATH ou `--caddy`. |
@@ -227,3 +236,15 @@ La validation locale ne garantit pas la configuration de votre box, de votre VPN
 ou de vos appareils. Le mode public n'a pas été déployé sur Internet pendant cette
 intervention. G1/G2, la vraie bibliothèque et les appareils mobiles restent à
 mesurer avant une release ; un déploiement VPS et une soirée réelle restent à faire.
+
+## Identités Bridge et sauvegarde V0.5
+
+`init` garde le bootstrap pour un premier Bridge. Pour des instances supplémentaires,
+créer un UUID et un fichier privé via `openblindysir-server bridge-credential`, puis
+passer `--credentials` au Bridge ; conserver ses choix de racine et URL locaux.
+Révocation depuis le panneau hôte ou `bridge-revoke`, rotation avec le même UUID et
+un nouveau fichier de sortie. Voir [les commandes natives/Docker V0.5](v0.5.md).
+Sauvegarder tout `STATE_DIR`, registre d'identités compris, et les fichiers de
+configuration privés. Logiciel 0.5.0.dev0, protocole 5, snapshot 4, historique 2 :
+aucune publication ni gel. [Retour arrière](operations.md) exige un backup antérieur
+à la migration pour reprendre V0.3.

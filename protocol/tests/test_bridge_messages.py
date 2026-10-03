@@ -31,7 +31,7 @@ def test_prepare_parses() -> None:
 
 
 @pytest.mark.parametrize("t", ["LIST", "READ_FILE", "RESCAN", "PONG", "JOB_DONE"])
-def test_bridge_accepts_only_the_four_server_commands(t: str) -> None:
+def test_bridge_accepts_only_the_five_server_commands(t: str) -> None:
     with pytest.raises(ValidationError):
         SERVER_TO_BRIDGE.validate_json(json.dumps({"t": t}))
 

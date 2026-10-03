@@ -158,7 +158,8 @@ def run_plan(plan: HostingPlan, caddy: str, *, check: bool = False) -> int:
     if plan.mode == "private":
         print(f"Certificat racine à faire approuver sur les appareils : {plan.root_certificate}")
     print(
-        "Gardez ce terminal ouvert. Ctrl+C arrête la partie et efface son état en mémoire.",
+        "Gardez ce terminal ouvert. Ctrl+C arrête les services ; les snapshots privés "
+        "et l'historique sont conservés dans STATE_DIR.",
         flush=True,
     )
     processes: list[subprocess.Popen[bytes]] = []

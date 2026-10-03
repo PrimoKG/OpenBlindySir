@@ -1,5 +1,5 @@
 # 0002 — Bridge : connexion sortante et bac à sable
-Statut : Accepté   ·   Date : 2026-10-01
+Statut : Accepté ; sources/commandes/multi-Bridge étendus par [0012](0012-dynamic-sources-and-metadata.md) en V0.2 · Date : 2026-10-01
 
 ## Contexte
 La bibliothèque musicale (des dizaines, voire des centaines de gigaoctets) reste sur le PC qui la contient, derrière une box ou un NAT. Le serveur OpenBlindySir tourne sur un VPS et a besoin, à chaque round, d'un **extrait de 20 à 30 s** d'un morceau de cette bibliothèque. **Les fichiers complets ne doivent jamais quitter le PC** (`docs/architecture.md` §1).

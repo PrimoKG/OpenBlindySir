@@ -8,7 +8,8 @@ import asyncio
 import contextlib
 import hashlib
 import os
-from collections import deque
+import shutil
+from collections import OrderedDict, deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,6 +22,7 @@ from openblindysir_protocol.bridge import JobDone, JobFailed, JobProgress, Prepa
 from openblindysir_protocol.enums import ClipFormat, JobFailureCode, JobStage
 
 QUEUE_MAX = 4
+REPLAY_CACHE_MAX_BYTES = 64 * 1024 * 1024
 MIN_OUTPUT_RATIO = 0.5
 Sender = Callable[[JobProgress | JobDone | JobFailed], None]
 Uploader = Callable[[str, str, Path, str, str], Awaitable[int]]  # url, token, file, sha, mime
@@ -69,12 +71,16 @@ class JobRunner:
     faults: Faults = field(default_factory=Faults)
     stats: JobStats = field(default_factory=JobStats)
     on_detail: Callable[[str], None] | None = None
+    allow_full_review: bool = False
+    _replays: OrderedDict[str, tuple[str, Path, JobDone]] = field(default_factory=OrderedDict)
     _queue: deque[_Job] = field(default_factory=deque)
     _wake: asyncio.Event = field(default_factory=asyncio.Event)
     _current: tuple[str, asyncio.Task[None]] | None = None
     _count: int = 0
 
     def submit(self, prepare: Prepare, request: ClipRequest) -> JobFailureCode | None:
+        if prepare.review_mode == "full" and not self.allow_full_review:
+            return JobFailureCode.NOT_FOUND
         if len(self._queue) >= QUEUE_MAX:
             return JobFailureCode.QUEUE_FULL
         self._count += 1
@@ -131,6 +137,24 @@ class JobRunner:
         out = self.tmpdir / f"{job.prepare.job_id}{suffix}"
         try:
             done = await self._pipeline(job, out)
+            if job.prepare.review_mode is None:
+                cached = self.tmpdir / f"replay-{done.sha256}{suffix}"
+                # An optional replay cache must never turn a successful upload into a failure.
+                try:
+                    shutil.copyfile(out, cached)
+                except OSError:
+                    self._replays.pop(done.sha256, None)
+                    with contextlib.suppress(OSError):
+                        cached.unlink(missing_ok=True)
+                else:
+                    self._replays[done.sha256] = (job.prepare.track_id, cached, done)
+                    self._replays.move_to_end(done.sha256)
+                    while (
+                        sum(row[2].bytes for row in self._replays.values()) > REPLAY_CACHE_MAX_BYTES
+                    ):
+                        _, (_, path, _) = self._replays.popitem(last=False)
+                        with contextlib.suppress(OSError):
+                            path.unlink(missing_ok=True)
         except JobError as exc:
             self._failed(job, exc.code, exc.detail)
             return
@@ -147,6 +171,20 @@ class JobRunner:
 
     async def _pipeline(self, job: _Job, out: Path) -> JobDone:  # noqa: PLR0915
         prepare, request = job.prepare, job.request
+        cached = self._replays.get(prepare.replay_sha256 or "")
+        if prepare.review_mode == "excerpt" and cached and cached[0] == prepare.track_id:
+            _, path, done = cached
+            self._replays.move_to_end(done.sha256)
+            status = await self.uploader(
+                prepare.upload_url,
+                prepare.upload_token,
+                path,
+                done.sha256,
+                "audio/webm" if request.clip_format is ClipFormat.OPUS else "audio/mp4",
+            )
+            if not 200 <= status < 300:
+                raise JobError(JobFailureCode.INVALID_UPLOAD)
+            return done.model_copy(update={"job_id": prepare.job_id})
         self._progress(job, JobStage.PROBING)
         entry = self.catalog().lookup(prepare.track_id)
         if entry is None:
@@ -158,18 +196,51 @@ class JobRunner:
             real = self.sandbox.resolve_for_open(entry)
         except SandboxError as exc:
             raise JobError(JobFailureCode.NOT_FOUND, f"sandbox : {exc} ({entry.relpath})") from exc
+        stat = os.stat(real)
+        revision = hashlib.sha256(f"{stat.st_size}:{stat.st_mtime_ns}".encode()).hexdigest()
+        if prepare.expected_source_revision and prepare.expected_source_revision != revision:
+            raise JobError(JobFailureCode.NOT_FOUND, "source changed since the round")
         probe_run = await ffmpeg.run_bounded(
             ffmpeg.probe_argv(self.tools, real), ffmpeg.PROBE_TIMEOUT_S
         )
         if probe_run.returncode is None:
             raise JobError(JobFailureCode.TIMEOUT, "ffprobe : délai dépassé")
         probe = ffmpeg.parse_probe(probe_run.stdout) if probe_run.returncode == 0 else None
-        if probe is None or not probe.has_audio:
+        if probe is None:
             raise JobError(JobFailureCode.DECODE_ERROR, f"ffprobe : {probe_run.stderr}")
+        if not probe.has_audio:
+            raise JobError(JobFailureCode.NO_AUDIO, "no audio stream")
         try:
             start, duration = compute_start(probe.duration_s, request.duration_s, request.fraction)
         except TooShortError as exc:
             raise JobError(JobFailureCode.TOO_SHORT, "piste trop courte") from exc
+        if request.exact_start_s is not None:
+            start = request.exact_start_s
+            duration = min(request.duration_s, probe.duration_s - start)
+            if duration <= 0:
+                raise JobError(JobFailureCode.TOO_SHORT)
+        if request.avoid_silence and request.exact_start_s is None:
+            for attempt in range(3):
+                analysis = await ffmpeg.run_bounded(
+                    ffmpeg.analysis_argv(self.tools, real, start, duration), ffmpeg.PROBE_TIMEOUT_S
+                )
+                if analysis.returncode is None:
+                    raise JobError(JobFailureCode.TIMEOUT, "silence analysis timed out")
+                if analysis.returncode != 0:
+                    raise JobError(JobFailureCode.DECODE_ERROR, "silence analysis failed")
+                silent, leading = ffmpeg.analyze_silence(analysis.stderr, duration)
+                if not silent:
+                    start = min(max(0, probe.duration_s - duration), start + leading)
+                    break
+                start, duration = compute_start(
+                    probe.duration_s,
+                    request.duration_s,
+                    (request.fraction + (attempt + 1) * 0.31) % 0.999,
+                )
+            else:
+                raise JobError(
+                    JobFailureCode.SILENT_AUDIO, "no audible excerpt found after three attempts"
+                )
         self._progress(job, JobStage.ENCODING)
         if self.faults.slow_encode_ms:
             await asyncio.sleep(self.faults.slow_encode_ms / 1000)
@@ -181,6 +252,8 @@ class JobRunner:
             duration=duration,
             bitrate_kbps=request.bitrate_kbps,
             clip_format=request.clip_format,
+            normalize_audio=request.normalize_audio,
+            fade_audio=request.fade_audio,
         )
         encode_run = await ffmpeg.run_bounded(argv, ffmpeg.ENCODE_TIMEOUT_S)
         if encode_run.returncode is None:
@@ -223,4 +296,6 @@ class JobRunner:
             bytes=size,
             sha256=digest,
             tags=tags,
+            input_duration=round(duration, 3),
+            source_revision=revision,
         )

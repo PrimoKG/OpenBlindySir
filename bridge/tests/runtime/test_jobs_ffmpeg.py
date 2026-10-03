@@ -59,7 +59,11 @@ def prepare(track_id: str, duration: float = 12.0) -> Prepare:
 
 
 def run_job(
-    root: Path, track_id: str, tmp_path: Path, catalog: LocalCatalog | None = None
+    root: Path,
+    track_id: str,
+    tmp_path: Path,
+    catalog: LocalCatalog | None = None,
+    request: ClipRequest | None = None,
 ) -> tuple[list[Any], dict[str, bytes]]:
     """Run one PREPARE; ``catalog`` lets a test change the files after the scan."""
     tools = ffmpeg.discover()
@@ -83,7 +87,8 @@ def run_job(
         )
         task = asyncio.create_task(runner.run())
         runner.submit(
-            prepare(track_id), ClipRequest(12.0, 0.3, 128, 4 * 1024 * 1024, ClipFormat.AAC)
+            prepare(track_id),
+            request or ClipRequest(12.0, 0.3, 128, 4 * 1024 * 1024, ClipFormat.AAC),
         )
         for _ in range(400):
             if any(isinstance(m, JobDone | JobFailed) for m in sent):

@@ -1,0 +1,310 @@
+"""Private source controls, metadata diagnostics, multi-Bridge and recovery permissions."""
+
+import asyncio
+import gzip
+import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
+import pytest
+from conftest import BLIND, BRIDGE_ID, ORIGIN, SECRET, Harness, bridge_hello, catalog, put_catalog
+from fastapi import Request
+from pydantic import TypeAdapter
+
+from openblindysir_protocol.client import ClientMessage
+from openblindysir_server.game import commands as c
+from openblindysir_server.game.state import CatalogEntryData
+from openblindysir_server.library import routes
+
+CLIENT = TypeAdapter(ClientMessage)
+SECOND = "12345678-1234-1234-1234-123456789abd"
+
+
+def host_command(h: Harness, pid: str, cmd: str, args: dict | None = None) -> None:
+    msg = CLIENT.validate_json(
+        json.dumps(
+            {
+                "t": "HOST",
+                "cmd": cmd,
+                "expected_phase": h.runtime.engine.state.game.phase.value,
+                "args": args or {},
+            }
+        )
+    )
+    assert h.runtime.dispatch(c.HostIn(pid, msg)).error is None
+
+
+def private_library(h: Harness) -> tuple[str, str, dict]:
+    pid, token = h.join("Host")
+    h.elevate(token)
+    body = catalog()
+    entries = {
+        e["track_id"]: CatalogEntryData(e["relpath"], e["folder"], e["ext"], e["size"])
+        for e in body["entries"]
+    }
+    h.runtime.dispatch(c.BridgeConnected(BRIDGE_ID, "PC", "example", body["catalog_hash"], 6))
+    h.runtime.dispatch(c.CatalogLoaded(BRIDGE_ID, "PC", body["catalog_hash"], entries))
+    return pid, token, body
+
+
+def receive(ws: object, kind: str) -> dict:
+    for _ in range(30):
+        msg = ws.receive_json()
+        if msg["t"] == kind:
+            return msg
+    raise AssertionError(kind)
+
+
+def test_catalog_completion_revision_changes_even_when_the_tracks_do_not(harness: Harness) -> None:
+    _, token, body = private_library(harness)
+    before = harness.client.get("/api/host/library", headers=harness.cookie(token))
+    state = harness.runtime.engine.state
+    harness.runtime.dispatch(
+        c.CatalogLoaded(BRIDGE_ID, "PC", body["catalog_hash"], state.catalogs[BRIDGE_ID].entries)
+    )
+    after = harness.client.get("/api/host/library", headers=harness.cookie(token))
+    assert before.json() == after.json()
+    assert json.loads(before.headers["x-catalog-revisions"]) == {BRIDGE_ID: 1}
+    assert json.loads(after.headers["x-catalog-revisions"]) == {BRIDGE_ID: 2}
+
+
+def test_replacing_bridge_rejects_an_old_catalog_upload_already_in_progress(
+    harness: Harness,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started, release = threading.Event(), asyncio.Event()
+    original = routes._read_gzip
+
+    async def delayed(request: Request) -> bytes:
+        raw = await original(request)
+        started.set()
+        await release.wait()
+        return raw
+
+    monkeypatch.setattr(routes, "_read_gzip", delayed)
+    body = catalog()
+    with (
+        harness.bridge_ws() as old,
+        harness.bridge_ws() as replacement,
+        ThreadPoolExecutor(max_workers=1) as executor,
+    ):
+        old.send_text(bridge_hello(body["catalog_hash"], 6))
+        token = receive(old, "WELCOME")["catalog_upload_token"]
+        future = executor.submit(put_catalog, harness, body, token)
+        try:
+            assert started.wait(3)
+            replacement.send_text(bridge_hello(body["catalog_hash"], 6))
+            fresh_token = receive(replacement, "WELCOME")["catalog_upload_token"]
+        finally:
+            assert harness.client.portal is not None
+            harness.client.portal.call(release.set)
+        assert future.result(3).status_code == 409
+        assert BRIDGE_ID not in harness.runtime.engine.state.catalogs
+        assert put_catalog(harness, body, fresh_token).status_code == 204
+
+
+def test_metadata_partial_import_manual_priority_search_and_export(harness: Harness) -> None:
+    _, token, body = private_library(harness)
+    headers = {"origin": ORIGIN, **harness.cookie(token)}
+    entry = body["entries"][0]
+    row = {
+        "bridge_id": BRIDGE_ID,
+        "relpath": entry["relpath"],
+        "title": "Imported",
+        "artist": "Original",
+        "album": "Album",
+        "year": 2026,
+    }
+    rows = [
+        row,
+        row,
+        {**row, "relpath": "missing.flac"},
+        {**row, "year": "bad"},
+        {**row, "relpath": "../escape.flac"},
+    ]
+    result = harness.client.post(
+        "/api/host/metadata/import", json={"version": 1, "rows": rows}, headers=headers
+    )
+    assert result.status_code == 200
+    assert result.json() == {
+        "accepted": 1,
+        "issues": [
+            {"row": 2, "code": "duplicate"},
+            {"row": 3, "code": "unknown"},
+            {"row": 4, "code": "invalid"},
+            {"row": 5, "code": "invalid"},
+        ],
+    }
+    edited = harness.client.put(
+        "/api/host/metadata",
+        json={
+            "bridge_id": BRIDGE_ID,
+            "track_id": entry["track_id"],
+            "metadata": {"artist": "Manual", "featuring": "Guest"},
+        },
+        headers=headers,
+    )
+    assert edited.status_code == 200
+    found = harness.client.get(
+        "/api/host/library/search?q=manual&ext=.flac", headers=headers
+    ).json()
+    assert found["total"] == 1
+    assert (
+        found["tracks"][0]["title"],
+        found["tracks"][0]["album"],
+        found["tracks"][0]["artist"],
+    ) == ("Imported", "Album", "Manual")
+    exported = harness.client.get("/api/host/metadata", headers=headers).json()
+    assert exported["version"] == 1
+    assert exported["rows"][0]["featuring"] == "Guest"
+    assert (
+        harness.client.get("/api/host/library/search?folder=Animes", headers=headers).json()[
+            "total"
+        ]
+        == 0
+    )
+
+
+@pytest.mark.parametrize("route", ["/api/host/library/search", "/api/host/metadata"])
+def test_library_data_is_host_only(harness: Harness, route: str) -> None:
+    private_library(harness)
+    assert harness.client.get(route).status_code == 401
+    _, token = harness.join("Player")
+    assert harness.client.get(route, headers=harness.cookie(token)).status_code == 403
+
+
+@pytest.mark.parametrize(("host_mode", "expected"), [("player", 409), ("mc", 200)])
+@pytest.mark.parametrize("route", ["/api/host/library", "/api/host/library/search"])
+def test_library_during_play_respects_host_mode(
+    harness: Harness, host_mode: str, expected: int, route: str
+) -> None:
+    pid, token, _ = private_library(harness)
+    harness.join("Player")
+    host_command(harness, pid, "set_mode", {"mode": host_mode})
+    host_command(
+        harness, pid, "configure", {"sources": [{"bridge_id": BRIDGE_ID, "folder_prefix": ""}]}
+    )
+    host_command(harness, pid, "start_game")
+    assert harness.client.get(route, headers=harness.cookie(token)).status_code == expected
+
+
+def test_metadata_ambiguous_path_and_whole_document_validation(harness: Harness) -> None:
+    _, token, _ = private_library(harness)
+    state = harness.runtime.engine.state
+    state.catalogs[BRIDGE_ID].ambiguous_paths = ("ambiguous.flac",)
+    headers = {"origin": ORIGIN, **harness.cookie(token)}
+    row = {"bridge_id": BRIDGE_ID, "relpath": "ambiguous.flac", "title": "Unknown"}
+    result = harness.client.post(
+        "/api/host/metadata/import", json={"version": 1, "rows": [row]}, headers=headers
+    )
+    assert result.json()["issues"] == [{"row": 1, "code": "ambiguous"}]
+    for payload in (
+        {"version": 2, "rows": []},
+        {"version": True, "rows": []},
+        {"version": 1, "rows": [], "extra": True},
+    ):
+        assert (
+            harness.client.post(
+                "/api/host/metadata/import", json=payload, headers=headers
+            ).status_code
+            == 400
+        )
+
+
+def test_two_bridges_coexist_catalog_tokens_are_bound_and_sources_route_to_owner(
+    harness: Harness,
+) -> None:
+    _, token = harness.join("Host")
+    harness.elevate(token)
+    first, second = catalog(), {**catalog(), "bridge_id": SECOND}
+    second_secret = "synthetic-second-distinct-credential-0123456789"
+    harness.runtime.credentials.replace(SECOND, "Second", second_secret)
+    with harness.bridge_ws() as a, harness.bridge_ws(second_secret) as b:
+        a.send_text(bridge_hello(first["catalog_hash"], 6))
+        hello = json.loads(bridge_hello(second["catalog_hash"], 6))
+        hello["bridge_id"] = SECOND
+        b.send_json(hello)
+        wa, wb = receive(a, "WELCOME"), receive(b, "WELCOME")
+        assert len(harness.runtime.bridge.connections) == 2
+        # Without identity selection, an upload with multiple active Bridges is rejected.
+        assert put_catalog(harness, first, wa["catalog_upload_token"]).status_code == 403
+
+        def upload(body: dict, grant: str) -> int:
+            credential = second_secret if body["bridge_id"] == SECOND else SECRET
+            return harness.client.put(
+                "/api/bridge/catalog",
+                content=gzip.compress(json.dumps(body).encode()),
+                headers={
+                    "authorization": f"Bearer {credential}",
+                    "x-catalog-token": grant,
+                    "x-bridge-id": body["bridge_id"],
+                    "content-encoding": "gzip",
+                    "content-type": "application/json",
+                },
+            ).status_code
+
+        assert upload(second, wa["catalog_upload_token"]) == 403
+        assert upload(first, wa["catalog_upload_token"]) == 204
+        assert upload(second, wb["catalog_upload_token"]) == 204
+        assert len(harness.runtime.engine.library().bridges) == 2
+        headers = {"origin": ORIGIN, **harness.cookie(token)}
+        for folder in ("../outside", "C:/music", "/music", "a\\b"):
+            assert (
+                harness.client.post(
+                    "/api/host/library/sources",
+                    json={"bridge_id": SECOND, "folders": [folder]},
+                    headers=headers,
+                ).status_code
+                == 400
+            )
+        result = harness.client.post(
+            "/api/host/library/sources",
+            json={"bridge_id": SECOND, "folders": ["Anime"]},
+            headers=headers,
+        )
+        assert result.status_code == 202
+        assert receive(b, "SCAN_SOURCES")["folders"] == ["Anime"]
+
+
+def test_recovery_code_requires_password_is_one_use_and_never_grants_host(harness: Harness) -> None:
+    pid, token = harness.join("Host")
+    harness.elevate(token)
+    result = harness.client.post(
+        "/api/session/recovery-code", headers={"origin": ORIGIN, **harness.cookie(token)}
+    )
+    code = result.json()["code"]
+    assert code not in repr(harness.runtime.sessions.recovery_snapshot())
+    bad = harness.client.post(
+        "/api/session/recover", json={"password": "wrong", "code": code}, headers={"origin": ORIGIN}
+    )
+    assert bad.status_code == 401
+    recovered = harness.client.post(
+        "/api/session/recover", json={"password": BLIND, "code": code}, headers={"origin": ORIGIN}
+    )
+    assert recovered.status_code == 200
+    assert recovered.json()["player_id"] == pid
+    assert recovered.json()["role"] == "player"
+    harness.client.cookies.clear()
+    assert harness.client.get("/api/session", headers=harness.cookie(token)).status_code == 401
+    replay = harness.client.post(
+        "/api/session/recover", json={"password": BLIND, "code": code}, headers={"origin": ORIGIN}
+    )
+    assert replay.status_code == 401
+
+
+def test_mutations_require_origin_and_import_has_a_memory_limit(harness: Harness) -> None:
+    _, token, _ = private_library(harness)
+    assert (
+        harness.client.post(
+            "/api/host/metadata/import",
+            json={"version": 1, "rows": []},
+            headers=harness.cookie(token),
+        ).status_code
+        == 403
+    )
+    response = harness.client.post(
+        "/api/host/metadata/import",
+        content=b" " * (1024 * 1024 + 1),
+        headers={"origin": ORIGIN, "content-type": "application/json", **harness.cookie(token)},
+    )
+    assert response.status_code == 413

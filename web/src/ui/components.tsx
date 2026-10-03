@@ -116,21 +116,29 @@ export function ConfirmDialog(props: {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const messageId = useId();
+  const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) {
       return;
     }
     if (props.open && !dialog.open) {
+      opener.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       dialog.showModal();
+      dialog.querySelector<HTMLButtonElement>("button")?.focus();
     } else if (!props.open && dialog.open) {
       dialog.close();
+      if (opener.current?.isConnected) opener.current.focus();
     }
   }, [props.open]);
   return (
     <dialog
       ref={ref}
-      onCancel={props.onCancel}
+      onCancel={(event) => {
+        event.preventDefault();
+        props.onCancel();
+      }}
       className="dialog"
       aria-labelledby={titleId}
       aria-describedby={messageId}

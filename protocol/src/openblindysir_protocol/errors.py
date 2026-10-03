@@ -17,6 +17,8 @@ class ErrorCode(StrEnum):
     NO_SOURCES = "no_sources"
     BRIDGE_OFFLINE = "bridge_offline"
     NO_COMPETITORS = "no_competitors"
+    POOL_EXHAUSTED = "pool_exhausted"
+    UNREVIEWED_SCORES = "unreviewed_scores"
     SCORES_FROZEN = "scores_frozen"
     RATE_LIMITED = "rate_limited"
     MESSAGE_TOO_LARGE = "message_too_large"
@@ -31,6 +33,9 @@ class ErrorCode(StrEnum):
     NOT_FOUND = "not_found"
     PAYLOAD_TOO_LARGE = "payload_too_large"
     UPLOAD_REJECTED = "upload_rejected"
+    JOIN_LOCKED = "join_locked"
+    RECOVERY_INVALID = "recovery_invalid"
+    REVIEW_UNAVAILABLE = "review_unavailable"
 
 
 class CloseCode(IntEnum):
@@ -57,3 +62,4 @@ class StartBlocker(StrEnum):
     NO_SOURCES = "no_sources"
     BRIDGE_OFFLINE = "bridge_offline"
     NO_COMPETITORS = "no_competitors"
+    POOL_EXHAUSTED = "pool_exhausted"

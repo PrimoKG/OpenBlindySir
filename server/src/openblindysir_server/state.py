@@ -1,7 +1,9 @@
 """Per-application state shared by the routes (no module-level state)."""
 
-from dataclasses import dataclass
-from typing import Any
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 from starlette.requests import HTTPConnection
@@ -11,7 +13,9 @@ from openblindysir_protocol.errors import ErrorCode
 from openblindysir_server.config import Settings
 from openblindysir_server.logging import get, log_event
 from openblindysir_server.ratelimit import ConnectionCounter, SlidingWindowLimiter
-from openblindysir_server.runtime import Runtime
+
+if TYPE_CHECKING:
+    from openblindysir_server.runtime import Runtime
 
 LOG = get("http")
 
@@ -25,6 +29,16 @@ class AppState:
     ws_counter: ConnectionCounter
     started_mono: int
     lag: Any  # diagnostics.LoopLagMonitor (typed loosely to avoid an import cycle)
+    recovery_limiter: SlidingWindowLimiter = field(
+        default_factory=lambda: SlidingWindowLimiter(5, 60)
+    )
+    bridge_auth_limiter: SlidingWindowLimiter = field(
+        default_factory=lambda: SlidingWindowLimiter(10, 60)
+    )
+    bridge_counter: ConnectionCounter = field(default_factory=lambda: ConnectionCounter(12))
+    join_activity_limiter: SlidingWindowLimiter = field(
+        default_factory=lambda: SlidingWindowLimiter(60, 600)
+    )
 
 
 def app_state(conn: HTTPConnection) -> AppState:

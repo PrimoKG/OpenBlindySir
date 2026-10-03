@@ -5,10 +5,10 @@ template, upload), so every demo run exercises the real pipeline. No protected c
 """
 
 import subprocess
-import tempfile
 from pathlib import Path
 
-from openblindysir_bridge.ffmpeg import FfmpegTools, private_tempdir_prefix
+from openblindysir_bridge.ffmpeg import FfmpegTools
+from openblindysir_bridge.tempdirs import create
 
 ARTIST = "OpenBlindySir Demo"
 MELODY = "0.4*sin(2*PI*({base}+110*floor(mod(t*4,8)))*t)*lt(mod(t,0.25),0.18)"
@@ -43,7 +43,7 @@ def demo_tracks() -> list[tuple[str, str, str]]:
 
 def materialize_demo_library(tools: FfmpegTools, dest: Path | None = None) -> Path:
     """Generate the demo FLAC files in a private folder and return its path."""
-    root = dest or Path(tempfile.mkdtemp(prefix=private_tempdir_prefix() + "demo-"))
+    root = dest or create("demo-")
     for relpath, expr, title in demo_tracks():
         out = root / relpath
         if out.is_file():

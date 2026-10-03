@@ -39,10 +39,8 @@ def test_retention_keeps_previous_current_next_and_evicts_the_rest() -> None:
     sc = Scenario(rounds=5)
     first = sc.to_open()
     sc.on_round("close")
-    sc.publish()
     second = sc.to_open()
     sc.on_round("close")
-    sc.publish()
     sc.to_open()
     assert sc.s.assets[first.slot.asset_id].state is AssetState.EVICTED  # type: ignore[index]
     roles = sc.engine.retained_assets()

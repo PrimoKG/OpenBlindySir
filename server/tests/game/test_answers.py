@@ -115,7 +115,6 @@ def test_wrong_round_and_earlier_round() -> None:
     a = sc.player_ids[0]
     assert sc.submit(a, "x", round_id="r_999999").reason is AnswerRejectReason.WRONG_ROUND
     sc.on_round("close")
-    sc.publish()
     sc.to_open()
     assert sc.submit(a, "x", round_id=first.id).reason is AnswerRejectReason.CLOSED
 

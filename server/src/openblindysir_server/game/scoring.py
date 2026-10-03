@@ -13,7 +13,7 @@ from openblindysir_protocol.enums import ScoreKind
 
 @dataclass(frozen=True, slots=True)
 class ScoreEvent:
-    id: int  # global, strictly increasing
+    id: int  # strictly increasing within the active game's journal
     game_id: str
     player_id: str
     round_id: str | None
@@ -153,3 +153,6 @@ class ScoreJournal:
 
     def is_frozen(self, game_id: str) -> bool:
         return game_id in self._frozen
+
+    def frozen_games(self) -> frozenset[str]:
+        return frozenset(self._frozen)

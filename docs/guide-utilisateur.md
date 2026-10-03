@@ -1,153 +1,265 @@
-# Utiliser OpenBlindySir
+# Utiliser OpenBlindySir — V0.5 — développement
 
-OpenBlindySir permet de jouer à un blind test entre amis, chacun dans son
-navigateur. Une instance accueille une seule partie à la fois. Le serveur peut
-tourner sur le PC de l'hôte ou sur un serveur distant :
-[préparer l'hébergement](deployment.md). Aucun compte à créer.
-Pour éviter d'installer Python, Node.js ou FFmpeg sur le PC, utilisez le
-[lancement complet Docker](docker.md) : il ouvre aussi la page hôte automatiquement.
+[English guide](user-guide.en.md). Une instance accueille une partie à la fois,
+entre amis dans leur navigateur, sur LAN, VPN ou Internet. Aucun compte à créer.
+Préparez [l'hébergement](deployment.md) ou le [lancement Docker](docker.md).
+Mettez à jour serveur, Bridge et interface ensemble : **protocole 5**.
+Le Bridge s'installe sans clone après publication, par [uvx ou archive native](bridge-installation.md).
 
-## Avant la soirée
+## Préparer et rejoindre la soirée
 
-La personne qui héberge prépare le serveur, le Bridge et son dossier musical.
-Elle envoie aux joueurs **l'adresse de la partie et le mot de passe de la partie**.
-Elle garde pour elle le mot de passe hôte et le secret du Bridge.
+L'hôte partage l'adresse et le **mot de passe de la partie** ; il garde le mot de
+passe hôte. Chaque propriétaire de Bridge reçoit son propre
+[fichier d'identité privé](bridge-installation.md#première-configuration), à conserver
+sur son appareil ; ne le partagez pas avec les joueurs. En LAN/VPN, préparez la confiance du certificat
+selon le guide réseau. Chaque joueur écoute dans son navigateur, idéalement au casque.
 
-Pour un jeu à distance par VPN privé, les participants doivent d'abord rejoindre
-le même réseau VPN. Pour une partie sur réseau local, les appareils doivent
-pouvoir atteindre le PC hôte ; un Wi-Fi invité peut empêcher cette communication.
-Sur un réseau privé, approuver le certificat fourni par l'hôte est une étape de
-préparation expliquée dans le guide d'hébergement.
+1. Entrez un pseudo (24 caractères maximum) et le mot de passe, puis **Entrer**.
+2. Dans le lobby, **Tester mon audio**, puis **Je l'entends ✓** après le bip.
+3. Ajustez le volume. Gardez le navigateur actif pendant les manches.
 
-Chacun écoute dans son propre navigateur, même sur le même Wi-Fi. Utilisez un
-casque si vous êtes ensemble ou dans un appel vocal pour éviter que plusieurs
-extraits se superposent. Le navigateur doit rester actif pendant le jeu.
+Le choix Français/English est mémorisé localement. **Correction audio (ms)**
+compense une sortie lente : une valeur positive avance la prochaine lecture,
+une valeur négative la retarde (−500 à +500 ms). Commencez à zéro ; par exemple
++150 ms pour une sortie Bluetooth en retard de 150 ms. Le réglage n'interrompt
+pas une lecture en cours, persiste dans ce navigateur et ne modifie jamais le
+temps de réponse officiel ni les points. La compensation physique reste à mesurer.
 
-## Rejoindre et vérifier le son
+**Créer un code de récupération** crée un code privé de six caractères.
+Gardez-le pour changer d'appareil ou retrouver votre place si le cookie est perdu.
+À l'entrée, **Retrouver ma place** demande le code et le mot de passe de partie.
+Le code s'utilise une seule fois ; en recréer un invalide le précédent. Les anciens
+onglets sont déconnectés. Vos réponses et votre identité restent conservées ;
+un ancien hôte doit saisir à nouveau le mot de passe hôte. La récupération reste
+possible lorsque les inscriptions sont verrouillées. Un joueur retiré ne peut pas revenir ainsi.
 
-1. Ouvrez l'adresse envoyée par l'hôte.
-2. Choisissez un **Pseudo**, de 24 caractères au maximum, et saisissez le
-   **Mot de passe de la partie**. Cliquez sur **Entrer**.
-3. Dans le lobby, cliquez sur **Tester mon audio**. Vous devez entendre un bip.
-4. Cliquez sur **Je l'entends ✓** après avoir réellement entendu le bip. Ajustez
-   le volume avec le curseur ; vérifiez aussi le volume de l'appareil et du casque.
-5. Attendez le lancement par l'hôte. La liste indique qui a rejoint la partie.
+## Jouer les manches
 
-Si le bip ne démarre pas, utilisez le bouton de reprise audio et vérifiez la sortie
-sonore. Le jeu reste accessible pendant une erreur audio. Sur les navigateurs
-mobiles, un geste peut être nécessaire à nouveau après une interruption.
+**Préparation**, **Chargement**, compte à rebours, puis lecture synchronisée.
+Écrivez dans **Ta réponse** et utilisez **VALIDER** ou Entrée. La validation est
+définitive ; attendez **✓ Réponse enregistrée**. Le texte non validé est un brouillon
+synchronisé ; après fermeture, le dernier texte reçu devient **Brouillon capturé**.
+Il n'a ni rang officiel ni temps de validation, et ne reçoit aucun point automatique.
 
-## Jouer une manche
+La fin du son ne ferme pas nécessairement les réponses : le délai restant est
+affiché. L'hôte peut suspendre son et réponses, reprendre, rejouer, ajouter du temps
+ou fermer. La pause n'entre pas dans les temps de réponse.
 
-- **Préparation de l'extrait…** : le Bridge prépare le morceau.
-- **Chargement de l'extrait…** : les navigateurs téléchargent et décodent le son.
-- Le **compte à rebours** annonce le départ. Pendant la lecture, le disque tourne
-  et la progression de l'extrait est visible.
-- Saisissez librement le titre, l'artiste ou ce que votre groupe attend dans
-  **Ta réponse**. Le texte reste un brouillon : vous pouvez le modifier.
-- Cliquez sur **VALIDER**, ou appuyez sur Entrée dans le champ, quand vous êtes
-  sûr. **Cette validation est définitive pour la manche.** Une réponse vide ne
-  peut pas être validée. Attendez **✓ Réponse enregistrée**.
+Après chaque manche, **Réponses conservées** confirme l'enregistrement. L'hôte
+passe à la suivante. **Tous les morceaux et points sont révélés après la revue
+globale de fin de partie**. Avant cela, vous ne voyez que votre propre réponse.
+Le compteur anonyme n/m est masqué lorsque moins de trois joueurs sont attendus.
 
-**Extrait terminé** signifie que le son est terminé ou a été arrêté. Tant que le
-champ reste ouvert, vous pouvez encore répondre pendant le délai restant.
-L'hôte peut fermer les réponses ; le serveur décide toujours de la fin de la
-manche, y compris si un message arrive trop tard.
+## Préparer la partie comme hôte
 
-Avant la révélation, vous ne voyez pas les réponses, les temps ni les rangs de
-réponse des autres joueurs. Le compteur « n/m ont validé » est anonyme ; il
-n'apparaît pas quand moins de trois joueurs sont attendus. L'absence du compteur
-n'est donc pas une panne.
+Sur `/host` ou **Accès hôte**, entrez le mot de passe hôte, puis ouvrez
+**Commandes hôte**. Choisissez **Hôte joueur** pour jouer avec les mêmes protections
+anti-spoiler, ou **Animateur** pour voir morceaux à venir et réponses en direct.
+Passer animateur en cours de partie est permis entre les manches ; revenir joueur
+attend la prochaine partie. Les spectateurs écoutent et voient les résultats sans répondre.
 
-Si la manche se ferme avec un brouillon non validé, l'hôte peut voir ce texte
-capturé et choisir de lui attribuer des points. Il est marqué **(non validée)**,
-sans temps de réponse validée. Votre propre réponse reste visible pendant l'attente.
+Choisissez les dossiers dans l'arborescence, le nombre de manches, la durée des
+extraits, le délai de réponse, la consigne/barème et la politique des brouillons.
+Cocher parent et enfant ne double pas les morceaux. Le compteur indique les
+morceaux disponibles et encore inédits pendant la session. **Enregistrer et lancer**
+applique le tout atomiquement. Une sélection trop petite propose de réduire les
+manches ou d'autoriser les répétitions. Les sélections favorites restent locales.
 
-## Révélation et résultats
+Dans les options avancées : pause/reprise déjà disponible, **Normaliser le volume**,
+**Éviter les extraits silencieux** et **Équilibrer les dossiers**. L'équilibrage
+alterne les dossiers sélectionnés, mélangés en interne, jusqu'à épuisement ; les
+morceaux restent uniques. Pour une sélection de la racine, il utilise les dossiers
+contenant les fichiers. Aucun barème de rapidité n'est automatique.
 
-Pendant **L'hôte note les réponses…**, attendez : rien n'est encore publié.
-Après publication, l'écran affiche le morceau, les réponses, les temps, les points
-et le classement. Le signe **≈** indique des réponses très proches dans le temps ;
-la vitesse n'attribue jamais automatiquement des points.
+Configurez équipes et spectateurs au lobby. **Fermer les inscriptions**
+empêche de nouveaux joueurs d'entrer ; reconnexion et récupération restent possibles.
+Le verrou peut être retiré depuis le panneau hôte, quelle que soit la phase.
 
-Après la dernière manche, **L'hôte vérifie les scores…** annonce la vérification
-finale. Le classement affiché reste celui déjà publié pendant que l'hôte prépare
-ses corrections. Ensuite apparaissent le podium, les totaux et les ajustements
-finaux. Des joueurs ex æquo partagent leur rang.
+## Gérer les sources et rechercher
 
-## Animer en tant qu'hôte
+Trois choix distincts :
 
-### Préparer la partie
+1. **Dossier accessible** : racine locale autorisée au Bridge, ou montage Docker.
+2. **Dossiers scannés** : sous-dossiers publiés dans son catalogue.
+3. **Dossiers sélectionnés** : ceux cochés pour la prochaine partie.
 
-1. Rejoignez la partie comme les autres, puis utilisez **Accès hôte** ou l'adresse
-   de la partie suivie de `/host`. Saisissez le **Mot de passe hôte**.
-2. Ouvrez **Commandes hôte** si le panneau est replié. Sur téléphone, le lien du
-   même nom dans l'en-tête permet d'y accéder rapidement.
-3. Choisissez votre rôle via **Changer de rôle**, quand le changement est autorisé :
-   **Hôte joueur** pour répondre, **Animateur (MC)** pour animer sans jouer.
-4. Vérifiez **Bibliothèque connectée** et choisissez les dossiers musicaux. Si
-   aucun Bridge n'est connecté, démarrez-le avant de lancer la partie.
-5. Réglez **Nombre de rounds** et **Durée des extraits (s)**. Les **Réglages
-   avancés** donnent accès au délai supplémentaire pour les réponses.
-6. Cliquez sur **Enregistrer**, puis **Lancer la partie**. Le lancement attend
-   l'enregistrement des modifications et les conditions de démarrage du serveur.
+Dans **Sources et recherche de bibliothèque**, ajoutez/retirez des sous-dossiers relatifs et
+demandez **Actualiser**. Le scan est asynchrone : les commandes de dossier restent
+bloquées jusqu'à réception du scan terminé, puis les comptes et dossiers se mettent
+à jour. Si le scan n'est pas confirmé sous 75 s, actualisez la bibliothèque puis
+réessayez. La racine entière est représentée
+par un chemin vide ; retirez-la avant de limiter le scan à quelques sous-dossiers.
+Plusieurs Bridges peuvent rester connectés (huit maximum), identifiés séparément.
 
-L'hôte joueur conserve la surprise du morceau pendant le jeu et répond comme les
-autres. Le MC voit le morceau et peut consulter **À venir** ; pendant la saisie il
-voit qui a validé, sans lire les textes avant la revue.
+Un dossier hors racine ne peut pas être ajouté depuis le navigateur. Sous Docker,
+ajoutez un montage **en lecture seule** sous `/music`, puis recréez seulement le
+Bridge ; gardez le serveur et son volume de session. Pour un fichier ajouté sous
+un montage existant, un rescan suffit. Voir [les commandes Docker](docker.md#sources-dynamiques-et-réécoute).
+Un chemin inaccessible affiche les étapes de montage ; le dernier catalogue valide reste conservé.
 
-### Diriger et noter les manches
+Recherchez par nom de fichier, titre ou artiste importé/corrigé. Filtrez par Bridge,
+dossier, extension, disponibilité et morceaux encore inédits. La recherche de
+dossiers garde les ancêtres dans l'arbre ; les pages de morceaux contiennent au
+plus 100 résultats. Cette bibliothèque reste réservée aux hôtes au lobby, en revue
+finale et aux résultats, ou au MC pendant le jeu.
 
-Les commandes disponibles suivent l'étape du jeu. Pendant la préparation, le
-compteur audio indique combien de joueurs sont prêts ; **Lancer quand même**
-apparaît si le serveur autorise ce choix. Pendant une manche, vous pouvez arrêter
-ou rejouer l'extrait, ajouter du temps ou fermer les réponses selon les commandes
-affichées.
+Les fichiers MP4/MOV/MKV/AVI et autres conteneurs autorisés fournissent **uniquement
+leur première piste audio**. Aucune vidéo, pochette ou tag n'est envoyé aux joueurs.
+Un fichier sans audio est écarté avec un diagnostic privé. Formats, tailles,
+codec manquant et fichier facultatif de métadonnées : [guide des sources](media-and-metadata.md).
 
-Lors de la revue, lisez les réponses et attribuez les points manuellement. Les
-boutons **0 / +1 / +2 / +3** sont des raccourcis ; le champ numérique permet aussi
-d'autres valeurs, y compris négatives. Une indication de retard audio aide à
-interpréter le temps. En mode joueur, notez également votre propre réponse.
-Cliquez sur **Publier** quand les scores de la manche sont prêts. Cette action
-révèle le morceau et les réponses à tous. Passez ensuite à la manche suivante.
+## Choisir un morceau comme animateur
 
-**Autres actions sur la manche** regroupe le saut d'une manche, l'annulation de
-publication quand elle est encore permise et la fin anticipée. Terminer en notant
-la manche mène à sa revue ; terminer en l'abandonnant n'en attribue pas les points.
-Dans les deux cas, la vérification finale reste obligatoire.
+Dans **Commandes hôte → Sources et recherche de bibliothèque**, le mode
+Animateur affiche **Choisir les morceaux (animateur)**. Sélectionnez la **Manche
+à préparer**, recherchez/filtrez le morceau, puis **Choisir pour la manche N**.
+Les résultats montrent Bridge, dossier, nom de fichier, titre/artiste disponibles,
+format, durée si mesurée, disponibilité, déjà joué et réservé. Seuls les dossiers
+de la partie sont éligibles ; en dehors, cochez d'abord ces sources au lobby.
 
-**Ajuster** permet une correction manuelle supplémentaire avec confirmation.
-**Participants et connexion** affiche les états audio et réseau et permet de
-retirer un joueur. **Diagnostic** fournit les informations techniques et leur
-copie pour le dépannage ; ces outils restent secondaires au déroulement du jeu.
+Attendez **Choix enregistré par le serveur** et **Choix confirmé** avant de lancer.
+Pendant cette confirmation, les commandes de lancement attendent. Deux éditions
+simultanées ne s'écrasent pas : actualisez et réessayez si la révision a changé.
+Un choix manuel respecte les répétitions autorisées mais contourne l'alternance
+aléatoire des dossiers. Une piste réservée ailleurs ne peut pas être doublonnée.
 
-### Vérifier et terminer
+L'extrait se verrouille **dès sa demande de préparation**, y compris dans le
+préchargement des une/deux manches suivantes. Planifiez au lobby ou choisissez
+une manche future encore libre. Aucun remplacement pendant la lecture. Une
+manche manuelle prête attend **Lancer maintenant**, même avec auto-start.
 
-Dans **VÉRIFICATION FINALE DES SCORES**, comparez le score actuel, la correction
-et le nouveau score. Utilisez les boutons −/+ ou le champ numérique, consultez
-le détail, et réinitialisez les corrections si nécessaire. Les joueurs ne voient
-pas ce brouillon. Cliquez sur **VALIDER LES SCORES ET AFFICHER LES RÉSULTATS**,
-relisez le récapitulatif et confirmez.
+Si le fichier disparaît, devient illisible ou le Bridge se déconnecte, le MC
+reçoit une erreur et peut remplacer, **Revenir au tirage aléatoire**, passer ou
+arrêter. Le serveur ne remplace pas silencieusement votre choix. Un saut de la
+manche actuelle ne consomme pas une réservation de la manche suivante.
+Les joueurs et l'hôte joueur ne reçoivent pas ces informations avant le reveal.
+[Dépannage](troubleshooting.md#extraction-et-choix-mc).
 
-Après les résultats, **Nouvelle partie** retourne au lobby. **Fin de session**,
-après confirmation, renvoie tout le monde à l'entrée. Une nouvelle session sur
-`/host` demande de nouveau l'élévation hôte. Arrêter le programme serveur efface
-la partie : les scores ne sont pas sauvegardés entre deux démarrages.
+## Revue globale et publication
 
-## Si quelque chose se passe mal
+La dernière manche ou **Arrêter la partie** ouvre **REVUE DE FIN DE PARTIE**.
+La navigation affiche toutes les manches entendues : recherchez un morceau,
+choisissez une manche ou utilisez précédent/suivant. Les joueurs attendent.
 
-| Situation | Que faire |
+Chaque réponse indique validation ou brouillon capturé, temps officiel/rang si
+disponibles, heure de réception serveur et retard audio connu. Une donnée absente
+reste « — ». Les joueurs retirés ayant participé restent dans cette revue.
+Corrigez titre, artiste, featuring, album et année si nécessaire.
+
+Choisissez **0 / +1 / +2 / +3** ou un entier signé entre −1000 et +1000. Zéro choisi
+est **Vérifié** ; zéro par défaut reste **À vérifier**. Entrée ou sortie du champ
+envoie la note au serveur. Attendez **Enregistré** : la navigation et la validation
+attendent la sauvegarde. Les notes reçues survivent au rafraîchissement, à la
+reconnexion et aux snapshots. Du texte local non envoyé peut être perdu.
+
+Les totaux provisoires additionnent toutes les manches et les corrections finales.
+Les équipes additionnent les points individuels. La politique de brouillons
+`manual` permet une décision humaine ; `zero` impose zéro, à vérifier explicitement.
+Les corrections finales −/+ sont facultatives ; **Réinitialiser les corrections**
+réinitialise ces corrections, pas les notes par manche.
+Ces raccourcis et la remise à zéro attendent aussi l'accusé serveur avant une
+nouvelle modification ou la publication.
+
+**VALIDER LES SCORES ET AFFICHER LES RÉSULTATS** demande une confirmation avec les
+totaux et le nombre de réponses restant à vérifier. Confirmer celles-ci conserve
+leurs valeurs actuelles, initialement zéro. La publication est unique et fige les
+scores. Tous voient alors morceaux, réponses, temps, points, classement, équipes
+et récapitulatif ; les exports CSV/JSON reprennent exactement ces résultats.
+
+## Réécouter pendant la revue
+
+**Écouter** charge l'extrait exact de la manche à la demande, avec pause, progression,
+durée, navigation et volume indépendants. Ce lecteur n'envoie rien aux autres joueurs.
+La réécoute est aussi autorisée après les résultats via l'API privée.
+
+**Écouter le morceau complet** nécessite un Bridge connecté et l'option locale
+`--allow-full-review` ou `OPENBLINDYSIR_BRIDGE_ALLOW_FULL_REVIEW=true`. Le mode complet
+est clairement indiqué ; **Revenir à l'extrait** retrouve la version de jeu.
+L'intégralité est réencodée en segments d'au plus 30 s, seulement lors de l'écoute
+ou d'un déplacement. Il peut y avoir une attente entre segments. Le fichier
+complet reste sur le Bridge ; les segments ne sont pas stockés durablement au serveur.
+
+Si le Bridge est indisponible, la source a changé, ou l'extrait exact n'est plus
+reproductible après redémarrage, le lecteur affiche une erreur et **Réessayer**.
+Une réécoute en échec reprend à la position demandée. Une déconnexion du Bridge
+ou un upload rejeté termine rapidement l'attente en cours.
+La notation continue. Ne remplacez pas une source pendant la partie si vous voulez
+la réécouter intégralement ensuite.
+
+## Arrêter et retrouver la session
+
+**Arrêter la partie** reste accessible avant le premier morceau, pendant la
+préparation, la lecture, la pause et la revue. La confirmation explique les effets :
+
+| Moment | Conséquence |
 |---|---|
-| Mot de passe incorrect | Vérifier le mot de passe de partie avec l'hôte ; le mot de passe hôte est distinct. |
-| Serveur injoignable | Utiliser Réessayer ; vérifier que le PC hôte est allumé, que le lanceur tourne et que le VPN/réseau est accessible. |
-| Erreur audio | Réactiver ou réessayer le son ; vérifier le volume, le casque et la connexion. |
-| Reconnexion… | Garder l'onglet ouvert. Une validation en attente n'est acquise qu'après l'accusé du serveur. |
-| Page rechargée | La session et le dernier brouillon reçu par le serveur sont restaurés si la session est encore valide. Du texte non transmis peut être perdu. |
-| Ouvert ailleurs — reprendre ici | Cliquer Reprendre ici dans l'onglet qui doit jouer ; un seul onglet actif par joueur. |
-| Retiré de la partie | Contacter l'hôte : celui-ci a retiré le joueur de la session. |
-| Certificat refusé | Faire vérifier l'adresse et installer correctement le certificat privé prévu ; ne pas désactiver la vérification TLS. |
+| Lobby, avant tout morceau | Revue vide, puis validation finale possible. |
+| Préparation/chargement/compte à rebours | Manche non entendue annulée, pas de points. |
+| Lecture/saisie/pause | Son arrêté, validations et derniers brouillons conservés, manche à noter en revue globale. |
+| Option « terminer sans noter cette manche » | Manche entendue conservée, annulée et exclue des points. |
+| Réponses déjà fermées | Toutes les manches jouées conservées. |
+| Revue globale déjà ouverte | Notes et corrections inchangées. |
 
-L'application est encore en développement. Les parcours Chromium sont vérifiés
-sur des tailles de téléphone ; cela ne vaut pas validation sur de vrais appareils
-iOS/Android, sur Safari ou sur WebKit. Pour ces appareils, faites un essai avant
-la soirée. Les mesures de synchronisation acoustique restent à réaliser.
+Aucun arrêt ne publie les résultats. Un double clic est sans effet supplémentaire.
+Les manches entendues puis annulées apparaissent dans le récapitulatif avec zéro.
+**Nouvelle partie** garde les joueurs encore inscrits, la bibliothèque et les morceaux
+déjà entendus pendant la soirée. Les identités des joueurs retirés sont libérées,
+leurs résultats archivés restent lisibles. **Fin de session** révoque cookies/codes et vide joueurs, partie et morceaux
+entendus, après confirmation. Les archives et métadonnées de bibliothèque restent conservées.
+
+Le snapshot privé restaure identité, réponses, notes, réglages, métadonnées,
+catalogues et historique des 50 dernières parties. Le cache audio RAM est perdu.
+Une manche ouverte interrompue ferme ses réponses et indique l'interruption ;
+un départ encore futur revient en préparation. Les Bridges se reconnectent et
+régénèrent les extraits nécessaires. Un échec de sauvegarde est visible pour l'hôte.
+
+## Dépannage
+
+Les inscriptions sont limitées à 60 par IP/minute et 600 par serveur/minute,
+même avec le bon mot de passe : attendez une minute après `rate_limited`.
+Le plafond de joueurs simultanés reste `MAX_PLAYERS`. L'état conserve au plus
+1 000 identités, retirées comprises, pour les résultats courants. À ce plafond,
+`game_full` refuse les inscriptions ; Nouvelle partie après archivage ou Fin de
+session libèrent les anciennes identités.
+
+| Situation | Action |
+|---|---|
+| Erreur audio/autoplay | Réactiver le son, vérifier volume/sortie, garder l'onglet actif. |
+| Reconnexion | Attendre l'accusé du serveur ; le dernier brouillon reçu est restauré. |
+| Ouvert ailleurs | « Reprendre ici » dans l'onglet voulu ; un onglet actif par identité. |
+| Bibliothèque trop petite | Réduire les manches, rescanner ou autoriser les répétitions. |
+| Fichier écarté | Consulter le diagnostic privé ; vérifier audio, codec, durée, silence et chemin. |
+| Certificat refusé | Vérifier l'adresse et la confiance du certificat ; garder TLS actif. |
+| Mot de passe/code incorrect | Vérifier le mot de passe de partie et le code privé non utilisé. |
+
+L'application reste en développement. Les essais automatisés utilisent des sons
+synthétiques et des navigateurs sans sortie sonore vérifiée ; ils ne remplacent
+pas un essai Safari/iPhone/Android ni une mesure acoustique avant la soirée.
+Voir [testing](testing.md) et les vérifications exécutées dans [DEVLOG](DEVLOG.md).
+
+## Bridges privés et historique V0.5
+
+Chaque Bridge possède un UUID stable, un nom et son propre secret. L'hôte prépare
+un fichier d'identité privé ; le propriétaire conserve sa racine musicale et son
+choix d'écoute complète. Voir [les commandes V0.5](v0.5.md). Le panneau Bridges
+présente connexion, capacités et erreurs par propriétaire, puis permet de révoquer
+une identité avec confirmation. En jeu, l'hôte joueur n'a pas accès aux noms de
+sources, à la bibliothèque ou aux archives ; le MC garde ses accès privés.
+Une source aléatoire non préparée attend au plus 45 s après déconnexion, puis tente
+une autre source disponible. Un choix manuel conserve son erreur et propose
+remplacement, retour au hasard, saut ou fin ; un extrait déjà préparé peut continuer.
+
+Après validation finale, **Historique** charge à la demande les parties conservées,
+avec les noms et équipes de l'époque, réglages, réponses, temps, révélations et
+scores corrigés. Les changements de bibliothèque et les nouvelles parties ne les
+modifient pas. L'hôte peut consulter, exporter, supprimer une archive ou purger
+l'historique, avec confirmation. Politique : 50 parties, 90 jours, 16 Mio, sans audio.
+L'avertissement de sauvegarde indique si l'état durable n'est pas disponible.
+Une suppression retire l'archive des deux snapshots gérés ; exports et backups
+externes restent à supprimer séparément. Les résultats de la partie courante restent
+visibles jusqu'à Nouvelle partie ou Fin de session.
+
+Les liens d'évitement, le clavier, les confirmations avec Échap/retour du focus et
+les commandes audio ont des libellés accessibles. Les parcours automatisés incluent
+320 px et texte à 200 %. La recette NVDA/VoiceOver et les appareils physiques reste
+à effectuer ; ces tests ne constituent pas une certification d'accessibilité.

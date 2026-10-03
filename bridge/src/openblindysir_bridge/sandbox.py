@@ -6,8 +6,9 @@ file whose size and mtime still match the scan. The residual TOCTOU window is ac
 
 import os
 import stat
+from pathlib import Path
 
-from openblindysir_bridge.scanner import LocalEntry, is_link_or_junction
+from openblindysir_bridge.scanner import LocalEntry, is_link_or_junction, require_unlinked_path
 
 
 class SandboxError(Exception):
@@ -16,6 +17,7 @@ class SandboxError(Exception):
 
 class Sandbox:
     def __init__(self, root_real: str) -> None:
+        require_unlinked_path(Path(root_real))
         self.root_real = os.path.realpath(root_real, strict=True)
 
     def resolve_for_open(self, entry: LocalEntry) -> str:

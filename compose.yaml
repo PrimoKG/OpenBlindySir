@@ -9,7 +9,8 @@ services:
     environment:
       BLIND_PASSWORD: "${BLIND_PASSWORD:?Run the Docker launcher first}"
       HOST_PASSWORD: "${HOST_PASSWORD:?Run the Docker launcher first}"
-      BRIDGE_SECRET: "${BRIDGE_SECRET:?Run the Docker launcher first}"
+      BRIDGE_SECRET: "${BRIDGE_SECRET:-}"
+      BRIDGE_SECRETS: "${BRIDGE_SECRETS:-}"
       DOMAIN: ${DOMAIN:?Run the Docker launcher first}
       DEV_MODE: "0"
       BIND_HOST: "127.0.0.1"
@@ -18,6 +19,9 @@ services:
       STATIC_DIR: /opt/openblindysir/web
       LOG_TRACK_NAMES: "false"
       CLIP_FORMAT: ${CLIP_FORMAT:-aac}
+      STATE_DIR: /data/state
+    volumes:
+      - app_data:/data
     # Caddy and the Bridge share this network namespace. Port 8000 stays loopback-only.
     ports:
       - target: 443
@@ -74,6 +78,7 @@ services:
       OPENBLINDYSIR_BRIDGE_SECRET: ${BRIDGE_SECRET:?Run the Docker launcher first}
       OPENBLINDYSIR_BRIDGE_NAME: ${BRIDGE_NAME:-Docker Bridge}
       OPENBLINDYSIR_BRIDGE_DEMO: ${BRIDGE_DEMO:-false}
+      OPENBLINDYSIR_BRIDGE_ALLOW_FULL_REVIEW: ${BRIDGE_ALLOW_FULL_REVIEW:-false}
     volumes:
       - type: bind
         source: ${MUSIC_DIR:?Choose a music folder in the Docker launcher}
@@ -91,6 +96,7 @@ services:
     init: true
 
 volumes:
+  app_data:
   caddy_data:
   caddy_config:
   bridge_data:

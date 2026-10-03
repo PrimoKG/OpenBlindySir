@@ -32,6 +32,7 @@ def main() -> int:
         "BRIDGE_SECRET": SECRET,
         "PORT": str(PORT),
         "STATIC_DIR": str(ROOT / "web" / "dist"),
+        "STATE_DIR": str(work / "state"),
         # Playwright's Chromium has no AAC decoder; Opus decodes everywhere.
         "CLIP_FORMAT": "opus",
         "READY_TIMEOUT_S": "10",
@@ -42,6 +43,8 @@ def main() -> int:
         "OPENBLINDYSIR_BRIDGE_SECRET": SECRET,
         "OPENBLINDYSIR_BRIDGE_CONFIG": str(work / "bridge.toml"),
         "OPENBLINDYSIR_BRIDGE_NAME": "Demo",
+        # Synthetic sources only: exercise opt-in full review without changing production defaults.
+        "OPENBLINDYSIR_BRIDGE_ALLOW_FULL_REVIEW": "true",
     }
     children: list[subprocess.Popen[bytes]] = []
 

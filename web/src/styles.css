@@ -30,6 +30,28 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  padding: 0.65rem 1rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 2px solid var(--text);
+}
+.skip-link:focus {
+  transform: none;
+}
+.bridge-card {
+  overflow-wrap: anywhere;
+}
+:focus-visible {
+  outline: 3px solid #184f8c;
+  outline-offset: 3px;
+}
 button,
 input {
   font: inherit;
@@ -446,6 +468,10 @@ input[type="range"] {
   opacity: 0.55;
   cursor: not-allowed;
 }
+.history-picker .btn {
+  white-space: normal;
+  text-align: left;
+}
 :is(button, a, input, summary):focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 4px;
@@ -844,7 +870,7 @@ progress::-moz-progress-bar {
 }
 
 .drawer {
-  position: sticky;
+  position: static;
   top: 1.5rem;
   border-top: 3px solid var(--text);
   background: var(--surface-alt);
@@ -872,11 +898,12 @@ progress::-moz-progress-bar {
   font-weight: 400;
 }
 #host-panel {
-  max-height: calc(100dvh - 145px);
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   scrollbar-gutter: stable;
   padding-right: 0.4rem;
 }
+
 .host {
   min-inline-size: 0;
   border: 0;
@@ -1408,5 +1435,272 @@ summary {
 @media (prefers-reduced-motion: reduce) {
   .record-playing {
     animation: none;
+  }
+}
+
+select,
+textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0.65rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+select {
+  overflow: hidden;
+}
+textarea {
+  resize: vertical;
+}
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.phase-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  background: var(--surface-alt);
+}
+.phase-band span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.full-review .player-stage {
+  padding: 0;
+  background: transparent;
+}
+.full-review .host-mode {
+  border: 0;
+  padding: 0;
+}
+.review-heading h1 {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+}
+.track-artist {
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+.review-status,
+.answer-status,
+.score-preview {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.reviewed .review-status {
+  color: var(--accent);
+}
+.unreviewed .review-status {
+  font-weight: 600;
+  color: var(--warn);
+}
+.capacity-card,
+.game-rules {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+}
+.capacity-card p {
+  margin-top: 0.5rem;
+}
+.game-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  font-size: 0.85rem;
+}
+.game-rules small,
+.game-rules p {
+  width: 100%;
+}
+.answer-deadline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  justify-content: space-between;
+  padding: 1rem;
+  background: var(--surface-alt);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.answer-deadline.urgent {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.numeric-draft {
+  display: inline-flex;
+  flex-direction: column;
+  max-width: 10rem;
+}
+.numeric-draft small {
+  max-width: 12rem;
+}
+.metadata-editor {
+  margin-top: 1rem;
+}
+.participation-row {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+}
+.invite canvas {
+  width: 192px;
+  height: 192px;
+  max-width: 100%;
+  border-radius: 8px;
+  background: white;
+}
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+.history-list li {
+  border-top: 1px solid var(--border);
+  padding: 0.8rem 0;
+}
+.history-answer {
+  overflow-wrap: anywhere;
+  margin-top: 0.4rem;
+}
+.history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.history-meta strong {
+  color: var(--text);
+}
+.recap {
+  min-width: 0;
+}
+.final-table .final-detail {
+  min-width: 0;
+}
+.final-table .history-details {
+  min-width: min(28rem, 60vw);
+}
+.dialog p {
+  white-space: pre-line;
+}
+.global-review-layout {
+  display: grid;
+  grid-template-columns: minmax(11rem, 19rem) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.global-review-layout > *,
+.library-manager,
+.library-results {
+  min-width: 0;
+}
+.review-navigation {
+  position: sticky;
+  top: 1rem;
+}
+.review-navigation ol {
+  max-height: 60vh;
+  overflow: auto;
+}
+.review-navigation .btn {
+  width: 100%;
+  justify-content: start;
+  text-align: left;
+  min-height: 44px;
+}
+.review-navigation [aria-current="step"] {
+  background: var(--accent);
+  color: var(--surface);
+}
+.review-audio {
+  padding: 1rem;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.review-audio input[type="range"] {
+  width: 100%;
+  min-height: 44px;
+}
+.review .answer-time time {
+  display: block;
+}
+.session-controls {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.library-filters,
+.metadata-editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+.source-card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.source-card + .source-card {
+  margin-top: 1rem;
+}
+.library-results li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.language-choice select {
+  min-height: 44px;
+}
+.review h1 {
+  font-size: clamp(1.4rem, 4vw, 2.2rem);
+}
+@media (max-width: 700px) {
+  .global-review-layout {
+    grid-template-columns: 1fr;
+  }
+  .review-navigation {
+    position: static;
+  }
+  .review-navigation ol {
+    max-height: 12rem;
+  }
+  .review .btn-small {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .library-filters,
+  .metadata-editor {
+    grid-template-columns: 1fr;
+  }
+  .answer-form {
+    scroll-margin-top: 1rem;
+  }
+  .answer-form input {
+    font-size: 16px;
+  }
+  .answer-form .btn-primary {
+    min-height: 52px;
+  }
+  .full-review .host-mode {
+    margin-top: 0;
+  }
+  .final-table .history-details {
+    min-width: 0;
   }
 }

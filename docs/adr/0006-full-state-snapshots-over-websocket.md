@@ -1,5 +1,5 @@
 # 0006 — Vues d'état complètes par destinataire sur WebSocket
-Statut : Accepté   ·   Date : 2026-10-01
+Statut : Accepté ; contenu de revue remplacé par [0011](0011-global-review-and-private-replay.md) en V0.2 · Date : 2026-10-01
 
 ## Contexte
 Chaque client OpenBlindySir (joueur, hôte en Host Player Mode, hôte en MC Mode) reçoit l'état de la partie par un WebSocket `/api/ws` authentifié par cookie. Le volumineux (catalogue, extraits) passe en HTTP (`docs/architecture.md` §3).

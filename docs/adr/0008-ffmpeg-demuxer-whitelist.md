@@ -40,3 +40,9 @@ Le **serveur ne contrôle jamais un argument FFmpeg**. Le gabarit est fixe, les 
   - fichiers supprimés, renommés ou remplacés après le scan (`bridge/tests/runtime/test_jobs_ffmpeg.py`).
 - Un test de mutation manuel a été fait : en retirant `-format_whitelist`, les deux tests ffconcat échouent.
 - Risque résiduel inchangé : une faille d'un décodeur autorisé, exploitée par un fichier piégé de l'utilisateur. Il est atténué par la vérification de version, les timeouts et l'exécution sans droits administrateur.
+
+## Évolution V0.2
+
+Les règles de revue/notation/réécoute sont précisées par [ADR 0011](0011-global-review-and-private-replay.md).
+Les sources, formats et métadonnées sont précisés par [ADR 0012](0012-dynamic-sources-and-metadata.md).
+Les décisions historiques restent conservées ; ces deux ADR font autorité pour les changements V0.2.

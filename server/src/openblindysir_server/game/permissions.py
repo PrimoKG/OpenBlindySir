@@ -11,6 +11,7 @@ from openblindysir_protocol.enums import (
     BridgeState,
     EndGameMode,
     GamePhase,
+    HostMode,
     RoundState,
 )
 from openblindysir_protocol.errors import StartBlocker
@@ -45,7 +46,13 @@ def start_blockers(s: SessionState) -> list[StartBlocker]:
     blockers: list[StartBlocker] = []
     if not s.game.settings.sources or not selection.pool(s):
         blockers.append(StartBlocker.NO_SOURCES)
-    if not any(b.state is BridgeState.ONLINE for b in s.bridges.values()):
+    elif not s.game.settings.allow_repeats and all(t in s.played for t in selection.pool(s)):
+        blockers.append(StartBlocker.POOL_EXHAUSTED)
+    selected_bridges = {bridge_id for bridge_id, _ in s.game.settings.sources}
+    if not any(
+        b.state is BridgeState.ONLINE and b.bridge_id in selected_bridges
+        for b in s.bridges.values()
+    ):
         blockers.append(StartBlocker.BRIDGE_OFFLINE)
     if not any(is_participant(p) for p in active_players(s)):
         blockers.append(StartBlocker.NO_COMPETITORS)
@@ -80,7 +87,7 @@ def _start_game(s: SessionState, issuer: Player) -> bool:
 
 def _end_game(s: SessionState, issuer: Player) -> bool:
     del issuer
-    return current_round(s.game) is not None
+    return s.game.phase is not GamePhase.FINAL_RESULTS
 
 
 def _next(s: SessionState, issuer: Player) -> bool:
@@ -88,8 +95,7 @@ def _next(s: SessionState, issuer: Player) -> bool:
     r = current_round(s.game)
     return (
         r is not None
-        and r.state is RoundState.REVEALED
-        and r.number < s.game.settings.rounds
+        and r.state in {RoundState.REVIEW, RoundState.REVEALED}
         and s.game.ending is None
     )
 
@@ -109,7 +115,37 @@ def _force_start(s: SessionState, issuer: Player) -> bool:
 def _stop(s: SessionState, issuer: Player) -> bool:
     del issuer
     r = current_round(s.game)
-    return r is not None and r.state is RoundState.OPEN and active_play(r) is not None
+    return (
+        r is not None
+        and r.state is RoundState.OPEN
+        and r.paused_at is None
+        and active_play(r) is not None
+    )
+
+
+def _unpaused_open(s: SessionState, issuer: Player) -> bool:
+    r = current_round(s.game)
+    return _round(RoundState.OPEN)(s, issuer) and r is not None and r.paused_at is None
+
+
+def _resume(s: SessionState, issuer: Player) -> bool:
+    r = current_round(s.game)
+    return (
+        _round(RoundState.OPEN)(s, issuer)
+        and r is not None
+        and r.paused_at is not None
+        and r.resume_at is None
+        and r.pause_ready
+    )
+
+
+def _set_mode(s: SessionState, issuer: Player) -> bool:
+    if s.game.phase is not GamePhase.IN_GAME:
+        return True
+    r = current_round(s.game)
+    return issuer.host_mode is HostMode.PLAYER and (
+        r is None or r.state not in {RoundState.COUNTDOWN, RoundState.OPEN}
+    )
 
 
 def _undo(s: SessionState, issuer: Player) -> bool:
@@ -122,35 +158,43 @@ def _to_final_review(s: SessionState, issuer: Player) -> bool:
     r = current_round(s.game)
     return (
         r is not None
-        and r.state is RoundState.REVEALED
+        and r.state in {RoundState.REVIEW, RoundState.REVEALED}
         and (r.number >= s.game.settings.rounds or s.game.ending is EndGameMode.SCORE)
     )
 
 
 HOST_RULES: dict[str, Predicate] = {
+    "select_track": lambda s, issuer: (
+        issuer.host_mode is HostMode.MC and s.game.phase in {GamePhase.LOBBY, GamePhase.IN_GAME}
+    ),
     "configure": _phase(GamePhase.LOBBY, GamePhase.IN_GAME, GamePhase.FINAL_RESULTS),
-    "set_mode": _always,
+    "set_mode": _set_mode,
     "start_game": _start_game,
     "new_game": _phase(GamePhase.FINAL_RESULTS),
     "end_game": _end_game,
     "end_session": _always,
     "next": _next,
     "force_start": _force_start,
-    "replay": _round(RoundState.OPEN),
+    "replay": _unpaused_open,
     "stop": _stop,
+    "pause": _unpaused_open,
+    "resume": _resume,
     "skip": _round(*SKIPPABLE),
-    "add_time": _round(RoundState.OPEN),
+    "add_time": _unpaused_open,
     "close": _round(RoundState.OPEN),
-    "score_draft": _round(RoundState.REVIEW),
-    "publish": _round(RoundState.REVIEW),
-    "undo_publish": _undo,
-    "adjust": _phase(GamePhase.IN_GAME),
+    "score_draft": _phase(GamePhase.FINAL_SCORE_REVIEW),
+    "publish": lambda s, issuer: False,
+    "track_metadata": _phase(GamePhase.FINAL_SCORE_REVIEW),
+    "undo_publish": lambda s, issuer: False,
+    "adjust": lambda s, issuer: False,
     "to_final_review": _to_final_review,
     "final_set": _phase(GamePhase.FINAL_SCORE_REVIEW),
     "final_reset": _phase(GamePhase.FINAL_SCORE_REVIEW),
     "final_validate": _phase(GamePhase.FINAL_SCORE_REVIEW),
     "kick": _always,
     "rename": _always,
+    "participation": _phase(GamePhase.LOBBY),
+    "join_lock": _always,
 }
 assert set(HOST_RULES) == set(HOST_COMMAND_NAMES)
 

@@ -137,65 +137,59 @@ def test_replacement_warns_host_only() -> None:
 
 def test_next_is_idempotent() -> None:
     sc = Scenario()
-    sc.to_review()
-    sc.publish()
-    r1 = sc.current()
+    r1 = sc.to_review()
     assert sc.host("next", round_id=r1.id, args={}).error is None
     assert sc.host("next", round_id=r1.id, args={}).error is ErrorCode.STALE_COMMAND
     assert sc.current().number == 2
 
 
-def test_publish_twice_is_stale_or_invalid() -> None:
+def test_round_publication_is_disabled() -> None:
     sc = Scenario()
     r = sc.to_review()
-    assert sc.on_round("publish").error is None
-    assert sc.host("publish", round_id=r.id, args={}).error is ErrorCode.INVALID_STATE
-    assert len(sc.s.journal.events()) == 0
-
-
-def test_undo_publish_restores_review_and_draft() -> None:
-    sc = Scenario()
-    a = sc.player_ids[0]
-    r = sc.to_review()
-    sc.publish({a: 3})
-    assert sc.host("undo_publish", round_id=r.id, args={}).error is None
+    for _ in range(2):
+        assert (
+            sc.host("publish", round_id=r.id, args={"confirm_unreviewed": True}).error
+            is ErrorCode.INVALID_STATE
+        )
+    assert sc.s.journal.events() == ()
     assert r.state is RoundState.REVIEW
-    assert r.score_draft == {a: 3}
-    assert r.reveal is None
-    assert sc.view(a).standings[0].score == 0
 
 
-def test_undo_allowed_while_next_round_not_in_countdown() -> None:
+def test_closed_round_has_no_public_points_to_undo() -> None:
     sc = Scenario()
     r = sc.to_review()
-    sc.publish()
+    assert sc.host("undo_publish", round_id=r.id, args={}).error is ErrorCode.INVALID_STATE
+    assert r.state is RoundState.REVIEW
+    assert sc.view(sc.player_ids[0]).standings == []
+
+
+def test_closed_answers_survive_next_round_loading() -> None:
+    sc = Scenario()
+    r = sc.to_open()
+    sc.submit(sc.player_ids[0], "kept")
+    sc.on_round("close")
     sc.on_round("next")
-    nxt = sc.current()
-    assert nxt.state is RoundState.LOADING
-    assert sc.host("undo_publish", round_id=r.id, args={}).error is None
-    assert sc.current() is r
-    assert nxt.state is RoundState.CANCELLED
+    assert sc.current().state is RoundState.LOADING
+    assert r.answers[sc.player_ids[0]].text == "kept"
+    assert sc.host("undo_publish", round_id=r.id, args={}).error is ErrorCode.INVALID_STATE
 
 
-def test_undo_refused_once_next_round_reached_countdown() -> None:
+def test_old_round_cannot_be_reopened_during_countdown() -> None:
     sc = Scenario()
     r = sc.to_review()
-    sc.publish()
     sc.on_round("next")
     sc.ready()
     assert sc.current().state is RoundState.COUNTDOWN
-    assert sc.host("undo_publish", round_id=r.id, args={}).error is ErrorCode.STALE_COMMAND
+    assert sc.host("undo_publish", round_id=r.id, args={}).error is ErrorCode.INVALID_STATE
 
 
-def test_undo_after_skipped_next_round() -> None:
+def test_skipping_next_round_keeps_closed_round_for_global_review() -> None:
     sc = Scenario()
     r = sc.to_review()
-    sc.publish()
     sc.on_round("next")
     sc.on_round("skip")
-    assert sc.host("undo_publish", round_id=r.id, args={}).error is None
-    assert sc.current() is r
-    assert r.state is RoundState.REVIEW
+    sc.on_phase("end_game", {"current_round": "score"})
+    assert sc.host_view().host.review_rounds[0].round_id == r.id
 
 
 def test_close_captures_drafts() -> None:

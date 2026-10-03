@@ -128,9 +128,10 @@ réglages et lancez après le test audio des joueurs. Le
 | Exporter la racine privée | `.\tools\docker-host.ps1 certificate` | `sh tools/docker-host.sh certificate` |
 | Arrêter | `.\tools\docker-host.ps1 stop` | `sh tools/docker-host.sh stop` |
 
-Arrêter ou recréer le serveur **efface la partie et les scores en RAM**. Gardez
-le PC et Docker allumés, sans mise en veille. `stop` conserve les volumes :
-certificats et identité du Bridge. Ne faites pas `docker compose down -v` si vous
+Arrêter ou recréer le serveur restaure la session depuis le volume **app_data**.
+Une manche ouverte interrompue revient en correction avec ses réponses ; la musique
+est régénérée pour les manches à préparer. Gardez le PC allumé pendant le jeu.
+`stop` conserve la session, les certificats et l'identité du Bridge. Ne faites pas `docker compose down -v` si vous
 voulez les conserver. Les services redémarrent avec Docker grâce à leur politique
 `unless-stopped`, sauf si vous les avez arrêtés volontairement.
 
@@ -205,7 +206,66 @@ de l'hôte et ajoutez `-f deploy/compose.bridge.private.yaml` avant `up`. La rac
 est montée en lecture seule et utilisée par Python pour vérifier HTTPS/WSS.
 En public, l'autorité système de l'image suffit. Utilisez les mêmes options pour
 `logs`, `restart` ou `down`. Si ce Bridge remplace celui de la pile complète,
-arrêtez d'abord le Bridge de cette pile ; un seul Bridge actif doit servir la bibliothèque.
+arrêtez uniquement le Bridge remplacé. Jusqu'à huit Bridges distincts peuvent coexister ;
+chacun garde son UUID/configuration et les jobs sont routés vers leur propriétaire.
+
+## Sources dynamiques et réécoute
+
+Trois niveaux distincts : **monté** dans `/music` par Docker ; **scanné** parmi
+les sous-dossiers autorisés par le Bridge ; **sélectionné** pour une partie dans
+la configuration hôte. Changer les deux derniers se fait dans l'application sans
+redémarrer le serveur. Un nouveau dossier déjà présent sous `MUSIC_DIR` demande
+simplement un rescan, pas une modification des volumes.
+
+Un chemin du PC extérieur à `MUSIC_DIR` demande un montage supplémentaire.
+Créez par exemple `.local/docker/sources.override.yaml` :
+
+```yaml
+services:
+  bridge:
+    volumes:
+      - type: bind
+        source: D:/AutreMusique
+        target: /music/Extra
+        read_only: true
+        bind:
+          create_host_path: false
+```
+
+Adaptez le chemin à un dossier réel, lisible et autorisé par Docker Desktop.
+Le montage existant `/music` et le volume de configuration Bridge restent en
+place. Recréez seulement le Bridge, avec le même fichier privé d'environnement :
+
+```powershell
+docker compose --env-file .local/docker/hosting.env -f compose.yaml -f .local/docker/sources.override.yaml up -d --no-deps --force-recreate bridge
+```
+
+Pour un déploiement public, ajoutez `-f deploy/compose.public.yaml` avant le
+fichier override. Pour un Bridge distant, remplacez le fichier de base par
+`deploy/compose.bridge.yaml` et employez son fichier privé d'environnement et
+ses options TLS habituelles. Réutilisez les mêmes fichiers `-f` pour les commandes
+suivantes. Ajoutez ensuite `Extra` aux dossiers scannés, puis sélectionnez-le
+pour le jeu. Pour le retirer : retirer du scan, puis du montage si nécessaire.
+Les réponses/identités des manches déjà jouées restent conservées.
+
+Pour plusieurs Bridges sur un même PC, employez un projet Compose distinct
+(`-p bridge-deux`) et un fichier privé d'environnement par instance ; les volumes
+de configuration séparés génèrent des UUID distincts. Ne copiez pas le volume
+d'identité d'un Bridge vers un autre. Chaque UUID a son secret propre ; le
+bootstrap `BRIDGE_SECRET` ne sert qu'au premier UUID. Délivrer les fichiers privés
+avec les actions `bridge-credential`/`bridge-revoke` des lanceurs, puis utiliser
+`deploy/compose.bridge-credential.yaml` pour chaque Bridge distant/supplémentaire.
+Le fichier d'identité et la musique sont montés en lecture seule. Le fichier doit
+être lisible par UID 10001 dans un dossier parent privé ; ne pas rendre son secret
+lisible par tous. [Commandes et permissions V0.5](v0.5.md#docker-et-autre-appareil).
+
+L'écoute intégrale demande l'accord local du propriétaire du Bridge. Dans son
+fichier privé d'environnement, ajoutez `BRIDGE_ALLOW_FULL_REVIEW=true` puis
+recréez uniquement ce Bridge avec ses mêmes options Compose. Par défaut : false.
+Chaque requête fournit au plus 30 secondes réencodées, jamais le fichier original.
+Le cache local des extraits exacts est limité à 64 MiB ; le tmpfs Bridge reste
+128 MiB. Le serveur conserve au plus deux transferts privés de 2 MiB, uniquement
+en mémoire. [Détails et limites](bridge-security.md#réécoute-et-fichiers-temporaires).
 
 ## Dépannage
 
@@ -221,5 +281,6 @@ arrêtez d'abord le Bridge de cette pile ; un seul Bridge actif doit servir la b
 
 La CI exerce une partie Docker avec sons synthétiques et certificat vérifié.
 Cela ne remplace pas les essais sur votre LAN/VPN, votre musique ou vos appareils.
-G1/G2 restent à mesurer, WebKit reste non validé et aucune soirée/VPS n'est déployée
+G1/G2 restent à mesurer. Les parcours graphiques WebKit headless sont testés ;
+ils ne valident pas l'audio Safari/iOS. Aucune soirée/VPS n'est déployée
 automatiquement. [Référence Docker Compose](https://docs.docker.com/compose/).

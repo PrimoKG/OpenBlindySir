@@ -1,0 +1,112 @@
+name: Validate distribution
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  python-packages:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: 0.12.22
+      - run: uv sync --locked --group distribution --python 3.13
+      - run: uv run python tools/release.py verify --require-clean
+      - name: Build each wheel from its standalone sdist
+        run: |
+          uv run --group distribution python -m build --no-isolation --outdir dist/python protocol
+          uv run --group distribution python -m build --no-isolation --outdir dist/python bridge
+          uv run --group distribution python -m twine check dist/python/*
+          uv run python tools/release.py python-manifest --directory dist/python
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: distribution-python
+          path: dist/python/
+          if-no-files-found: error
+          retention-days: 14
+
+  cli-matrix:
+    needs: python-packages
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2025, macos-15, macos-15-intel]
+        python: ['3.12', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: 0.12.22
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - run: uv sync --locked --python ${{ matrix.python }}
+      - run: uv run pytest bridge/tests
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: distribution-python
+          path: dist/python
+      - name: Run installed wheel with isolated uvx outside checkout
+        shell: bash
+        run: uv run python tools/smoke_bridge_distribution.py --wheels dist/python --version "$(cat VERSION)"
+
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: linux-x86_64
+          - os: windows-2025
+            target: windows-x86_64
+          - os: macos-15
+            target: macos-arm64
+          - os: macos-15-intel
+            target: macos-x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: 0.12.22
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - run: uv sync --locked --group distribution --python 3.13
+      - run: uv run python tools/release.py verify --require-clean
+      - run: uv run --group distribution python tools/build_bridge.py --output dist/binary
+      - name: Smoke extracted archive outside checkout
+        shell: bash
+        run: |
+          uv run python tools/smoke_bridge_distribution.py --archive dist/binary/*.zip --version "$(cat VERSION)"
+          uv run python tools/release.py verify --require-clean
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: distribution-${{ matrix.target }}
+          path: dist/binary/
+          if-no-files-found: error
+          retention-days: 14

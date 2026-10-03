@@ -1,5 +1,7 @@
 // Minimal i18n: typed keys, {name} placeholders. French in V0.1 (spec patch 2);
 // "?lang=en" is accepted for development only.
+
+import { readLocal, writeLocal } from "../storage";
 import { en } from "./en";
 import { fr, type MessageKey } from "./fr";
 
@@ -17,6 +19,9 @@ function currentLanguage(): "fr" | "en" {
   ) {
     return "en";
   }
+  if (typeof location !== "undefined" && new URLSearchParams(location.search).get("lang") === "fr")
+    return "fr";
+  if (readLocal("language") === "en") return "en";
   return "fr";
 }
 
@@ -24,6 +29,12 @@ let language: "fr" | "en" = currentLanguage();
 
 export function setLanguage(lang: "fr" | "en"): void {
   language = lang;
+  writeLocal("language", lang);
+  if (typeof document !== "undefined") document.documentElement.lang = lang;
+}
+
+export function getLanguage(): "fr" | "en" {
+  return language;
 }
 
 export function format(template: string, params?: Params): string {

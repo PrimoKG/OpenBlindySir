@@ -101,7 +101,10 @@ def test_encode_argv_is_the_fixed_template() -> None:
         position = argv.index(group[0])
         assert argv[position : position + 2] == group
     assert {"-vn", "-sn", "-dn", "-nostdin"} <= set(argv)
-    assert argv[argv.index("-af") + 1] == "afade=t=in:st=0:d=0.3,afade=t=out:st=23.500:d=1.5"
+    assert (
+        argv[argv.index("-af") + 1]
+        == "loudnorm=I=-16:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.3,afade=t=out:st=23.500:d=1.5"
+    )
     assert argv[-1] == "file:/tmp/out.m4a"
 
 

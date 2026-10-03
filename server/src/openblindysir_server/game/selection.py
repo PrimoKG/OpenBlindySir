@@ -2,7 +2,7 @@
 
 from collections import deque
 
-from openblindysir_protocol.enums import GamePhase, RoundState
+from openblindysir_protocol.enums import BridgeState, GamePhase, RoundState
 from openblindysir_protocol.views import PoolStatus
 from openblindysir_server.game.state import SessionState, Slot, TrackRef, current_round
 
@@ -29,7 +29,7 @@ def live_slots(s: SessionState) -> list[Slot]:
     """Slots whose track is in use: the pipeline and the current round while it is live."""
     slots: list[Slot] = list(s.game.pipeline)
     r = current_round(s.game)
-    if r is not None and r.state is not RoundState.REVEALED:
+    if r is not None and r.state not in {RoundState.REVIEW, RoundState.REVEALED}:
         slots.insert(0, r.slot)
     return slots
 
@@ -41,17 +41,58 @@ def drop_played_from_idle_slots(s: SessionState) -> None:
             slot.track_ref = None
 
 
+def prune_manual_plans(s: SessionState) -> None:
+    g = s.game
+    valid = set(pool(s))
+    planned = {
+        number: ref
+        for number, ref in g.manual_tracks.items()
+        if number <= g.settings.rounds
+        and ref in valid
+        and (g.settings.allow_repeats or ref not in s.played)
+    }
+    if planned != g.manual_tracks:
+        g.manual_tracks = planned
+        g.selection_revision += 1
+
+
 def build_queue(s: SessionState, *, include_played: bool) -> deque[TrackRef]:
     """Shuffled queue; tracks never played in the session always come first."""
     in_use = {slot.track_ref for slot in live_slots(s) if slot.track_ref is not None}
-    candidates = [t for t in pool(s) if t not in in_use]
+    in_use.update(s.game.manual_tracks.values())
+    candidates = [t for t in pool(s) if t not in in_use and online(s, t)]
     fresh = [t for t in candidates if t not in s.played]
     s.rng.shuffle(fresh)
     repeats: list[TrackRef] = []
     if include_played:
         repeats = [t for t in candidates if t in s.played]
         s.rng.shuffle(repeats)
+    if s.game.settings.balance_folders:
+        fresh = balanced(s, fresh)
+        repeats = balanced(s, repeats)
     return deque(fresh + repeats)
+
+
+def balanced(s: SessionState, tracks: list[TrackRef]) -> list[TrackRef]:
+    groups: dict[tuple[str, str], deque[TrackRef]] = {}
+    for ref in tracks:
+        entry = s.catalogs[ref.bridge_id].entries[ref.track_id]
+        # Deepest selected folder wins; overlapping selections never duplicate a track.
+        prefixes = [
+            f
+            for b, f in s.game.settings.sources
+            if b == ref.bridge_id and matches(entry.relpath, f)
+        ]
+        key = (ref.bridge_id, max(prefixes, key=len, default=entry.folder) or entry.folder)
+        groups.setdefault(key, deque()).append(ref)
+    keys = list(groups)
+    s.rng.shuffle(keys)
+    result: list[TrackRef] = []
+    while any(groups.values()):
+        for key in keys:
+            if groups[key]:
+                result.append(groups[key].popleft())
+    return result
 
 
 def track_exists(s: SessionState, ref: TrackRef) -> bool:
@@ -59,20 +100,62 @@ def track_exists(s: SessionState, ref: TrackRef) -> bool:
     return catalog is not None and ref.track_id in catalog.entries
 
 
+def online(s: SessionState, ref: TrackRef) -> bool:
+    info = s.bridges.get(ref.bridge_id)
+    return info is not None and info.state is BridgeState.ONLINE
+
+
 def take(s: SessionState) -> TrackRef | None:
     """Next usable track of the queue, or None when the pool is exhausted."""
     queue = s.game.queue
     while queue:
         ref = queue.popleft()
-        if ref not in s.game.unavailable and track_exists(s, ref):
+        reserved = set(s.game.manual_tracks.values()) | {slot.track_ref for slot in live_slots(s)}
+        if (
+            ref not in s.game.unavailable
+            and ref not in reserved
+            and track_exists(s, ref)
+            and online(s, ref)
+            and (s.game.settings.allow_repeats or ref not in s.played)
+        ):
             return ref
+    if s.game.settings.allow_repeats:
+        reserved = set(s.game.manual_tracks.values()) | {slot.track_ref for slot in live_slots(s)}
+        candidates = [t for t in pool(s) if t not in reserved and online(s, t)]
+        # A one-track library may repeat after its previous round has finished.
+        if candidates:
+            if s.game.settings.balance_folders:
+                candidates = balanced(s, candidates)
+            else:
+                s.rng.shuffle(candidates)
+            queue.extend(candidates[1:])
+            return candidates[0]
     return None
 
 
+def new_slot(s: SessionState, number: int) -> Slot:
+    manual = s.game.manual_tracks.pop(number, None)
+    ref = manual or take(s)
+    return Slot(
+        track_ref=ref, attempts=1 if ref else 0, round_number=number, manual=manual is not None
+    )
+
+
 def pool_status(s: SessionState) -> PoolStatus:
-    size = len(pool(s))
+    tracks = pool(s)
+    size = len(tracks)
+    fresh = sum(t not in s.played for t in tracks)
+    reserved = sum(slot.track_ref is not None for slot in live_slots(s)) + len(s.game.manual_tracks)
     if s.game.phase is GamePhase.IN_GAME:
-        remaining = len(s.game.queue)
+        remaining = len(s.game.queue) + len(s.game.manual_tracks)
     else:
-        remaining = len([t for t in pool(s) if t not in s.played])
-    return PoolStatus(size=size, remaining=remaining, exhausted=remaining == 0)
+        remaining = size if s.game.settings.allow_repeats else fresh
+    return PoolStatus(
+        size=size,
+        remaining=remaining,
+        exhausted=size == 0 or (remaining == 0 and reserved == 0),
+        fresh=fresh,
+        played=size - fresh,
+        unavailable=len(s.game.unavailable),
+        reserved=reserved,
+    )

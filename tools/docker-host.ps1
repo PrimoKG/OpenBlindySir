@@ -1,10 +1,13 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('init', 'start', 'stop', 'status', 'open', 'certificate')]
+    [ValidateSet('init', 'start', 'stop', 'status', 'open', 'certificate', 'bridge-credential', 'bridge-revoke')]
     [string]$Action = 'start',
     [string]$Address,
     [ValidateSet('private', 'public')][string]$Mode = 'private',
     [string]$MusicDir,
+    [string]$BridgeId,
+    [string]$BridgeName = 'Bridge',
+    [string]$CredentialOutput,
     [switch]$Demo,
     [switch]$NoBrowser,
     [switch]$NoBuild
@@ -40,7 +43,7 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 }
 # Configuration belongs to this launcher, independent of variables from native hosting.
 $taskKeys = @('DOMAIN', 'TLS_HOST', 'HTTPS_PORT', 'BIND_IP', 'CADDY_PROFILE',
-    'MUSIC_DIR', 'BRIDGE_DEMO', 'BLIND_PASSWORD', 'HOST_PASSWORD', 'BRIDGE_SECRET',
+    'MUSIC_DIR', 'BRIDGE_DEMO', 'BRIDGE_ALLOW_FULL_REVIEW', 'BLIND_PASSWORD', 'HOST_PASSWORD', 'BRIDGE_SECRET', 'BRIDGE_SECRETS',
     'COMPOSE_FILE', 'COMPOSE_PROFILES', 'COMPOSE_PROJECT_NAME')
 $taskSaved = @{}
 foreach ($key in $taskKeys) {
@@ -101,6 +104,20 @@ try {
         }
         'stop' { Invoke-Docker ($taskCompose + @('down')) }
         'status' { Invoke-Docker ($taskCompose + @('ps')) }
+        'bridge-credential' {
+            if (-not $BridgeId -or -not $CredentialOutput) {
+                throw 'Indiquez -BridgeId UUID et -CredentialOutput /data/state/issued-NOM.toml (nouveau fichier privé dans le conteneur).'
+            }
+            Invoke-Docker ($taskCompose + @('exec', '-T', 'app', 'python', '-m',
+                'openblindysir_server', 'bridge-credential', '--bridge-id', $BridgeId,
+                '--name', $BridgeName, '--output', $CredentialOutput))
+            Write-Host 'Transférez le fichier privé au propriétaire de ce Bridge. Voir docs/v0.5.md.'
+        }
+        'bridge-revoke' {
+            if (-not $BridgeId) { throw 'Indiquez -BridgeId UUID.' }
+            Invoke-Docker ($taskCompose + @('exec', '-T', 'app', 'python', '-m',
+                'openblindysir_server', 'bridge-revoke', '--bridge-id', $BridgeId))
+        }
         'open' { Open-HostBrowser $taskUrl }
         'certificate' {
             if ($taskRouting['CADDY_PROFILE'] -ne 'private') { throw 'Le mode public utilise un certificat public.' }

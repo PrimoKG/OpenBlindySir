@@ -7,9 +7,10 @@ Every variant declares exactly one idempotency key in the envelope (``round_id``
 from collections.abc import Mapping
 from typing import Annotated, Any, Final, Literal, get_args
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, model_validator
 
 from openblindysir_protocol.base import (
+    BridgeId,
     InboundModel,
     NonZeroPoints,
     NoteText,
@@ -19,13 +20,35 @@ from openblindysir_protocol.base import (
     Points,
     RoundId,
     ServerMs,
+    TrackId,
 )
 from openblindysir_protocol.enums import EndGameMode, GamePhase, HostMode
+from openblindysir_protocol.metadata import MusicalMetadata
 from openblindysir_protocol.settings import SettingsPatch
 
 AnyPhase = Literal[
     GamePhase.LOBBY, GamePhase.IN_GAME, GamePhase.FINAL_SCORE_REVIEW, GamePhase.FINAL_RESULTS
 ]
+
+
+class SelectTrackArgs(InboundModel):
+    round_number: Annotated[int, Field(ge=1, le=100)]
+    expected_revision: Annotated[int, Field(ge=0)]
+    bridge_id: BridgeId | None = None
+    track_id: TrackId | None = None
+
+    @model_validator(mode="after")
+    def paired_reference(self) -> "SelectTrackArgs":
+        if (self.bridge_id is None) != (self.track_id is None):
+            raise ValueError("bridge_id and track_id must be paired")
+        return self
+
+
+class HostSelectTrack(InboundModel):
+    t: Literal["HOST"]
+    cmd: Literal["select_track"]
+    expected_phase: Literal[GamePhase.LOBBY, GamePhase.IN_GAME]
+    args: SelectTrackArgs
 
 
 class EmptyArgs(InboundModel):
@@ -75,6 +98,24 @@ class RenameArgs(InboundModel):
     nickname: Annotated[str, StringConstraints(min_length=1, max_length=64)]
 
 
+class ParticipationArgs(InboundModel):
+    player_id: PlayerId
+    spectator: bool = False
+    team: Annotated[str, StringConstraints(max_length=40)] | None = None
+
+
+class PublishArgs(InboundModel):
+    confirm_unreviewed: bool = False
+
+
+class TrackMetadataArgs(MusicalMetadata):
+    pass
+
+
+class JoinLockArgs(InboundModel):
+    locked: bool
+
+
 class _Host(InboundModel):
     t: Literal["HOST"]
 
@@ -83,6 +124,7 @@ class HostConfigure(_Host):
     cmd: Literal["configure"]
     expected_phase: Literal[GamePhase.LOBBY, GamePhase.IN_GAME, GamePhase.FINAL_RESULTS]
     args: SettingsPatch
+    start_game: bool = False
 
 
 class HostSetMode(_Host):
@@ -105,8 +147,15 @@ class HostNewGame(_Host):
 
 class HostEndGame(_Host):
     cmd: Literal["end_game"]
-    round_id: RoundId
+    round_id: RoundId | None = None
+    expected_phase: AnyPhase | None = None
     args: EndGameArgs
+
+    @model_validator(mode="after")
+    def _key(self) -> "HostEndGame":
+        if (self.round_id is None) == (self.expected_phase is None):
+            raise ValueError("exactly one idempotency key required")
+        return self
 
 
 class HostEndSession(_Host):
@@ -139,6 +188,18 @@ class HostStop(_Host):
     args: PlayIdArgs
 
 
+class HostPause(_Host):
+    cmd: Literal["pause"]
+    round_id: RoundId
+    args: EmptyArgs
+
+
+class HostResume(_Host):
+    cmd: Literal["resume"]
+    round_id: RoundId
+    args: EmptyArgs
+
+
 class HostSkip(_Host):
     cmd: Literal["skip"]
     round_id: RoundId
@@ -166,7 +227,13 @@ class HostScoreDraft(_Host):
 class HostPublish(_Host):
     cmd: Literal["publish"]
     round_id: RoundId
-    args: EmptyArgs
+    args: PublishArgs
+
+
+class HostTrackMetadata(_Host):
+    cmd: Literal["track_metadata"]
+    round_id: RoundId
+    args: TrackMetadataArgs
 
 
 class HostUndoPublish(_Host):
@@ -207,7 +274,13 @@ class HostFinalReset(_Host):
 class HostFinalValidate(_Host):
     cmd: Literal["final_validate"]
     expected_phase: Literal[GamePhase.FINAL_SCORE_REVIEW]
-    args: EmptyArgs
+    args: PublishArgs
+
+
+class HostJoinLock(_Host):
+    cmd: Literal["join_lock"]
+    expected_phase: AnyPhase
+    args: JoinLockArgs
 
 
 class HostKick(_Host):
@@ -222,8 +295,15 @@ class HostRename(_Host):
     args: RenameArgs
 
 
+class HostParticipation(_Host):
+    cmd: Literal["participation"]
+    expected_phase: Literal[GamePhase.LOBBY]
+    args: ParticipationArgs
+
+
 HostCommandVariant = (
-    HostConfigure
+    HostSelectTrack
+    | HostConfigure
     | HostSetMode
     | HostStartGame
     | HostNewGame
@@ -233,11 +313,14 @@ HostCommandVariant = (
     | HostForceStart
     | HostReplay
     | HostStop
+    | HostPause
+    | HostResume
     | HostSkip
     | HostAddTime
     | HostClose
     | HostScoreDraft
     | HostPublish
+    | HostTrackMetadata
     | HostUndoPublish
     | HostAdjust
     | HostToFinalReview
@@ -246,6 +329,8 @@ HostCommandVariant = (
     | HostFinalValidate
     | HostKick
     | HostRename
+    | HostParticipation
+    | HostJoinLock
 )
 HostCommand = Annotated[HostCommandVariant, Field(discriminator="cmd")]
 
@@ -259,6 +344,10 @@ _PLAY = "pl_play01"
 
 # One valid JSON example per command, used by the permission test (spec §20.1 item 6).
 HOST_COMMAND_EXAMPLES: Final[Mapping[str, dict[str, Any]]] = {
+    "select_track": {
+        "expected_phase": "LOBBY",
+        "args": {"round_number": 1, "expected_revision": 0},
+    },
     "configure": {"expected_phase": "LOBBY", "args": {"rounds": 10}},
     "set_mode": {"expected_phase": "LOBBY", "args": {"mode": "mc"}},
     "start_game": {"expected_phase": "LOBBY", "args": {}},
@@ -269,11 +358,14 @@ HOST_COMMAND_EXAMPLES: Final[Mapping[str, dict[str, Any]]] = {
     "force_start": {"round_id": _ROUND, "args": {}},
     "replay": {"round_id": _ROUND, "args": {"play_id": _PLAY}},
     "stop": {"round_id": _ROUND, "args": {"play_id": _PLAY}},
+    "pause": {"round_id": _ROUND, "args": {}},
+    "resume": {"round_id": _ROUND, "args": {}},
     "skip": {"round_id": _ROUND, "args": {}},
     "add_time": {"round_id": _ROUND, "args": {"expected_deadline": 1000}},
     "close": {"round_id": _ROUND, "args": {}},
     "score_draft": {"round_id": _ROUND, "args": {"player_id": _PLAYER, "points": 2}},
     "publish": {"round_id": _ROUND, "args": {}},
+    "track_metadata": {"round_id": _ROUND, "args": {"title": "Example", "artist": "Example"}},
     "undo_publish": {"round_id": _ROUND, "args": {}},
     "adjust": {
         "expected_phase": "IN_GAME",
@@ -288,4 +380,6 @@ HOST_COMMAND_EXAMPLES: Final[Mapping[str, dict[str, Any]]] = {
     "final_validate": {"expected_phase": "FINAL_SCORE_REVIEW", "args": {}},
     "kick": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER}},
     "rename": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER, "nickname": "Yo"}},
+    "participation": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER}},
+    "join_lock": {"expected_phase": "LOBBY", "args": {"locked": True}},
 }

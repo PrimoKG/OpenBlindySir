@@ -23,7 +23,6 @@ def test_no_repeat_within_a_session() -> None:
         r = sc.to_open()
         tracks.append(r.slot.track_ref)
         sc.on_round("close")
-        sc.publish()
     assert len(set(tracks)) == 4
 
 
@@ -31,7 +30,6 @@ def test_pool_exhausted_keeps_round_queued_and_warns() -> None:
     sc = Scenario(rounds=3, tracks=1)
     sc.to_open()
     sc.on_round("close")
-    sc.publish()
     sc.on_round("next")
     r = sc.current()
     assert r.state is RoundState.QUEUED

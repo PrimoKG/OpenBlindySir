@@ -10,6 +10,7 @@ services:
       OPENBLINDYSIR_BRIDGE_SERVER: "${BRIDGE_SERVER:?Set the server HTTPS URL}"
       OPENBLINDYSIR_BRIDGE_SECRET: "${BRIDGE_SECRET:?Set the Bridge secret}"
       OPENBLINDYSIR_BRIDGE_NAME: ${BRIDGE_NAME:-Docker Bridge}
+      OPENBLINDYSIR_BRIDGE_ALLOW_FULL_REVIEW: ${BRIDGE_ALLOW_FULL_REVIEW:-false}
     volumes:
       - type: bind
         source: ${MUSIC_DIR:?Set the music folder}

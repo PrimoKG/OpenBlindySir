@@ -1,6 +1,7 @@
 """Host diagnostics (``GET /api/host/diagnostics``, spec §21) and the event-loop lag monitor.
 
-Never exposes track ids, paths, file names or tags: the JSON is safe for a public issue.
+Never exposes track ids, paths, file names, tags or secrets. Host diagnostics can
+contain nicknames and source names: anonymize them before sharing.
 """
 
 import asyncio
@@ -10,6 +11,7 @@ from collections import deque
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
+from openblindysir_protocol.compatibility import Compatibility
 from openblindysir_protocol.diagnostics import (
     DiagCacheAsset,
     DiagJob,
@@ -18,13 +20,14 @@ from openblindysir_protocol.diagnostics import (
     DiagRound,
     DiagUnvalidated,
 )
-from openblindysir_protocol.enums import AnswerStatus, ConnectionState
+from openblindysir_protocol.enums import AnswerStatus, ConnectionState, GamePhase, HostMode
 from openblindysir_protocol.errors import ErrorCode
 from openblindysir_protocol.version import PROTOCOL_VERSION
 from openblindysir_server import __version__
 from openblindysir_server.auth.cookies import read_token
+from openblindysir_server.game.history import record_bytes
 from openblindysir_server.game.state import IN_FLIGHT_ASSET_STATES
-from openblindysir_server.game.views import bridge_status
+from openblindysir_server.game.views import bridge_details, bridge_status
 from openblindysir_server.logging import get, log_event
 from openblindysir_server.security import error
 from openblindysir_server.state import AppState, app_state
@@ -66,7 +69,7 @@ def _percentile(values: list[float], q: int) -> float | None:
     return statistics.quantiles(values, n=100)[q - 1]
 
 
-def build(state: AppState) -> DiagnosticsResponse:
+def build(state: AppState, *, private_sources: bool = True) -> DiagnosticsResponse:
     runtime = state.runtime
     s = runtime.engine.state
     now = runtime.clock.now().mono_ms
@@ -91,7 +94,13 @@ def build(state: AppState) -> DiagnosticsResponse:
         if p.connection is not ConnectionState.REMOVED
     ]
     jobs = [
-        DiagJob(job_id=a.job_id, asset_state=a.state, stage=a.stage, age_ms=now - a.requested_at)
+        DiagJob(
+            job_id=a.job_id,
+            asset_state=a.state,
+            stage=a.stage,
+            age_ms=now - a.requested_at,
+            bridge_id=a.track_ref.bridge_id,
+        )
         for a in s.assets.values()
         if a.state in IN_FLIGHT_ASSET_STATES
     ]
@@ -139,12 +148,19 @@ def build(state: AppState) -> DiagnosticsResponse:
         uptime_s=(now - state.started_mono) // 1000,
         loop_lag_p99_ms=round(state.lag.p99_ms, 1),
         players=players,
-        bridge=bridge_status(s),
+        bridge=bridge_status(s)
+        if private_sources
+        else bridge_status(s).model_copy(update={"name": None}),
         jobs=jobs,
         cache_used_bytes=runtime.cache.used_bytes,
         cache_cap_bytes=runtime.cache.cap_bytes,
         cache=cache,
         rounds=rounds,
+        compatibility=Compatibility(server_version=__version__),
+        bridges=bridge_details(s) if private_sources else [],
+        persistence_status=s.persistence_status,
+        history_count=len(s.archives),
+        history_bytes=sum(record_bytes(row) for row in s.archives),
     )
 
 
@@ -157,4 +173,8 @@ async def diagnostics(request: Request) -> Response:
         return error(401, ErrorCode.UNAUTHENTICATED)
     if not runtime.engine.is_host(pid):
         return error(403, ErrorCode.NOT_HOST)
-    return JSONResponse(build(state).model_dump(mode="json"))
+    s = runtime.engine.state
+    private_sources = (
+        s.game.phase is not GamePhase.IN_GAME or s.players[pid].host_mode is HostMode.MC
+    )
+    return JSONResponse(build(state, private_sources=private_sources).model_dump(mode="json"))

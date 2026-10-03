@@ -42,6 +42,7 @@ USER 10001:10001
 ENTRYPOINT ["python", "/opt/tools/docker_bridge.py"]
 
 FROM runtime AS app
+RUN mkdir /data && chown 10001:10001 /data
 COPY --from=server-build /workspace/.venv /workspace/.venv
 COPY --from=web-build /web/dist /opt/openblindysir/web
 COPY tools/host_pc.py tools/docker_config.py /opt/tools/

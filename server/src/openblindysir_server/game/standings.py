@@ -1,14 +1,25 @@
 """Standings: competition ranking (1, 1, 3) of the projection of the score journal (§6.7)."""
 
+from openblindysir_protocol.enums import ConnectionState
 from openblindysir_protocol.views import StandingRow
-from openblindysir_server.game.state import SessionState, active_players, is_participant
+from openblindysir_server.game.state import SessionState, is_participant
 
 
 def standings_player_ids(s: SessionState) -> list[str]:
     """Players ranked: not removed, and participants or holders of at least one event."""
     game_id = s.game.game_id
+    participated = {
+        pid
+        for r in s.game.rounds
+        if r.official_start_at is not None
+        for pid in r.participant_ids | set(r.answers)
+    }
     return [
-        p.id for p in active_players(s) if is_participant(p) or s.journal.has_events(game_id, p.id)
+        p.id
+        for p in s.players.values()
+        if p.id in participated
+        or (p.connection is not ConnectionState.REMOVED and is_participant(p))
+        or s.journal.has_events(game_id, p.id)
     ]
 
 

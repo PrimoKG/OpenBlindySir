@@ -28,6 +28,7 @@ export interface EngineSnapshot {
   readonly lateJoinMs: number | null;
   readonly heardConfirmed: boolean;
   readonly volume: number;
+  readonly manualLatencyMs: number;
 }
 
 export class AudioEngine {
@@ -44,6 +45,8 @@ export class AudioEngine {
   private lateJoinMs: number | null = null;
   private heardConfirmed = false;
   private volume: number;
+  private manualLatencyMs: number;
+  private appliedLatencyMs = 0;
   private lastView: AnyView | null = null;
   private listeners = new Set<() => void>();
   private snapshot: EngineSnapshot;
@@ -54,6 +57,8 @@ export class AudioEngine {
   ) {
     const stored = Number(readLocal("volume"));
     this.volume = Number.isFinite(stored) && readLocal("volume") !== null ? stored : 0.8;
+    const latency = Number(readLocal("manualLatencyMs"));
+    this.manualLatencyMs = Number.isFinite(latency) ? Math.min(500, Math.max(-500, latency)) : 0;
     this.snapshot = this.makeSnapshot();
   }
 
@@ -70,6 +75,7 @@ export class AudioEngine {
       lateJoinMs: this.lateJoinMs,
       heardConfirmed: this.heardConfirmed,
       volume: this.volume,
+      manualLatencyMs: this.manualLatencyMs,
     };
   }
 
@@ -168,6 +174,13 @@ export class AudioEngine {
     this.changed();
   }
 
+  setManualLatency(value: number): void {
+    if (!Number.isFinite(value)) return;
+    this.manualLatencyMs = Math.round(Math.min(500, Math.max(-500, value)));
+    writeLocal("manualLatencyMs", String(this.manualLatencyMs));
+    this.changed();
+  }
+
   // --- clips ----------------------------------------------------------------------------
 
   /** Download what the view offers (never N+1 during our own playback) and late-start. */
@@ -175,6 +188,13 @@ export class AudioEngine {
     this.lastView = view;
     if (!this.unlocked) {
       return;
+    }
+    if (view.paused && !view.paused.resume_at && this.scheduledPlayId) {
+      this.stop(this.scheduledPlayId, view.paused.paused_at);
+    }
+    if (!view.play && !view.paused && this.playing) {
+      this.stopSource();
+      this.playing = false;
     }
     const keep = new Set<string>();
     for (const ref of [view.audio.current, view.audio.next]) {
@@ -254,7 +274,8 @@ export class AudioEngine {
     }
     this.stopSource();
     const estimate = this.clock.estimate();
-    const tLocal = serverToLocal(msg.start_at, estimate?.offset ?? 0);
+    this.appliedLatencyMs = this.manualLatencyMs;
+    const tLocal = serverToLocal(msg.start_at, estimate?.offset ?? 0, this.appliedLatencyMs);
     const timestamp =
       typeof ctx.getOutputTimestamp === "function" ? ctx.getOutputTimestamp() : null;
     const T = contextTimeForLocal(tLocal, {
@@ -297,8 +318,35 @@ export class AudioEngine {
     return plan;
   }
 
-  stop(playId: string): void {
+  stop(playId: string, at?: number | null): void {
     if (playId === this.scheduledPlayId) {
+      if (at != null && (!this.source || !this.ctx)) return;
+      if (at != null && this.source && this.ctx) {
+        const local = serverToLocal(at, this.clock.estimate()?.offset ?? 0, this.appliedLatencyMs);
+        const timestamp =
+          typeof this.ctx.getOutputTimestamp === "function" ? this.ctx.getOutputTimestamp() : null;
+        const when = Math.max(
+          this.ctx.currentTime,
+          contextTimeForLocal(local, {
+            ts:
+              timestamp &&
+              timestamp.contextTime !== undefined &&
+              timestamp.performanceTime !== undefined
+                ? { contextTime: timestamp.contextTime, performanceTime: timestamp.performanceTime }
+                : null,
+            currentTime: this.ctx.currentTime,
+            perfNow: performance.now(),
+            outputLatency: this.ctx.outputLatency,
+            baseLatency: this.ctx.baseLatency,
+          }),
+        );
+        try {
+          this.source.stop(when);
+        } catch {
+          /* already stopped */
+        }
+        return;
+      }
       this.stopSource();
       this.playing = false;
       this.setState(this.unlocked ? "IDLE" : "LOCKED", null);
@@ -328,6 +376,7 @@ export class AudioEngine {
       epsilon: estimate?.epsilon ?? null,
       state: this.state,
       lateJoinMs: this.lateJoinMs,
+      manualLatencyMs: this.manualLatencyMs,
     };
   }
 }

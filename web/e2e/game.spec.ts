@@ -29,8 +29,19 @@ async function resetRoom(page: Page): Promise<void> {
   await page.goto("/host");
   await endTestSession(page);
 }
-test.beforeEach(async ({ page }) => resetRoom(page));
-test.afterEach(async ({ page }) => resetRoom(page));
+test.beforeEach(async ({ page, browserName }) => {
+  if (browserName === "webkit") {
+    await page.goto("/");
+    test.skip(
+      await page.evaluate(() => typeof AudioContext === "undefined"),
+      "This WebKit build has no Web Audio support; verify full games on Safari separately.",
+    );
+  }
+  await resetRoom(page);
+});
+test.afterEach(async ({ page }) => {
+  if (test.info().status !== "skipped") await resetRoom(page);
+});
 
 // Anything that would spoil a round before REVEALED (demo library names, catalogue keys).
 const SPOILERS = [
@@ -99,7 +110,13 @@ async function capture(page: Page, info: TestInfo, name: string): Promise<void> 
 async function answer(page: Page, text: string): Promise<void> {
   await page.getByLabel("Ta réponse").fill(text);
   await page.getByRole("button", { name: "VALIDER" }).click();
-  await expect(page.getByText("✓ Réponse enregistrée")).toBeVisible();
+  await expect(
+    page
+      .getByText("✓ Réponse enregistrée")
+      .or(page.getByText(`Ta réponse : ${text}`, { exact: true }))
+      .or(page.locator(".review").getByText(text, { exact: true }))
+      .or(page.getByRole("heading", { name: "REVUE DE FIN DE PARTIE", exact: true })),
+  ).toBeVisible();
 }
 
 function reviewRow(host: Page, name: string): Locator {
@@ -116,15 +133,9 @@ function framesSince(s: Seat, from: number): string {
   return s.frames.slice(from).join("\n");
 }
 
-async function playRound(
-  host: Seat,
-  alice: Seat,
-  bob: Seat,
-  n: number,
-  points: Record<string, number>,
-): Promise<void> {
+async function playRound(host: Seat, alice: Seat, bob: Seat, n: number): Promise<void> {
   const start = { alice: alice.frames.length, bob: bob.frames.length };
-  await expect(alice.page.getByText(`ROUND ${n} / 2`)).toBeVisible({ timeout: 90_000 });
+  await expect(alice.page.getByText(`MANCHE ${n} / 2`)).toBeVisible({ timeout: 90_000 });
   await expect(alice.page.getByLabel("Ta réponse")).toBeVisible({ timeout: 90_000 });
 
   // VALIDER: confirmation without any time; the anonymous counter n/m for the others.
@@ -133,6 +144,18 @@ async function playRound(
   const counter = bob.page.getByText("1/3 ont validé");
   await expect(counter).toBeVisible();
   await expect(counter).not.toContainText("Alice");
+
+  if (n === 1) {
+    await host.page.getByRole("button", { name: "Mettre en pause", exact: true }).click();
+    await expect(bob.page.locator(".answer-deadline")).toContainText("Manche en pause");
+    await expect(bob.page.getByLabel("Ta réponse", { exact: true })).toBeDisabled();
+    await bob.page.waitForTimeout(700);
+    await expect(bob.page.locator(".answer-deadline")).toContainText(
+      "Son et temps de réponse suspendus",
+    );
+    await host.page.getByRole("button", { name: "Reprendre la manche", exact: true }).click();
+    await expect(bob.page.getByLabel("Ta réponse", { exact: true })).toBeEnabled();
+  }
 
   if (n === 2) {
     // Reconnection: Bob's draft survives a reload (same session cookie, same identity).
@@ -148,19 +171,17 @@ async function playRound(
   }
   await answer(host.page, `rep-H-${n}`);
 
-  // REVIEW: the player sees only their own answer; the host sees every row and scores.
-  await expect(alice.page.getByText("L'hôte note les réponses…")).toBeVisible({ timeout: 60_000 });
-  await expect(alice.page.getByText(`Ta réponse : rep-A-${n}`)).toBeVisible();
-  for (const other of [`rep-B-${n}`, `rep-H-${n}`]) {
+  // Closed rounds preserve each player's own answer; all scoring waits for global review.
+  if (n === 1) {
+    await expect(alice.page.getByText("Réponses conservées.")).toBeVisible({ timeout: 60_000 });
+    await expect(alice.page.getByText(`Ta réponse : rep-A-${n}`)).toBeVisible();
+  } else
+    await expect(alice.page.getByText("L'hôte vérifie les scores…")).toBeVisible({
+      timeout: 60_000,
+    });
+  for (const other of [`rep-B-${n}`, `rep-H-${n}`])
     await expect(alice.page.locator("body")).not.toContainText(other);
-  }
   await expect(alice.page.locator("main")).not.toContainText(TIME);
-  for (const name of ["Alice", "Bob", "Hote"]) {
-    await expect(reviewRow(host.page, name)).toContainText(TIME);
-  }
-  for (const [name, pts] of Object.entries(points)) {
-    await score(host.page, name, pts);
-  }
 
   // Nothing in the WebSocket traffic of a player spoils the round before REVEALED.
   for (const [s, from, others] of [
@@ -181,16 +202,6 @@ async function playRound(
     const reports = sent.filter((m) => m.t === "PLAYBACK_REPORT") as { late_ms?: number }[];
     expect(reports.length).toBeGreaterThanOrEqual(n);
     expect(reports.every((r) => (r.late_ms ?? 0) < 60_000)).toBe(true);
-  }
-
-  await host.page.getByRole("button", { name: "Publier" }).click();
-  // Reveal: everybody sees the track, every answer, the times and the points.
-  for (const s of [alice, bob]) {
-    await expect(s.page.getByText("C'était…")).toBeVisible();
-    for (const text of [`rep-A-${n}`, `rep-B-${n}`, `rep-H-${n}`]) {
-      await expect(s.page.locator("table")).toContainText(text);
-    }
-    await expect(s.page.locator("table")).toContainText(TIME);
   }
 }
 
@@ -220,28 +231,69 @@ for (const viewport of [
       timeout: 90_000,
     });
     await h.locator(".tree input[type=checkbox]").first().check();
-    await h.getByLabel("Nombre de rounds").fill("2");
+    await h.getByLabel("Nombre de manches").fill("2");
     await h.getByLabel("Durée des extraits (s)").fill("8");
     await h.getByText("Réglages avancés", { exact: true }).click();
-    const grace = h.getByLabel("Délai de grâce (s)");
+    const grace = h.getByLabel("Temps pour répondre après l’extrait (s)");
     await grace.fill((await grace.inputValue()) === "20" ? "21" : "20");
-    await expect(h.getByRole("button", { name: "Lancer la partie" })).toBeDisabled();
-    await h.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(h.getByRole("button", { name: "Enregistrer et lancer" })).toBeEnabled();
+    await h.getByRole("button", { name: "Enregistrer", exact: true }).click();
     const startButton = h.getByRole("button", { name: "Lancer la partie" });
     await expect(startButton).toBeEnabled();
     await startButton.click();
     await expect(alice.page.locator(".countdown")).toBeVisible({ timeout: 90_000 });
 
-    await playRound(host, alice, bob, 1, { Alice: 2, Bob: 1 });
+    await playRound(host, alice, bob, 1);
     await capture(alice.page, info, "player-reveal");
-    await h.getByRole("button", { name: "Suivant" }).click();
-    await playRound(host, alice, bob, 2, { Alice: 1, Hote: 3 });
-    await h.getByRole("button", { name: "Vérification finale" }).click();
+    await h.getByRole("button", { name: "Manche suivante" }).click();
+    await playRound(host, alice, bob, 2);
+    await expect(
+      h.getByRole("heading", { name: "REVUE DE FIN DE PARTIE", exact: true }),
+    ).toBeVisible();
+    const replayRequests: string[] = [];
+    h.on("request", (request) => {
+      if (request.url().includes("/api/host/review/") && request.url().includes("/audio"))
+        replayRequests.push(request.url());
+    });
+    const playerPlays = alice.frames.filter((raw) => JSON.parse(raw).t === "PLAY").length;
+    const privatePlayer = h.getByRole("region", { name: "Réécoute privée" });
+    expect(replayRequests).toHaveLength(0);
+    await privatePlayer.getByRole("button", { name: "Écouter", exact: true }).click();
+    await expect(privatePlayer.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await privatePlayer.getByRole("button", { name: "Pause", exact: true }).click();
+    await privatePlayer.getByRole("button", { name: "Écouter le morceau complet" }).click();
+    await expect(privatePlayer.getByText("Morceau complet", { exact: true })).toBeVisible();
+    await expect(privatePlayer.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await privatePlayer.getByRole("button", { name: "Revenir à l’extrait" }).click();
+    await expect(privatePlayer.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await privatePlayer.getByRole("button", { name: "Pause", exact: true }).click();
+    expect(replayRequests.some((url) => new URL(url).searchParams.get("mode") === "full")).toBe(
+      true,
+    );
+    expect(alice.frames.filter((raw) => JSON.parse(raw).t === "PLAY")).toHaveLength(playerPlays);
+    await expect(privatePlayer.getByRole("alert")).toHaveCount(0);
+    for (const [number, points] of [
+      [1, { Alice: 2, Bob: 1, Hote: 0 }],
+      [2, { Alice: 1, Bob: 0, Hote: 3 }],
+    ] as const) {
+      await h
+        .locator(".review-navigation")
+        .getByRole("button", { name: new RegExp(`^${number}\\.`) })
+        .click();
+      for (const [name, value] of Object.entries(points)) {
+        if (value) await score(h, name, value);
+        else {
+          const zero = reviewRow(h, name).getByRole("button", { name: "0", exact: true });
+          await zero.click();
+          await expect(zero).toHaveAttribute("aria-pressed", "true");
+        }
+      }
+    }
 
     // Final review: Bob +2, the host corrects themself −1; players never see the draft.
     const review = h.locator(".final-review");
-    const bobRow = review.locator("tr", { hasText: "Bob" });
-    const hostRow = review.locator("tr", { hasText: "Hote" });
+    const bobRow = review.locator(".final-table tr", { hasText: "Bob" });
+    const hostRow = review.locator(".final-table tr", { hasText: "Hote" });
     await bobRow.getByRole("button", { name: "Ajouter un point à Bob", exact: true }).click();
     await expect(bobRow).toContainText("1 → +1 → 2");
     await bobRow.getByRole("button", { name: "Ajouter un point à Bob", exact: true }).click();
@@ -249,14 +301,12 @@ for (const viewport of [
     await hostRow.getByRole("button", { name: "Retirer un point à Hote", exact: true }).click();
     await expect(hostRow).toContainText("3 → −1 → 2");
     await expect(alice.page.getByText("L'hôte vérifie les scores…")).toBeVisible();
-    await expect(alice.page.locator(".standing-list li", { hasText: "Bob" })).toContainText(
-      "1 pts",
-    );
+    await expect(alice.page.locator(".standings")).toHaveCount(0);
     await expect(alice.page.locator("body")).not.toContainText("+2");
     await capture(h, info, "host-final-review");
     await capture(alice.page, info, "player-final-waiting");
     await h.getByRole("button", { name: "VALIDER LES SCORES ET AFFICHER LES RÉSULTATS" }).click();
-    await expect(h.getByText("2 corrections")).toBeVisible();
+    await expect(h.getByText("2 correction(s)")).toBeVisible();
     await h.getByRole("button", { name: "Confirmer" }).click();
 
     // Results: podium, scores and the final adjustments, for everybody.
@@ -276,7 +326,7 @@ for (const viewport of [
       await expect(podium.locator("li", { hasText: "Hote" }).locator(".podium-rank")).toHaveText(
         "3.",
       );
-      await expect(page.getByText("2 rounds joués")).toBeVisible();
+      await expect(page.getByText("2 manches jouées", { exact: true })).toBeVisible();
       await expect(page.getByText("ajustement final : Bob +2")).toBeVisible();
       await expect(page.getByText("ajustement final : Hote −1")).toBeVisible();
     }
@@ -312,10 +362,10 @@ test("an MC hosts a round with a captured draft and starts another game", async 
   const h = host.page;
   await openModeOptions(h);
   await h.getByRole("button", { name: "Passer en mode animateur" }).click();
-  await expect(h.getByText("Animateur (MC)", { exact: true })).toBeVisible();
+  await expect(h.getByText("Animateur", { exact: true })).toBeVisible();
   await expect(h.locator(".setup").getByText("✓ Bibliothèque connectée")).toBeVisible();
   await h.locator(".tree input[type=checkbox]").first().check();
-  await h.getByLabel("Nombre de rounds").fill("1");
+  await h.getByLabel("Nombre de manches").fill("1");
   await h.getByLabel("Durée des extraits (s)").fill("8");
   await h.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(h.getByRole("button", { name: "Lancer la partie" })).toBeEnabled();
@@ -334,19 +384,21 @@ test("an MC hosts a round with a captured draft and starts another game", async 
   await expect(bob.page.getByLabel("Ta réponse", { exact: true })).toBeEnabled();
   await capture(h, info, "host-mc-open");
   await h.getByRole("button", { name: "Fermer les réponses" }).click();
-  await expect(reviewRow(h, "ExampleBob")).toContainText("(non validée)");
+  await expect(reviewRow(h, "ExampleBob")).toContainText("Brouillon capturé · non validé");
   await expect(reviewRow(h, "ExampleBob")).toContainText("example-captured-draft");
-  await expect(bob.page.getByText("(non validée)")).toBeVisible();
+  await expect(bob.page.getByText("L'hôte vérifie les scores…")).toBeVisible();
   await expect(alice.page.locator("body")).not.toContainText("example-captured-draft");
   await score(h, "ExampleAlice", 2);
   await score(h, "ExampleBob", 1);
   await capture(h, info, "host-mc-review");
-  await h.getByRole("button", { name: "Publier", exact: true }).click();
-  await expect(bob.page.locator("table")).toContainText("example-captured-draft");
-  await h.getByRole("button", { name: "Vérification finale", exact: true }).click();
+  await expect(bob.page.locator("body")).not.toContainText("example-mc-answer");
   await h.getByRole("button", { name: "VALIDER LES SCORES ET AFFICHER LES RÉSULTATS" }).click();
   await h.getByRole("button", { name: "Confirmer", exact: true }).click();
   await expect(alice.page.getByRole("heading", { name: "Résultats", exact: true })).toBeVisible();
+  await bob.page.locator(".recap summary").filter({ hasText: "ExampleBob" }).click();
+  await expect(bob.page.locator(".recap details").filter({ hasText: "ExampleBob" })).toContainText(
+    "example-captured-draft",
+  );
   await h.getByRole("button", { name: "Nouvelle partie", exact: true }).click();
   await expect(h.getByRole("heading", { name: "Tout le monde s’installe." })).toBeVisible();
   await expect(
@@ -372,7 +424,7 @@ async function endTestSession(page: Page): Promise<void> {
     );
     await new Promise<void>((resolve) => {
       ws.onopen = () =>
-        ws.send(JSON.stringify({ t: "HELLO", client_version: "0.1.0", protocol: 1 }));
+        ws.send(JSON.stringify({ t: "HELLO", client_version: "0.3.0", protocol: 5 }));
       ws.onmessage = (event) => {
         const msg = JSON.parse(String(event.data));
         if (msg.t === "STATE")

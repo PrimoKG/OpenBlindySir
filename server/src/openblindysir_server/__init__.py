@@ -1,8 +1,5 @@
 """OpenBlindySir Server."""
 
-from importlib.metadata import PackageNotFoundError, version
+from openblindysir_server._version import __version__
 
-try:
-    __version__ = version("openblindysir-server")
-except PackageNotFoundError:  # pragma: no cover - running from a source tree without install
-    __version__ = "0.0.0"
+__all__ = ["__version__"]
