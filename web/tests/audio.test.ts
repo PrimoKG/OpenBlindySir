@@ -54,8 +54,8 @@ describe("scheduling (spec §9.5)", () => {
   it("uses getOutputTimestamp when available", () => {
     const T = contextTimeForLocal(2_000, {
       ts: { contextTime: 10, performanceTime: 1_000 },
-      currentTime: 99,
-      perfNow: 99,
+      currentTime: 10.02,
+      perfNow: 1_000,
     });
     expect(T).toBeCloseTo(11);
   });
@@ -68,6 +68,37 @@ describe("scheduling (spec §9.5)", () => {
       outputLatency: 0.02,
     });
     expect(T).toBeCloseTo(10.98);
+  });
+
+  it.each([
+    { contextTime: 10, performanceTime: 11_000 },
+    { contextTime: Number.NaN, performanceTime: 1_000 },
+    { contextTime: -1, performanceTime: 1_000 },
+    { contextTime: 10, performanceTime: Number.POSITIVE_INFINITY },
+    { contextTime: 10, performanceTime: 0 },
+  ])("ignores an invalid output timestamp: %j", (ts) => {
+    expect(
+      contextTimeForLocal(2_000, {
+        ts,
+        currentTime: 10,
+        perfNow: 1_000,
+        outputLatency: 0.02,
+      }),
+    ).toBeCloseTo(10.98);
+  });
+
+  it("keeps later rounds scheduled when WebKit adds context age to performanceTime", () => {
+    // Values captured on Linux WebKit: the old mapping classifies this fresh
+    // eight-second clip as entirely missed. The fallback schedules it normally.
+    const T = contextTimeForLocal(20_500, {
+      ts: { contextTime: 17.142, performanceTime: 34_659 },
+      currentTime: 17.145,
+      perfNow: 17_518,
+      outputLatency: 0,
+    });
+    const plan = planStart(T, 17.145, 0, 8);
+    expect(plan.kind).toBe("scheduled");
+    expect(T).toBeCloseTo(20.127);
   });
 
   it("schedules a future start and catches up a past one", () => {

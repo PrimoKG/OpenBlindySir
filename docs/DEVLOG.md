@@ -1542,3 +1542,28 @@ réussis. Deux exécutions Playwright partageaient initialement leur dossier de
 traces ; la vérification affectée a été relancée séquentiellement avec des dossiers
 distincts et réussit. Les parties audio WebKit Linux et les variantes macOS sont
 vérifiées par GitHub Actions ; le WebKit Windows local ne fournit pas Web Audio.
+
+## 2026-10-04 — Horloge audio WebKit : ne plus sauter les manches suivantes
+
+Le run `37159420906` confirme **25 jobs réussis**, dont Docker, les six variantes
+CLI macOS et les intégrations, ainsi que **84 scénarios navigateur réussis**.
+Les deux parties WebKit complètes atteignent désormais la deuxième manche mais
+échouent sur son rapport de lecture. Une reproduction dans une image Linux
+Playwright isolée, avec une bibliothèque synthétique et instrumentation temporaire,
+identifie un défaut réel : `getOutputTimestamp().performanceTime` est parfois
+supérieur à `performance.now()` d'une durée correspondant à l'âge de l'AudioContext.
+Exemple mesuré : 34 659 ms contre 17 518 ms. La conversion transforme alors une
+nouvelle lecture en extrait déjà terminé et le moteur ne la démarre pas.
+
+`contextTimeForLocal` écarte les timestamps non finis, négatifs, non initialisés
+ou excessivement futurs (20 ms de marge pour l'arrondi), et reprend dans ce cas
+la conversion existante par `currentTime`, `performance.now()` et la latence de
+sortie. Les timestamps cohérents gardent leur conversion précise habituelle.
+La même fonction corrige aussi la programmation des pauses. Aucun protocole,
+barème, mécanisme d'autorisation ou délai serveur n'est modifié.
+
+Validation : **38 tests Vitest réussis**, dont six nouvelles régressions et une
+reproduction des valeurs réellement mesurées ; Biome, TypeScript et build réussis.
+**3 parties complètes WebKit Linux réussies**, sans exclusion audio (1280/320 px,
+MC, pause/reprise et reconnexion). Le banc de test Docker et les traces restent
+hors Git. Ce contrôle headless ne remplace pas une validation acoustique Safari/iOS.

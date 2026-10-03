@@ -11,7 +11,17 @@ export interface TimeSource {
 
 /** AudioContext time (seconds) matching a local performance.now() instant (ms). */
 export function contextTimeForLocal(tLocal: number, src: TimeSource): number {
-  if (src.ts && src.ts.performanceTime > 0) {
+  // Some WebKit builds return performanceTime ahead of performance.now() by
+  // the context's entire age. That invalid mapping eventually skips whole clips.
+  // Allow small clock rounding differences, otherwise use the latency fallback.
+  if (
+    src.ts &&
+    Number.isFinite(src.ts.contextTime) &&
+    src.ts.contextTime >= 0 &&
+    Number.isFinite(src.ts.performanceTime) &&
+    src.ts.performanceTime > 0 &&
+    src.ts.performanceTime <= src.perfNow + 20
+  ) {
     return src.ts.contextTime + (tLocal - src.ts.performanceTime) / 1000;
   }
   const latency = src.outputLatency ?? src.baseLatency ?? 0;
