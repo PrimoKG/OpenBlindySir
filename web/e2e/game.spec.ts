@@ -20,7 +20,8 @@ async function resetRoom(page: Page): Promise<void> {
     headers: { Origin: origin },
     data: { password: BLIND, nickname: `ExampleReset${Date.now().toString(36)}` },
   });
-  expect(joined.ok()).toBe(true);
+  if (joined.status() === 409) expect(await joined.json()).toEqual({ error: "already_joined" });
+  else expect(joined.ok()).toBe(true);
   const elevated = await page.request.post("/api/session/host", {
     headers: { Origin: origin },
     data: { host_password: HOST },
@@ -80,6 +81,8 @@ async function seat(
   await page.getByLabel("Mot de passe de la partie").fill(BLIND);
   await page.getByLabel("Pseudo").fill(nickname);
   await page.getByRole("button", { name: "Entrer" }).click();
+  // Navigation can cancel the join fetch before WebKit installs the session cookie.
+  await expect(page.getByRole("button", { name: "Tester mon audio", exact: true })).toBeVisible();
   if (host) {
     await page.goto("/host");
     await page.getByLabel("Mot de passe hôte").fill(HOST);
@@ -153,7 +156,9 @@ async function playRound(host: Seat, alice: Seat, bob: Seat, n: number): Promise
 
   // VALIDER: confirmation without any time; the anonymous counter n/m for the others.
   await answer(alice.page, `rep-A-${n}`);
-  await expect(alice.page.locator("main")).not.toContainText(TIME);
+  // Catch-up audio can legitimately display seconds. Only answer timings are private.
+  await expect(alice.page.locator(".answer-saved")).not.toContainText(TIME);
+  await expect(alice.page.locator(".answer-time")).toHaveCount(0);
   const counter = bob.page.getByText("1/3 ont validé");
   await expect(counter).toBeVisible();
   await expect(counter).not.toContainText("Alice");
@@ -194,7 +199,7 @@ async function playRound(host: Seat, alice: Seat, bob: Seat, n: number): Promise
     });
   for (const other of [`rep-B-${n}`, `rep-H-${n}`])
     await expect(alice.page.locator("body")).not.toContainText(other);
-  await expect(alice.page.locator("main")).not.toContainText(TIME);
+  await expect(alice.page.locator(".answer-time")).toHaveCount(0);
 
   // Nothing in the WebSocket traffic of a player spoils the round before REVEALED.
   for (const [s, from, others] of [

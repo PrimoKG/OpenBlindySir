@@ -70,7 +70,9 @@ def validate_profiles(env_file: Path, ca_file: Path) -> None:
             v for v in individual["volumes"] if v["target"] == "/credentials/issued.toml"
         )
         assert credential["read_only"]
-        assert credential["bind"]["create_host_path"] is False
+        # Older Compose-Go serializers omit bool false; newer ones retain it.
+        # True must still fail: credentials must never create a missing host path.
+        assert credential["bind"].get("create_host_path", False) is False
         assert individual["read_only"]
         assert individual["cap_drop"] == ["ALL"]
         assert "no-new-privileges:true" in individual["security_opt"]

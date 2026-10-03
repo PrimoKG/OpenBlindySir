@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from openblindysir_bridge.catalog import LocalCatalog
-from openblindysir_bridge.scanner import scan
+from openblindysir_bridge.scanner import LocalEntry, ScanResult, scan
 from openblindysir_bridge.sources import scan_sources
 
 
@@ -49,12 +49,40 @@ def test_inaccessible_folder_preserves_the_callers_previous_catalog(tmp_path: Pa
 def test_nfc_collisions_are_both_excluded_instead_of_selecting_an_arbitrary_file(
     tmp_path: Path,
 ) -> None:
-    (tmp_path / "é.mp3").write_bytes(b"one")
-    (tmp_path / "e\u0301.mp3").write_bytes(b"two")
-    catalog = LocalCatalog.from_scan(scan(tmp_path))
+    # APFS may alias NFC/NFD spellings. Exercise two distinct scanner entries on
+    # every platform rather than accidentally overwriting the first file on macOS.
+    result = ScanResult(
+        root_real=str(tmp_path.resolve()),
+        entries=(
+            LocalEntry("é.mp3", ("é.mp3",), 3, 1),
+            LocalEntry("é.mp3", ("e\u0301.mp3",), 3, 2),
+        ),
+        skipped_links=0,
+        skipped_hidden=0,
+        skipped_errors=0,
+        duration_s=0,
+    )
+    catalog = LocalCatalog.from_scan(result)
     assert catalog.entries == {}
     assert catalog.ambiguous_paths == ("é.mp3",)
     assert catalog.dropped == 2
+
+
+def test_scanned_unicode_spellings_follow_the_filesystem_identity(tmp_path: Path) -> None:
+    (tmp_path / "é.mp3").write_bytes(b"one")
+    (tmp_path / "e\u0301.mp3").write_bytes(b"two")
+    result = scan(tmp_path)
+    assert all(entry.relpath == "é.mp3" for entry in result.entries)
+    catalog = LocalCatalog.from_scan(result)
+    if len(list(tmp_path.iterdir())) == 1:
+        assert len(catalog.entries) == 1
+        assert catalog.ambiguous_paths == ()
+        assert catalog.dropped == 0
+    else:
+        assert len(result.entries) == 2
+        assert catalog.entries == {}
+        assert catalog.ambiguous_paths == ("é.mp3",)
+        assert catalog.dropped == 2
 
 
 @pytest.mark.windows
