@@ -1567,3 +1567,24 @@ reproduction des valeurs réellement mesurées ; Biome, TypeScript et build réu
 **3 parties complètes WebKit Linux réussies**, sans exclusion audio (1280/320 px,
 MC, pause/reprise et reconnexion). Le banc de test Docker et les traces restent
 hors Git. Ce contrôle headless ne remplace pas une validation acoustique Safari/iOS.
+
+## 2026-10-04 — Nettoyage E2E confirmé, sans concurrence entre sockets
+
+Le run `37160403551` est vert : **26 jobs réussis**. La suite navigateur compte
+85 réussites directes et une réussite après relance, sur l'initialisation du lobby
+WebKit mobile. Le helper de nettoyage naviguait vers l'application hôte puis
+ouvrait sa propre socket : une connexion applicative arrivant plus tard pouvait
+supplanter celle du helper, dont toute fermeture était interprétée comme un reset.
+
+Le helper quitte désormais l'application pour `/healthz`, puis utilise une seule
+socket. Seule une fermeture `SESSION_ENDED` (4004) confirme le reset ; les erreurs
+et autres fermetures échouent explicitement. Il vérifie aussi que `/api/session`
+renvoie 401 avant de créer les identités du test suivant. Les règles applicatives
+et les tentatives de relance configurées pour la CI restent inchangées.
+
+Validation : **6 parties WebKit Linux réussies sans relance**, chaque parcours
+(1280 px, 320 px et MC) étant exécuté deux fois ; **1 partie Chromium 1280 px
+réussie**, Biome et vérification du diff réussis. Le déploiement Docker précédent
+inclut les corrections d'affichage et d'horloge : santé, HTTPS, session, identités,
+réglages, archives, métadonnées et les deux montages musicaux vérifiés conservés.
+Cette dernière modification concerne uniquement le banc de test et le journal.
