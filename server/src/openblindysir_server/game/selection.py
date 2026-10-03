@@ -145,7 +145,8 @@ def pool_status(s: SessionState) -> PoolStatus:
     tracks = pool(s)
     size = len(tracks)
     fresh = sum(t not in s.played for t in tracks)
-    reserved = sum(slot.track_ref is not None for slot in live_slots(s)) + len(s.game.manual_tracks)
+    reserved_refs = {slot.track_ref for slot in live_slots(s)} | set(s.game.manual_tracks.values())
+    reserved = len((reserved_refs - {None}) - s.played)
     if s.game.phase is GamePhase.IN_GAME:
         remaining = len(s.game.queue) + len(s.game.manual_tracks)
     else:

@@ -46,7 +46,7 @@ body {
   transform: none;
 }
 .bridge-card {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 :focus-visible {
   outline: 3px solid #184f8c;
@@ -110,7 +110,7 @@ li,
 td,
 th,
 strong {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .stack {
   display: flex;
@@ -355,7 +355,7 @@ strong {
 }
 .identity {
   max-width: 170px;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .host-jump {
   display: none;
@@ -703,7 +703,7 @@ progress::-moz-progress-bar {
 }
 .own-answer {
   font-size: 1.1rem;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .answer-progress {
   text-align: center;
@@ -771,7 +771,7 @@ progress::-moz-progress-bar {
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: middle;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .table th {
   color: var(--muted);
@@ -932,7 +932,7 @@ summary {
   cursor: pointer;
   padding: 0.5rem 0;
   font-weight: 550;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .disclosure {
   border-top: 1px solid var(--border);
@@ -1573,7 +1573,7 @@ textarea:focus-visible {
   padding: 0.8rem 0;
 }
 .history-answer {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   margin-top: 0.4rem;
 }
 .history-meta {
@@ -1662,7 +1662,7 @@ textarea:focus-visible {
 .library-results li {
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--border);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .language-choice select {
   min-height: 44px;
@@ -1701,6 +1701,171 @@ textarea:focus-visible {
     margin-top: 0;
   }
   .final-table .history-details {
+    min-width: 0;
+  }
+}
+
+/* Compact stage and explicit modal workflows. */
+section[hidden],
+label[hidden] {
+  display: none;
+}
+.with-host .game-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.host-console {
+  order: -1;
+  min-width: 0;
+}
+.host-toolbar {
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.host-toolbar .btn {
+  min-height: 44px;
+}
+.workspace-modal {
+  width: min(960px, calc(100vw - 2rem));
+  max-width: none;
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+}
+.modal-heading {
+  position: sticky;
+  top: -1.5rem;
+  background: var(--surface);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.modal-heading h2 {
+  margin: 0;
+}
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.4rem 0;
+}
+.tabs [role="tab"] {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.tabs [aria-selected="true"] {
+  border: 2px solid var(--accent);
+  font-weight: 700;
+}
+.setup-footer {
+  position: sticky;
+  bottom: -1.5rem;
+  padding: 1rem 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 4;
+}
+.review-navigation {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+}
+.review-navigation ul {
+  list-style: none;
+  padding: 0;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+.review-navigation .btn {
+  width: 100%;
+  text-align: left;
+}
+.review .score-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+.criterion {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.criterion > span {
+  flex: 1 1 100%;
+}
+.review th,
+.final-table th {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.final-review > .row:last-of-type {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  padding: 0.8rem;
+  z-index: 4;
+}
+.library-tracks li {
+  padding: 0.6rem;
+}
+.library-tracks p {
+  margin: 0.2rem 0;
+}
+.library-tracks strong,
+.track-artist,
+.diag {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .workspace-modal {
+    width: calc(100vw - 1rem);
+    padding: 0.8rem;
+  }
+  .modal-heading {
+    top: -0.8rem;
+  }
+  .setup-footer {
+    bottom: -0.8rem;
+  }
+  .review-navigation {
+    position: static;
+  }
+  .review-navigation ul {
+    max-height: 12rem;
+  }
+}
+
+.game-layout > .player-stage {
+  min-width: 0;
+  width: 100%;
+}
+.player-stage input,
+.player-stage select {
+  max-width: 100%;
+  min-width: 0;
+}
+.host-console fieldset,
+.workspace-modal fieldset {
+  min-width: 0;
+}
+.workspace-modal .row {
+  flex-wrap: wrap;
+}
+.review .score-cell {
+  min-width: 15rem;
+}
+@media (max-width: 760px) {
+  .review .score-cell {
     min-width: 0;
   }
 }

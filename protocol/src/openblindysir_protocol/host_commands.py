@@ -74,6 +74,11 @@ class AddTimeArgs(InboundModel):
 class ScoreDraftArgs(InboundModel):
     player_id: PlayerId
     points: Points
+    judgement: Literal["manual", "criteria"] = "manual"
+    title_correct: bool | None = None
+    artist_correct: bool | None = None
+    custom_correct: bool | None = None
+    expected_revision: Annotated[int, Field(ge=0)] | None = None
 
 
 class AdjustArgs(InboundModel):
@@ -87,6 +92,13 @@ class AdjustArgs(InboundModel):
 class FinalSetArgs(InboundModel):
     player_id: PlayerId
     delta: Points
+    note: NoteText | None = None
+    expected_delta: Points | None = None
+    expected_note: NoteText | None = None
+
+
+class NewGameArgs(InboundModel):
+    reset_library: bool = False
 
 
 class PlayerArgs(InboundModel):
@@ -142,7 +154,7 @@ class HostStartGame(_Host):
 class HostNewGame(_Host):
     cmd: Literal["new_game"]
     expected_phase: Literal[GamePhase.FINAL_RESULTS]
-    args: EmptyArgs
+    args: NewGameArgs
 
 
 class HostEndGame(_Host):

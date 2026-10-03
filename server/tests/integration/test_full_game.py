@@ -15,7 +15,7 @@ def test_full_game_with_ten_bots(stack: Stack) -> None:
     assert final["rounds_played"] == 2
     assert len(final["standings"]) == 11
     assert final["final_adjustments"] == [
-        {"player_id": final["final_adjustments"][0]["player_id"], "delta": 1}
+        {"player_id": final["final_adjustments"][0]["player_id"], "delta": 1, "note": None}
     ]
     for nickname, acks in result["acks"].items():
         assert acks == ["accepted", "accepted"], nickname

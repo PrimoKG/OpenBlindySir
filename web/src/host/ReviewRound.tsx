@@ -20,7 +20,8 @@ export function ReviewRound({
 }) {
   const game = useGame();
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
-  const [pending, setPending] = useState<Map<string, number>>(new Map());
+  const [pending, setPending] = useState<Map<string, string>>(new Map());
+  const [markAbsent, setMarkAbsent] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [editTrack, setEditTrack] = useState(false);
   const [trackBusy, setTrackBusy] = useState(false);
@@ -28,41 +29,112 @@ export function ReviewRound({
     setPending((old) => {
       const next = new Map(old);
       for (const row of round.answers)
-        if (row.reviewed && next.get(row.player_id) === row.points_draft)
+        if (
+          next.get(row.player_id) ===
+          JSON.stringify([
+            row.points_draft,
+            row.judgement,
+            row.title_correct,
+            row.artist_correct,
+            row.custom_correct,
+            row.score_revision,
+          ])
+        )
           next.delete(row.player_id);
       return next.size === old.size ? old : next;
     });
   }, [round.answers]);
   useEffect(() => {
-    onBusy(busy.size > 0 || pending.size > 0 || trackBusy);
+    onBusy(busy.size > 0 || pending.size > 0 || trackBusy || markAbsent || saveError);
     return () => onBusy(false);
-  }, [busy, pending, trackBusy, onBusy]);
+  }, [busy, pending, trackBusy, markAbsent, saveError, onBusy]);
   useEffect(() => {
     if (!pending.size) return;
     const timer = window.setTimeout(() => {
       setPending(new Map());
       setSaveError(true);
+      setMarkAbsent(false);
     }, 10000);
     return () => window.clearTimeout(timer);
   }, [pending]);
-  const score = (pid: string, points: number) => {
-    const row = round.answers.find((a) => a.player_id === pid);
-    if (row?.reviewed && row.points_draft === points) return true;
-    const sent = game.send(cmd.scoreDraft(round.round_id, pid, points));
+  const score = (
+    pid: string,
+    points: number,
+    criteria?: Partial<
+      Record<"title_correct" | "artist_correct" | "custom_correct", boolean | null>
+    >,
+  ) => {
+    const row = round.answers.find((answer) => answer.player_id === pid);
+    if (!row) return false;
+    const judgement = criteria ? "criteria" : "manual";
+    const sent = game.send(
+      cmd.scoreDraft(round.round_id, pid, points, {
+        judgement,
+        ...criteria,
+        expected_revision: row.score_revision ?? 0,
+      }),
+    );
     setSaveError(!sent);
-    if (sent) setPending((old) => new Map(old).set(pid, points));
+    if (sent)
+      setPending((old) =>
+        new Map(old).set(
+          pid,
+          JSON.stringify([
+            points,
+            judgement,
+            criteria?.title_correct ?? null,
+            criteria?.artist_correct ?? null,
+            criteria?.custom_correct ?? null,
+            (row.score_revision ?? 0) + 1,
+          ]),
+        ),
+      );
     return sent;
   };
+  const mode = view.rules?.answer_mode ?? "both";
+  const weights = {
+    title_correct: view.rules?.title_points ?? 1,
+    artist_correct: view.rules?.artist_points ?? 1,
+    custom_correct: view.rules?.custom_points ?? 1,
+  };
+  const fields: (keyof typeof weights)[] =
+    mode === "title"
+      ? ["title_correct"]
+      : mode === "artist"
+        ? ["artist_correct"]
+        : mode === "custom"
+          ? ["custom_correct"]
+          : ["title_correct", "artist_correct"];
   const checked = round.answers.filter((row) => row.reviewed).length;
-  const presets = [
-    ...new Set([
-      0,
-      view.rules?.title_points ?? 1,
-      view.rules?.artist_points ?? 1,
-      (view.rules?.title_points ?? 1) + (view.rules?.artist_points ?? 1),
-      3,
-    ]),
-  ].filter((points) => points <= 1000);
+  // Batch absent answers at two commands per second, and wait for each server acknowledgement.
+  useEffect(() => {
+    if (!markAbsent || pending.size || busy.size) return;
+    const absent = round.answers.find((row) => !row.reviewed && row.status === "NONE" && !row.text);
+    if (!absent) {
+      setMarkAbsent(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const sent = game.send(
+        cmd.scoreDraft(round.round_id, absent.player_id, 0, {
+          judgement: "manual",
+          expected_revision: absent.score_revision ?? 0,
+        }),
+      );
+      if (!sent) {
+        setSaveError(true);
+        setMarkAbsent(false);
+        return;
+      }
+      setPending((old) =>
+        new Map(old).set(
+          absent.player_id,
+          JSON.stringify([0, "manual", null, null, null, (absent.score_revision ?? 0) + 1]),
+        ),
+      );
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [markAbsent, pending.size, busy.size, round.answers, round.round_id, game]);
   const markBusy = (id: string, value: boolean) =>
     setBusy((old) => {
       const next = new Set(old);
@@ -76,6 +148,7 @@ export function ReviewRound({
         <p className="eyebrow">{t("ux.privateCorrection")}</p>
         <h1>{round.track?.title ?? round.track?.display_name ?? t("hostui.reviewTitle")}</h1>
         {round.track?.artist && <p className="track-artist">{round.track.artist}</p>}
+        <p className="muted">{t("flow.metadataScope")}</p>
         <Button disabled={trackBusy} onClick={() => setEditTrack(!editTrack)}>
           {t("ux.editTrack")}
         </Button>
@@ -84,7 +157,17 @@ export function ReviewRound({
             .filter(Boolean)
             .join(" · ")}
         </p>
-        {editTrack && <TrackEditor key={round.round_id} round={round} onBusy={setTrackBusy} />}
+        {editTrack && (
+          <TrackEditor
+            key={round.round_id}
+            round={round}
+            onBusy={setTrackBusy}
+            onCancel={() => {
+              setEditTrack(false);
+              setTrackBusy(false);
+            }}
+          />
+        )}
       </div>
       <ReviewAudio key={round.round_id} round={round} />
       {!round.included && <p className="notice">{t("review.cancelled")}</p>}
@@ -100,6 +183,18 @@ export function ReviewRound({
         </span>
       </div>
       <p className="muted">{t("review.privateHint")}</p>
+      <Button
+        disabled={
+          !round.included ||
+          markAbsent ||
+          busy.size > 0 ||
+          pending.size > 0 ||
+          !round.answers.some((row) => !row.reviewed && row.status === "NONE" && !row.text)
+        }
+        onClick={() => setMarkAbsent(true)}
+      >
+        {t("flow.markAbsent")}
+      </Button>
       <table className="table review">
         <caption className="sr-only">{t("hostui.reviewTitle")}</caption>
         <thead>
@@ -131,7 +226,7 @@ export function ReviewRound({
                       ? t("ux.validated")
                       : row.status === "CAPTURED"
                         ? t("ux.captured")
-                        : t("round.noAnswer")}
+                        : ""}
                   </small>
                 </td>
                 <td className="answer-time">
@@ -150,23 +245,78 @@ export function ReviewRound({
                 </td>
                 <td className="score-cell">
                   <div className="score-controls">
-                    {presets.map((points) => (
-                      <button
-                        type="button"
-                        key={points}
-                        className={`btn btn-small ${row.reviewed && row.points_draft === points ? "btn-primary" : "btn-secondary"}`}
-                        aria-pressed={!!row.reviewed && row.points_draft === points}
-                        disabled={
-                          !round.included ||
-                          busy.has(row.player_id) ||
-                          pending.has(row.player_id) ||
-                          (capturedZero && points !== 0)
-                        }
-                        onClick={() => score(row.player_id, points)}
-                      >
-                        {points === 0 ? "0" : formatDelta(points)}
-                      </button>
+                    {fields.map((field) => (
+                      <div key={field} className="criterion row">
+                        <span>
+                          {t(
+                            field === "title_correct"
+                              ? "ux.trackTitle"
+                              : field === "artist_correct"
+                                ? "ux.artist"
+                                : "flow.customCriterion",
+                          )}{" "}
+                          · {weights[field]}
+                        </span>
+                        {[true, false].map((value) => (
+                          <Button
+                            key={String(value)}
+                            aria-pressed={row.judgement === "criteria" && row[field] === value}
+                            kind={
+                              row.judgement === "criteria" && row[field] === value
+                                ? "primary"
+                                : "secondary"
+                            }
+                            disabled={
+                              !round.included ||
+                              busy.has(row.player_id) ||
+                              pending.has(row.player_id) ||
+                              (capturedZero && value)
+                            }
+                            onClick={() => {
+                              const criteria = Object.fromEntries(
+                                fields.map((key) => [
+                                  key,
+                                  key === field
+                                    ? value
+                                    : row.judgement === "criteria"
+                                      ? (row[key] ?? null)
+                                      : null,
+                                ]),
+                              );
+                              const points = fields.reduce(
+                                (sum, key) => sum + (criteria[key] === true ? weights[key] : 0),
+                                0,
+                              );
+                              score(row.player_id, points, criteria);
+                            }}
+                          >
+                            {t(value ? "flow.true" : "flow.false")}
+                          </Button>
+                        ))}
+                      </div>
                     ))}
+                    <div className="row">
+                      {[true, false].map((value) => (
+                        <Button
+                          key={String(value)}
+                          disabled={
+                            !round.included ||
+                            busy.has(row.player_id) ||
+                            pending.has(row.player_id) ||
+                            (capturedZero && value)
+                          }
+                          onClick={() =>
+                            score(
+                              row.player_id,
+                              value ? fields.reduce((sum, key) => sum + weights[key], 0) : 0,
+                              Object.fromEntries(fields.map((key) => [key, value])),
+                            )
+                          }
+                        >
+                          {t(value ? "flow.allGood" : "flow.allWrong")}
+                        </Button>
+                      ))}
+                    </div>
                     <NumericDraft
                       value={row.points_draft}
                       label={t("hostui.pointsFor", { name: nameOf(view, row.player_id) })}
@@ -175,6 +325,9 @@ export function ReviewRound({
                       onCommit={(value) => score(row.player_id, value)}
                     />
                   </div>
+                  {row.reviewed && row.judgement !== "criteria" && (
+                    <small>{t("flow.manual")}</small>
+                  )}
                   <small className="score-preview">
                     {t("ux.scorePreview", {
                       before: row.score_before ?? 0,
@@ -211,7 +364,9 @@ export function ReviewRound({
 function TrackEditor({
   round,
   onBusy,
+  onCancel,
 }: {
+  readonly onCancel: () => void;
   readonly round: ReviewData;
   readonly onBusy: (value: boolean) => void;
 }) {
@@ -252,9 +407,9 @@ function TrackEditor({
     }
   }, [round.metadata_revision, track, pending]);
   useEffect(() => {
-    onBusy(pending !== null);
+    onBusy(pending !== null || key !== actual);
     return () => onBusy(false);
-  }, [pending, onBusy]);
+  }, [pending, key, actual, onBusy]);
   useEffect(() => {
     if (pending === null) return;
     const timer = window.setTimeout(() => {
@@ -309,6 +464,9 @@ function TrackEditor({
         }
       >
         {t(pending !== null ? "ux.saving" : "hostui.save")}
+      </Button>
+      <Button disabled={pending !== null} onClick={onCancel}>
+        {t("hostui.cancel")}
       </Button>
       {saved && key === actual && <p role="status">{t("hostui.saved")}</p>}
       {error && (

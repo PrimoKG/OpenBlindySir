@@ -8,8 +8,8 @@
 >
 > Licence : MIT.
 
-État courant : **V0.5 développement**, logiciel `0.5.0.dev0`, protocole 5
-(plage 5 à 5), snapshot 4, historique 2. Identités/secrets Bridge distincts,
+État courant : **V0.5 développement**, logiciel `0.5.0.dev0`, protocole 6
+(plage 6 à 6), snapshot 5, historique 2. Identités/secrets Bridge distincts,
 archives privées bornées et passe clavier/focus sont implémentés. Les décisions
 et limites opératoires sont détaillées en [V0.5](v0.5.md) / [English](v0.5.en.md)
 et [ADR 0015](adr/0015-v05-private-bridges-history-compatibility.md).
@@ -353,7 +353,12 @@ QUEUED → PREPARING → LOADING → COUNTDOWN → OPEN → REVIEW
 REVIEW est une manche fermée, conservée, permettant next et libérant son slot.
 REVEALED n'arrive qu'à la publication finale. Les manches entendues annulées restent
 CANCELLED. official_start_at ne bouge pas pour une manche entendue ; annuler un
-COUNTDOWN futur retire le départ et ne consomme pas le morceau.
+COUNTDOWN futur retire le départ mais conserve le morceau dans la réserve consommée.
+Une allocation annulée avant lecture consomme également le morceau ; un simple
+préchargement ne le consomme pas. L’enchaînement REVIEW → prochaine manche est
+automatique par défaut après 2 s (minuterie serveur), configurable de 0 à 10 s,
+avec pause/reprise et mode manuel. Les critères titre/artiste/personnalisé sont
+persistés séparément ; une révision par réponse protège les corrections concurrentes.
 
 ### 7.3 Asset
 REQUESTED → ENCODING → UPLOADING → STORED → EVICTED, ou FAILED.

@@ -13,7 +13,7 @@ from pydantic import TypeAdapter
 
 from openblindysir_protocol.client import ClientMessage
 from openblindysir_server.game import commands as c
-from openblindysir_server.game.state import CatalogEntryData
+from openblindysir_server.game.state import CatalogEntryData, Metadata, TrackRef
 from openblindysir_server.library import routes
 
 CLIENT = TypeAdapter(ClientMessage)
@@ -45,6 +45,33 @@ def private_library(h: Harness) -> tuple[str, str, dict]:
     h.runtime.dispatch(c.BridgeConnected(BRIDGE_ID, "PC", "example", body["catalog_hash"], 6))
     h.runtime.dispatch(c.CatalogLoaded(BRIDGE_ID, "PC", body["catalog_hash"], entries))
     return pid, token, body
+
+
+def test_search_sorts_before_paginating_and_searches_session_corrections(harness: Harness) -> None:
+    _, token, body = private_library(harness)
+    headers = harness.cookie(token)
+    root = "/api/host/library/search?sort=filename"
+    full = harness.client.get(root, headers=headers).json()
+    pages = [
+        harness.client.get(f"{root}&limit=2&offset={offset}", headers=headers).json()
+        for offset in range(0, full["total"], 2)
+    ]
+    assert [track for page in pages for track in page["tracks"]] == full["tracks"]
+    names = [track["filename"].casefold() for track in full["tracks"]]
+    assert names == sorted(names)
+    descending = harness.client.get(f"{root}&descending=true", headers=headers).json()
+    assert descending["tracks"] == list(reversed(full["tracks"]))
+    entry = body["entries"][0]
+    harness.runtime.engine.state.metadata[TrackRef(BRIDGE_ID, entry["track_id"])] = Metadata(
+        title="Example corrected title", artist="Example corrected artist"
+    )
+    corrected = harness.client.get(
+        "/api/host/library/search?q=corrected&sort=artist&limit=1", headers=headers
+    ).json()
+    assert corrected["total"] == 1
+    assert corrected["tracks"][0]["title"] == "Example corrected title"
+    assert harness.client.get(f"{root}&limit=101", headers=headers).status_code == 400
+    assert harness.client.get(f"{root}&sort=unknown", headers=headers).status_code == 400
 
 
 def receive(ws: object, kind: str) -> dict:

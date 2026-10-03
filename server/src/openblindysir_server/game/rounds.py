@@ -96,9 +96,11 @@ def stop_play(r: Round, fx: EffectSink) -> None:
 def cancel_round(s: SessionState, r: Round, reason: CancelReason, fx: EffectSink) -> None:
     stop_play(r, fx)
     if r.state is RoundState.COUNTDOWN:
-        if r.slot.track_ref is not None and not r.previously_played:
-            s.played.discard(r.slot.track_ref)
         r.official_start_at = None  # a scheduled excerpt that never sounded is not played
+    if r.slot.track_ref is not None:
+        s.played.add(r.slot.track_ref)
+        s.consumed_cancelled.add(r.slot.track_ref)
+    r.auto_advance_at = None
     capture_drafts(r)
     r.included = False
     if r.slot.track_ref is not None:
@@ -155,6 +157,7 @@ def begin_countdown(s: SessionState, r: Round, at: Instant, fx: EffectSink) -> N
         r.track_entry = catalog.entries.get(r.slot.track_ref.track_id)
         r.bridge_name = catalog.bridge_name
     s.played.add(r.slot.track_ref)
+    s.consumed_cancelled.discard(r.slot.track_ref)
     ready = s.asset_ready.get(asset.asset_id, {})
     for p in active_players(s):
         if not is_participant(p):
@@ -218,6 +221,11 @@ def close_round(
     r.closed_at = at.mono_ms
     r.close_reason = reason
     r.state = RoundState.REVIEW
+    r.auto_advance_at = (
+        at.mono_ms + s.game.settings.intermission_s * 1000
+        if s.game.settings.auto_advance and s.game.ending is None
+        else None
+    )
     stop_play(r, fx)
     r.paused_at = r.resume_at = None
     r.reveal = build_reveal(s, r)
@@ -320,6 +328,12 @@ def h_next(s: SessionState, issuer: Player, msg: HostNext, at: Instant, fx: Effe
     current_by_key(s, msg.round_id)
     require_rule("next", s, issuer)
     r = current_by_key(s, msg.round_id)
+    advance_round(s, r, at, fx)
+
+
+def advance_round(s: SessionState, r: Round, at: Instant, fx: EffectSink) -> None:
+    """One server-owned transition, shared with the manual command."""
+    r.auto_advance_at = None
     if r.number >= s.game.settings.rounds:
         from openblindysir_server.game.game_flow import enter_final_review  # noqa: PLC0415
 
@@ -364,6 +378,11 @@ def h_stop(s: SessionState, issuer: Player, msg: HostStop, at: Instant, fx: Effe
 def h_pause(s: SessionState, issuer: Player, msg: HostPause, at: Instant, fx: EffectSink) -> None:
     r = current_by_key(s, msg.round_id)
     require_rule("pause", s, issuer)
+    if r.state is RoundState.REVIEW:
+        r.paused_at = at.mono_ms
+        r.pause_ready = True
+        s.touched = True
+        return
     assert r.deadline is not None
     r.paused_at = min(at.mono_ms + 300, r.deadline - 1)
     r.pause_ready = False
@@ -383,6 +402,13 @@ def h_resume(s: SessionState, issuer: Player, msg: HostResume, at: Instant, fx: 
     r = current_by_key(s, msg.round_id)
     require_rule("resume", s, issuer)
     assert r.paused_at is not None
+    if r.state is RoundState.REVIEW:
+        if r.auto_advance_at is not None:
+            r.auto_advance_at += at.mono_ms - r.paused_at
+        r.paused_at = None
+        r.pause_ready = False
+        s.touched = True
+        return
     assert r.deadline is not None
     require(r.resume_at is None and at.mono_ms >= r.paused_at, ErrorCode.STALE_COMMAND)
     start_at = at.mono_ms + s.config.replay_lead_ms
@@ -420,7 +446,7 @@ def h_track_metadata(
 
 
 def h_skip(s: SessionState, issuer: Player, msg: HostSkip, at: Instant, fx: EffectSink) -> None:
-    """R18: the round is cancelled; its track is not marked as played unless it was heard."""
+    """Cancel the allocated round; its track remains consumed even before playback."""
     r = current_by_key(s, msg.round_id)
     require_rule("skip", s, issuer)
     cancel_round(s, r, CancelReason.SKIPPED, fx)
@@ -481,7 +507,37 @@ def h_score_draft(
         ),
         ErrorCode.INVALID_ARGS,
     )
-    r.score_reviewed.add(msg.args.player_id)
+    pid = msg.args.player_id
+    revision = r.score_revisions.get(pid, 0)
+    require(
+        msg.args.expected_revision is None or msg.args.expected_revision == revision,
+        ErrorCode.STALE_COMMAND,
+    )
+    if msg.args.judgement == "criteria":
+        cfg = s.game.settings
+        applicable = {
+            "title": ("title_correct",),
+            "artist": ("artist_correct",),
+            "both": ("title_correct", "artist_correct"),
+            "custom": ("custom_correct",),
+        }[cfg.answer_mode]
+        decisions = {key: getattr(msg.args, key) for key in applicable}
+        weights = {
+            "title_correct": cfg.title_points,
+            "artist_correct": cfg.artist_points,
+            "custom_correct": cfg.custom_points,
+        }
+        points = sum(weights[key] for key, correct in decisions.items() if correct is True)
+        require(msg.args.points == points, ErrorCode.INVALID_ARGS)
+        r.judgements[pid] = decisions
+        if all(value is not None for value in decisions.values()):
+            r.score_reviewed.add(pid)
+        else:
+            r.score_reviewed.discard(pid)
+    else:
+        r.judgements.pop(pid, None)
+        r.score_reviewed.add(pid)
+    r.score_revisions[pid] = revision + 1
     if msg.args.points == 0:
         r.score_draft.pop(msg.args.player_id, None)
     else:

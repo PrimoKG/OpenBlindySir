@@ -49,11 +49,12 @@ from openblindysir_server.game.state import (
     GameState,
     Player,
     SessionState,
+    Settings,
     active_players,
     current_round,
 )
 
-IN_GAME_CONFIGURABLE = frozenset({"allow_repeats", "auto_start"})
+IN_GAME_CONFIGURABLE = frozenset({"allow_repeats", "auto_start", "auto_advance", "intermission_s"})
 EARLY_STATES = frozenset(
     {RoundState.QUEUED, RoundState.PREPARING, RoundState.LOADING, RoundState.COUNTDOWN}
 )
@@ -92,6 +93,15 @@ def h_start_game(
     rounds.start_round(s, at, fx)
 
 
+def _maximum_points(settings: Settings) -> int:
+    return {
+        "title": settings.title_points,
+        "artist": settings.artist_points,
+        "both": settings.title_points + settings.artist_points,
+        "custom": settings.custom_points,
+    }[settings.answer_mode]
+
+
 def h_configure(
     s: SessionState, issuer: Player, msg: HostConfigure, at: Instant, fx: EffectSink
 ) -> None:
@@ -113,34 +123,23 @@ def h_configure(
         require(all(src.bridge_id in known for src in patch.sources), ErrorCode.INVALID_ARGS)
     previous = g.settings
     settings = g.settings.copy()
-    if patch.rounds is not None:
-        settings.rounds = patch.rounds
-    if patch.clip_seconds is not None:
-        settings.clip_seconds = patch.clip_seconds
-    if patch.answer_grace_s is not None:
-        settings.answer_grace_s = patch.answer_grace_s
+    for name in given - {"sources"}:
+        setattr(settings, name, getattr(patch, name))
     if patch.sources is not None:
         settings.sources = sorted({(src.bridge_id, src.folder_prefix) for src in patch.sources})
-    if patch.auto_start is not None:
-        settings.auto_start = patch.auto_start
-    if patch.prefetch_depth is not None:
-        settings.prefetch_depth = patch.prefetch_depth
-    if patch.allow_repeats is not None:
-        settings.allow_repeats = patch.allow_repeats
-    for name in (
-        "answer_mode",
-        "title_points",
-        "artist_points",
-        "instructions",
-        "captured_policy",
-        "normalize_audio",
-        "avoid_silence",
-        "balance_folders",
-    ):
-        value = getattr(patch, name)
-        if value is not None:
-            setattr(settings, name, value)
+    require(_maximum_points(settings) <= 1000, ErrorCode.INVALID_ARGS)
     g.settings = settings
+    r = current_round(g)
+    if (
+        r is not None
+        and r.state is RoundState.REVIEW
+        and ({"auto_advance", "intermission_s"} & given)
+    ):
+        r.auto_advance_at = (
+            at.mono_ms + settings.intermission_s * 1000 if settings.auto_advance else None
+        )
+        if r.paused_at is not None:
+            r.paused_at = at.mono_ms
     if msg.start_game:
         blockers = start_blockers(s)
         if blockers:
@@ -230,6 +229,18 @@ def h_final_set(
     require_phase(s, msg.expected_phase)
     require_rule("final_set", s, issuer)
     require(msg.args.player_id in standings_player_ids(s), ErrorCode.UNKNOWN_PLAYER)
+    require(
+        msg.args.expected_delta is None
+        or (
+            s.game.final_draft.get(msg.args.player_id, 0) == msg.args.expected_delta
+            and s.game.final_notes.get(msg.args.player_id) == msg.args.expected_note
+        ),
+        ErrorCode.STALE_COMMAND,
+    )
+    if msg.args.delta and msg.args.note:
+        s.game.final_notes[msg.args.player_id] = msg.args.note.strip()
+    else:
+        s.game.final_notes.pop(msg.args.player_id, None)
     if msg.args.delta == 0:
         s.game.final_draft.pop(msg.args.player_id, None)
     else:
@@ -244,6 +255,7 @@ def h_final_reset(
     require_phase(s, msg.expected_phase)
     require_rule("final_reset", s, issuer)
     s.game.final_draft = {}
+    s.game.final_notes = {}
     s.touched = True
 
 
@@ -291,12 +303,14 @@ def h_final_validate(
                 player_id=player_id,
                 delta=delta,
                 kind=ScoreKind.FINAL_ADJUSTMENT,
+                note=g.final_notes.get(player_id),
                 by=issuer.id,
                 at_wall_ms=at.wall_ms,
             )
             corrections += 1
     s.journal.freeze(g.game_id)
     g.final_draft = {}
+    g.final_notes = {}
     g.finalized_at = at.mono_ms
     g.finalized_wall_ms = at.wall_ms
     g.phase = GamePhase.FINAL_RESULTS
@@ -325,6 +339,9 @@ def h_new_game(
     del issuer, at
     require_phase(s, msg.expected_phase)
     s.game = GameState(game_id=s.ids.game_id(), settings=s.game.settings.copy())
+    if msg.args.reset_library:
+        s.played.clear()
+        s.consumed_cancelled.clear()
     # Completed results are self-contained in the bounded archive, not a growing journal.
     s.journal = ScoreJournal()
     s.players = {p.id: p for p in active_players(s)}
@@ -354,6 +371,7 @@ def h_end_session(
     s.game = GameState(game_id=s.ids.game_id(), settings=s.game.settings.copy())
     s.journal = ScoreJournal()
     s.played = set()
+    s.consumed_cancelled.clear()
     s.assets = {}
     s.jobs = {}
     s.asset_ready = {}

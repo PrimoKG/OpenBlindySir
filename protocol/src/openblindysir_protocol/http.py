@@ -92,6 +92,7 @@ class LibraryBridge(OutboundModel):
 
 
 class LibraryTrack(OutboundModel):
+    consumption: str = "available"
     bridge_name: str = ""
     duration_ms: int | None = None
     played: bool = False

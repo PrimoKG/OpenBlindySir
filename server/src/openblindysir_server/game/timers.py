@@ -27,6 +27,7 @@ class DueKind(IntEnum):
     RESUME_END = 5
     PAUSE_START = 6
     BRIDGE_WAIT = 7
+    NEXT_ROUND = 8
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -40,6 +41,8 @@ def pending(s: SessionState) -> list[Due]:
     dues: list[Due] = []
     r = current_round(s.game)
     if r is not None:
+        if r.state is RoundState.REVIEW and r.auto_advance_at is not None and r.paused_at is None:
+            dues.append(Due(r.auto_advance_at, DueKind.NEXT_ROUND, r.id))
         if r.state is RoundState.COUNTDOWN and r.official_start_at is not None:
             dues.append(Due(r.official_start_at, DueKind.COUNTDOWN_END, r.id))
         if r.state is RoundState.LOADING and r.ready_deadline is not None:
@@ -71,6 +74,9 @@ def next_wakeup(s: SessionState) -> int | None:
 
 def apply(s: SessionState, due: Due, at: Instant, fx: EffectSink) -> None:
     r = current_round(s.game)
+    if due.kind is DueKind.NEXT_ROUND and r is not None and r.id == due.ref:
+        rounds.advance_round(s, r, at, fx)
+        return
     if due.kind is DueKind.COUNTDOWN_END and r is not None:
         rounds.open_round(s, r)
     elif due.kind is DueKind.READY_TIMEOUT and r is not None:

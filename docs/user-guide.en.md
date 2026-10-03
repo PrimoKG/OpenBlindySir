@@ -3,7 +3,53 @@
 [Guide français](guide-utilisateur.md). One server hosts one game at a time, on a
 LAN, private VPN or the Internet. Players use a browser without creating an account.
 See [hosting](deployment.md) or [Docker](docker.md). Update server, Bridge and web
-UI together: **protocol 5**. [Install the Bridge](bridge-installation.en.md).
+UI together: **protocol 6**. [Install the Bridge](bridge-installation.en.md).
+
+## Continuous game and modal controls
+
+Rounds advance automatically after a two-second intermission, controlled by the
+server even when the host tab closes. The last round enters final review. No public
+points, other players’ answers or reveals appear until final publication. **Pause /
+Resume** also pauses an intermission. **Settings** opens without pausing the game;
+its Pace tab changes the gap (0–10 seconds) or selects manual advancement. Rules,
+scoring weights and selected music folders remain fixed for the current game.
+
+**Prepare game** has Music, Rules, Pace, Players and teams, and Advanced tabs, a
+sticky summary and save/start actions. Closing dirty preparation asks to discard
+changes. Sound controls have their own modal. Exceptional round actions live in
+Settings → Game actions; their confirmations describe what is retained.
+
+**Library sources and search** opens a modal with title/artist/filename/folder
+search, Bridge/folder/format/availability/consumption filters, sorting over the
+entire catalogue and 25-track pages. Filters and page survive closing. A playing
+host may browse before launch, with a spoiler reminder. Mounted folders, scanned
+folders and folders selected for the game are distinct; Docker mounts require
+container recreation, while added files in an existing mount only require rescan.
+
+Final review uses title/artist Correct/Incorrect, All correct/All incorrect, and a
+signed manual score. Buttons follow the saved scale (title 2 + artist 3 = 5).
+Title-only, artist-only and custom modes expose their applicable criteria. Missing
+decisions remain unchecked, distinct from incorrect. The custom mode has its own
+correct-answer weight; the total scale is at most 1,000 points per round. Scoring
+is human, without automatic text matching. Manual overrides are identified.
+Review supports unchecked-only navigation and batch zeroing absent answers,
+without zeroing captured drafts. Saves await the server echo; concurrent stale
+corrections are refused. Published recaps retain criterion decisions.
+
+Final corrections accept an optional reason (120 characters): amount and reason
+save together, remain private until publication, then appear in results/history
+and CSV/JSON exports. Reset clears both. Track-information corrections apply to
+all games in the session, including after a reserve reset; they do not change
+music files or already published archives. Search uses corrected title/artist.
+
+Teams lead the podium, provisional totals and history when teams are defined.
+Individual standings remain available; unassigned players stay there and ties
+share a rank. After results, **New game with remaining tracks** keeps consumed
+exclusions; **Restart with the entire library** resets only those exclusions.
+Both retain players, teams, settings, metadata and archives. A cancelled allocated
+round consumes its track even before playback; mere prefetch does not consume it.
+Private replay advertises full-listening permission before clicking and gives
+specific recovery messages for offline Bridges, changed sources and browser blocks.
 
 ## Join, audio and recovery
 
@@ -80,9 +126,10 @@ volume. Adding files under an existing mount only needs a rescan. Symlinks,
 junctions, absolute paths and traversal are refused. Inaccessible scans keep the
 previous catalogue and display instructions. See [Docker source management](docker.md#sources-dynamiques-et-réécoute).
 
-Search filename, imported/corrected title or artist. Filter Bridge, relative
-folder, extension, availability and fresh tracks; pages contain at most 100
-matches. Folder search preserves ancestors for navigation. This data is host-only
+Search filename, relative folder, imported/corrected title or artist. Filter Bridge, relative
+folder, extension, availability and fresh tracks; pages contain 25
+matches. Sorting by title, artist, filename or folder applies to the entire catalogue
+before pagination. Filters and the page survive closing the modal. Folder search preserves ancestors for navigation. This data is host-only
 in lobby/final review/results, or available to MC during play.
 
 MP4/MOV/MKV/AVI and other whitelisted containers provide **only their first audio
@@ -110,7 +157,8 @@ The review shows track context, each participant's answer/status, official time
 and rank when present, server reception time, and known late audio. Missing data
 shows “—”. Removed players who participated remain reviewable.
 
-Use 0/+1/+2/+3 shortcuts or a signed integer between −1000 and +1000. Explicit
+Use weighted Correct/Incorrect criteria, All correct/All incorrect, or a signed
+manual integer between −1000 and +1000. Explicit
 zero marks a checked decision; default zero stays unchecked. Enter/blur sends
 the value: wait for **Saved**. Navigation and final validation wait for the server.
 Saved points survive refresh/reconnection and snapshots; unsent local text can be lost.
@@ -154,8 +202,9 @@ open round, audio stops and answers/drafts are kept for global scoring. The seco
 with zero points and excluded status. A repeated stop during review preserves drafts.
 No stop publishes results automatically. Played cancelled rounds remain in the recap.
 
-**New game** keeps players still registered, metadata, catalogue and tracks already
-heard during the evening. Removed identities are discarded while their archived
+**New game with remaining tracks** keeps players, teams, metadata, settings, archives
+and consumed exclusions. **Restart with the entire library** clears only those musical
+exclusions after confirmation. Removed identities are discarded while their archived
 results remain readable. **End session** revokes sessions/codes and resets players/current game,
 while saved archives and library metadata remain. Keep private snapshot backups.
 

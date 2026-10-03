@@ -57,6 +57,9 @@ describe("library preflight", () => {
         { bridge_id: "example", folder_prefix: "A" },
       ],
       auto_start: true,
+      auto_advance: true,
+      intermission_s: 2,
+      custom_points: 1,
       prefetch_depth: 1,
       allow_repeats: false,
       answer_mode: "both",
@@ -100,14 +103,15 @@ describe("recap export", () => {
         standings: [],
         podium: [],
         rounds_played: 1,
-        final_adjustments: [{ player_id: "p_example", delta: -1 }],
+        final_adjustments: [{ player_id: "p_example", delta: -1, note: null }],
         recap: [
           {
             player_id: "p_example",
             score_before: 2,
+            draft_note: null,
             draft_delta: 0,
             score_after: 1,
-            adjustments: [{ delta: 1, round_number: 1, note: "+Example note" }],
+            adjustments: [{ kind: "adjustment", delta: 1, round_number: 1, note: "+Example note" }],
             history: [
               {
                 round_id: "r_example",
@@ -118,6 +122,10 @@ describe("recap export", () => {
                 order: 1,
                 near_tie: false,
                 points: 1,
+                judgement: "criteria",
+                title_correct: true,
+                artist_correct: false,
+                custom_correct: null,
                 received_at_wall_ms: 42,
                 included: true,
                 track: {
@@ -142,6 +150,13 @@ describe("recap export", () => {
     expect(csv).toContain('"\'+Example note"');
     expect(csv).toContain('"final_adjustment"');
     expect(csv).toContain('"-1"');
+    expect(csv).toContain('"criteria";"true";"false";""');
+    expect(
+      csv
+        .trim()
+        .split("\r\n")
+        .map((line) => [...line.matchAll(/"(?:[^"]|"")*"/g)].length),
+    ).toEqual([24, 24, 24, 24]);
     expect(csv.split("\r\n")).toHaveLength(5);
   });
 });

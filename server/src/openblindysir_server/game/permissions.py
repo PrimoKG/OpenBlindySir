@@ -128,10 +128,19 @@ def _unpaused_open(s: SessionState, issuer: Player) -> bool:
     return _round(RoundState.OPEN)(s, issuer) and r is not None and r.paused_at is None
 
 
+def _pause(s: SessionState, issuer: Player) -> bool:
+    r = current_round(s.game)
+    return (
+        r is not None
+        and r.paused_at is None
+        and (_unpaused_open(s, issuer) or _round(RoundState.REVIEW)(s, issuer))
+    )
+
+
 def _resume(s: SessionState, issuer: Player) -> bool:
     r = current_round(s.game)
     return (
-        _round(RoundState.OPEN)(s, issuer)
+        (_round(RoundState.OPEN)(s, issuer) or _round(RoundState.REVIEW)(s, issuer))
         and r is not None
         and r.paused_at is not None
         and r.resume_at is None
@@ -177,7 +186,7 @@ HOST_RULES: dict[str, Predicate] = {
     "force_start": _force_start,
     "replay": _unpaused_open,
     "stop": _stop,
-    "pause": _unpaused_open,
+    "pause": _pause,
     "resume": _resume,
     "skip": _round(*SKIPPABLE),
     "add_time": _unpaused_open,

@@ -1,6 +1,6 @@
 # Construire et publier une release
 
-Le checkout courant est **0.5.0.dev0**, protocole 5, en développement. La V0.5
+Le checkout courant est **0.5.0.dev0**, protocole 6, en développement. La V0.5
 n'est ni publiée ni stabilisée et ne fige pas le protocole. Les commandes de
 publication ci-dessous décrivent une procédure future ; les numéros 0.3.0 sont
 des exemples historiques, pas une release annoncée ou une version compatible V0.5.

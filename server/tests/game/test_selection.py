@@ -50,12 +50,12 @@ def test_selected_folders_restrict_the_pool() -> None:
     assert r.slot.track_ref.track_id == compute_track_id(rel)
 
 
-def test_skipped_track_stays_eligible_for_later_games() -> None:
+def test_skipped_track_is_consumed_for_later_games() -> None:
     sc = Scenario(rounds=1, tracks=2)
     sc.start()
     skipped = sc.current().slot.track_ref
     sc.on_round("skip")
-    assert skipped not in sc.s.played
+    assert skipped in sc.s.played
 
 
 def test_library_tree_has_folders_only() -> None:

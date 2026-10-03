@@ -1,6 +1,6 @@
 # OpenBlindySir — Bridge : fonctionnement et sécurité
 
-Référence V0.5 développement, protocole 5 (plage 5 à 5). [Architecture](architecture.md),
+Référence V0.5 développement, protocole 6 (plage 6 à 6). [Architecture](architecture.md),
 [formats et métadonnées](media-and-metadata.md), [ADR 0011](adr/0011-global-review-and-private-replay.md)
 et [ADR 0012](adr/0012-dynamic-sources-and-metadata.md).
 

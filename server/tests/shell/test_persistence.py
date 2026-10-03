@@ -23,7 +23,7 @@ def test_restart_preserves_host_cookie_and_configuration(tmp_path: Path) -> None
         harness.elevate(token)
         epoch = harness.runtime.engine.state.epoch
         with harness.player_ws(token) as ws:
-            ws.send_json({"t": "HELLO", "protocol": 5, "client_version": "example"})
+            ws.send_json({"t": "HELLO", "protocol": 6, "client_version": "example"})
             ws.receive_json()
             ws.send_json(
                 {

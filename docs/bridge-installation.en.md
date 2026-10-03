@@ -134,7 +134,7 @@ Unix execution also requires a filesystem allowing execution.
 
 ## Updating
 
-V0.5 requires **protocol 5**, admitted range 5 to 5, on all components. Protocols 2/3/4 are refused;
+V0.5 requires **protocol 6**, admitted range 6 to 6, on all components. Protocols 2/3/4/5 are refused;
 the Bridge package pins its protocol package to the exact same version. Pin a
 published release by replacing `VERSION` below with the published version matching
 the server:

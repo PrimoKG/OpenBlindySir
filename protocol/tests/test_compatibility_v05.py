@@ -8,10 +8,10 @@ from openblindysir_protocol.version import PROTOCOL_VERSION
 
 def test_compatibility_versions_and_close_reason_are_consistent():
     info = Compatibility(server_version="0.5.0.dev0")
-    assert info.protocol_min == info.protocol_max == PROTOCOL_VERSION == 5
+    assert info.protocol_min == info.protocol_max == PROTOCOL_VERSION == 6
     assert info.history_format == 2
-    assert info.snapshot_format == 4
-    assert required_range(mismatch_reason()) == (5, 5)
+    assert info.snapshot_format == 5
+    assert required_range(mismatch_reason()) == (6, 6)
 
 
 @pytest.mark.parametrize(
@@ -20,7 +20,7 @@ def test_compatibility_versions_and_close_reason_are_consistent():
         "protocol_mismatch",
         "protocol_mismatch;required=9..1",
         "protocol_mismatch;required=1..999999999999",
-        "protocol_mismatch;required=5..5\nSECRET",
+        "protocol_mismatch;required=6..6\nSECRET",
         "authentication",
         "\x1b[31msecret",
     ],

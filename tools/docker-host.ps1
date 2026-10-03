@@ -89,6 +89,11 @@ try {
     if ($taskRouting['CADDY_PROFILE'] -eq 'public') {
         $taskCompose += @('-f', (Join-Path $taskRoot 'deploy/compose.public.yaml'))
     } elseif ($taskRouting['CADDY_PROFILE'] -ne 'private') { throw 'CADDY_PROFILE doit être private ou public.' }
+    # Keep user music mounts when rebuilding or recreating the deployment.
+    $taskSourcesOverride = Join-Path $taskData 'sources.override.yaml'
+    if (Test-Path -LiteralPath $taskSourcesOverride -PathType Leaf) {
+        $taskCompose += @('-f', $taskSourcesOverride)
+    }
     switch ($Action) {
         'start' {
             if (-not $NoBuild) { Build-DockerImages @('app', 'bridge') }

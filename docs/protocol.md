@@ -1,4 +1,4 @@
-# OpenBlindySir — Protocole réseau 5 — V0.5 développement
+# OpenBlindySir — Protocole réseau 6 — V0.5 développement
 
 Ce document fait autorité pour le §8 de l'architecture. Le paquet Pydantic est
 la définition exécutable ; `protocol/schema.lock.json` et le TypeScript généré
@@ -21,7 +21,7 @@ mutations navigateur. Les messages entrants sont stricts, `extra=forbid`.
 | `POST /api/session/recover` | `{password,code}`, cinq tentatives/minute partagées avec join ; code haché à usage unique, sessions précédentes révoquées, rôle player. |
 | `GET /api/audio/{asset_id}` | Cookie ; seulement asset current/next servable, sinon 404. |
 | `GET /api/host/library` | Hôte hors IN_GAME ou MC ; arborescence, sources scannées/erreur, disponibilités. |
-| `GET /api/host/library/search` | Hôte hors IN_GAME ou MC ; `q`, `bridge`, `folder`, `ext`, `availability`, `offset` ; pages de 100 résultats au maximum. |
+| `GET /api/host/library/search` | Hôte hors IN_GAME ou MC ; `q`, `bridge`, `folder`, `ext`, `availability`, `offset`, `limit` (1–100), `sort` (titre/artiste/fichier/dossier) et `descending` ; tri global avant pagination, 25 par page dans l’interface. |
 | `POST /api/host/library/sources` | Hôte, `{bridge_id,folders}` ; 202 demande asynchrone, 503 Bridge hors ligne. `null` rescane les dossiers actuels, `[]` retire tous les dossiers, `""` désigne la racine. |
 | `POST /api/host/metadata/import` | Permissions bibliothèque ; JSON version 1, ≤1 Mio/10 000 lignes ; diagnostic par ligne. |
 | `GET /api/host/metadata` | Permissions bibliothèque ; export des champs fusionnés et chemins connus. |
@@ -43,7 +43,7 @@ catalogue incrémente cette révision même si son hash reste identique. L'inter
 attend une révision supérieure et les dossiers demandés, ou une erreur de scan,
 avant d'autoriser une autre modification. Vérification pendant 75 s au maximum,
 avec intervalles de 1, 2 puis 4 s. Ces informations HTTP supplémentaires ne
-modifient pas les schémas de messages du protocole 5.
+modifient pas les schémas de messages du protocole 6.
 Un upload catalogue commencé sur une connexion remplacée/déconnectée est refusé
 avant application, même si son jeton était valide au début du transfert.
 
@@ -56,7 +56,7 @@ le transfert concerné sans attendre le délai maximal ni un second message d'é
 
 ## 8.2 WebSocket joueur `/api/ws`
 
-Cookie + Origin. `HELLO {client_version,protocol:5}` reçoit un `STATE` filtré.
+Cookie + Origin. `HELLO {client_version,protocol:6}` reçoit un `STATE` filtré.
 `PING {c}` reçoit `PONG {c,s}`. `AUDIO_STATUS` et `PLAYBACK_REPORT` sont des
 diagnostics, sans influence sur la notation.
 
@@ -143,7 +143,7 @@ L'identité est revérifiée après HELLO, chaque trame et les corps HTTP stream
 
 | Sens | Message |
 |---|---|
-| B → S | HELLO avec bridge_id, name, version, protocol=5, catalog_hash, track_count, formats, allow_full_review (false par défaut). |
+| B → S | HELLO avec bridge_id, name, version, protocol=6, catalog_hash, track_count, formats, allow_full_review (false par défaut). |
 | S → B | WELCOME avec clip_format, bitrate, limits, catalog_needed, catalog_upload_token si nécessaire, compatibility. |
 | B → S | CATALOG_CHANGED ; provoque WELCOME + nouveau jeton, même si seul le choix de dossiers a changé. |
 | S → B | SCAN_SOURCES `{folders:null|list}` ; sous-dossiers relatifs NFC autorisés localement uniquement. |
@@ -166,17 +166,17 @@ ou identité refusés sans consommer le bon jeton. Les noms ne vont jamais aux j
 
 ## 8.4 Compatibilité et persistance
 
-Logiciel `0.5.0.dev0`, `PROTOCOL_VERSION=5`, minimum/maximum admis 5/5.
-`Compatibility` décrit version, protocole, plage et formats (snapshot 4, historique 2),
+Logiciel `0.5.0.dev0`, `PROTOCOL_VERSION=6`, minimum/maximum admis 6/6.
+`Compatibility` décrit version, protocole, plage et formats (snapshot 5, historique 2),
 dans WELCOME, erreurs de protocole joueur, diagnostics et `/api/compatibility`.
 Le Bridge refuse avec le code 4 et une plage numérique extraite du motif borné
-`protocol_mismatch;required=5..5` ; aucun texte distant arbitraire n'est réaffiché.
+`protocol_mismatch;required=6..6` ; aucun texte distant arbitraire n'est réaffiché.
 Le client web recharge au plus une fois automatiquement, puis affiche une action
 de mise à jour ; une connexion STATE réussie réinitialise ce garde-fou.
 La dérive des schémas est vérifiée par `tools/gen_ts_types.py --check`.
 Cette évolution non publiée ne constitue pas un gel de protocole.
 
-Snapshot 4, lecture/migration 1/2/3/4 ; historique 2, migration ancien/version 1.
+Snapshot 5, lecture/migration 1/2/3/4/5 ; historique 2, migration ancien/version 1.
 Un format futur inconnu provoque un refus explicite sans repli sur un état plus ancien.
 La corruption connue peut utiliser la précédente copie valide. Audio et jetons bruts
 restent exclus. Les archives sont figées, sans audio, 50 parties/90 jours/16 Mio ;
@@ -189,3 +189,29 @@ Publications anciennes d'une partie inachevée révoquées et restaurées en bro
 archives finales conservées. Voir [ADR 0011](adr/0011-global-review-and-private-replay.md),
 [ADR 0012](adr/0012-dynamic-sources-and-metadata.md),
 [ADR 0015](adr/0015-v05-private-bridges-history-compatibility.md) et [V0.5](v0.5.md).
+
+
+## Rythme et correction — protocole 6
+
+`configure` accepte `auto_advance` (true par défaut), `intermission_s` (0–10,
+2 par défaut) et `custom_points` (0–1000). Pendant IN_GAME, seuls rythme,
+auto_start et répétitions restent modifiables. Le total du barème actif est borné
+à 1000. La vue REVIEW expose seulement `auto_advance_at` en plus de la propre
+réponse ; les réponses privées/points restent réservés à FINAL_SCORE_REVIEW.
+La pause suspend aussi cette minuterie ; le redémarrage la retire et attend l’hôte.
+
+`new_game.args.reset_library` (false par défaut) remet à zéro les exclusions sans
+effacer joueurs/équipes/settings/métadonnées/archives. Les morceaux alloués puis
+annulés restent consommés ; le préchargement ne consomme pas la réserve.
+
+`score_draft.args` conserve points/player_id et ajoute `judgement` (manual ou
+criteria), `title_correct`, `artist_correct`, `custom_correct` (bool/null) et
+`expected_revision`. En criteria, le serveur vérifie la somme des poids actifs.
+Une décision incomplète reste non vérifiée. Une révision périmée est refusée sans
+mutation. Les vues et récapitulatifs conservent les décisions sémantiques.
+
+`final_set.args.note` (120 caractères maximum) est sauvegardé atomiquement avec
+delta ; `expected_delta`/`expected_note` protègent la saisie concurrente. Un delta
+zéro ou final_reset efface montant/motif. Le motif reste privé avant publication,
+puis figure dans les événements, résultats et archives. Snapshot 5 lit les formats
+1–4 ; les archives de format 2 restent compatibles avec les champs ajoutés par défaut.

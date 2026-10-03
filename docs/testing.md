@@ -31,8 +31,10 @@ Les builds WebKit sans `AudioContext` ignorent explicitement les tests audio ;
 leur réussite graphique ne valide pas Safari/iOS. Comptes et limites de la
 dernière exécution : [DEVLOG](DEVLOG.md).
 
-Régressions : revue globale sans publication intermédiaire, notes signées/zéro,
-arrêts dans toutes les phases, snapshots V1/V2 → V3, équipes/spectateurs/joueurs
+Régressions : transitions automatiques côté serveur sans hôte connecté, pause de
+l’intermission, mode manuel, consommation des annulations avant écoute et reset de
+réserve, barèmes sémantiques/révisions concurrentes et motifs de corrections ; revue globale sans publication intermédiaire, notes signées/zéro,
+arrêts dans toutes les phases, snapshots V1–V4 → V5, équipes/spectateurs/joueurs
 retirés, exports, anti-fuite HTTP/WS ; identité multi-Bridge, upload propriétaire,
 sources relatives/NFC/junctions, import JSON partiel, récupération et verrou ;
 MP4/MOV/MKV/AVI audio seul, aucune piste audio, première piste audio même si une
@@ -89,8 +91,8 @@ mainteneur décrite dans [releasing](releasing.md) ; aucun smoke ne publie.
 
 ## Recette sur les appareils et la bibliothèque réels
 
-Mettre à jour serveur, web et tous les Bridges ensemble : protocole **5** (plage 5 à 5),
-snapshot **4** (lecture 1/2/3/4), historique **2** (migration ancien/1). Sauvegarder `STATE_DIR` avant mise à
+Mettre à jour serveur, web et tous les Bridges ensemble : protocole **6** (plage 6 à 6),
+snapshot **5** (lecture 1/2/3/4/5), historique **2** (migration ancien/1). Sauvegarder `STATE_DIR` avant mise à
 jour et utiliser une soirée de test avec sauvegarde distincte.
 
 1. **Sources** : sélectionner racine et sous-dossier sans doublon. Ajouter/enlever

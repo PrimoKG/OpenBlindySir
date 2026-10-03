@@ -329,7 +329,7 @@ def test_revoked_cookie_cannot_register_after_delayed_hello(harness: Harness) ->
     pid, token = harness.join("Player")
     with harness.player_ws(token) as ws:
         harness.runtime.sessions.revoke((pid,))
-        ws.send_text(json.dumps({"t": "HELLO", "client_version": "0.3.0", "protocol": 5}))
+        ws.send_text(json.dumps({"t": "HELLO", "client_version": "0.3.0", "protocol": 6}))
         with pytest.raises(WebSocketDisconnect):
             drain(ws)
     assert harness.runtime.hub.current(pid) is None

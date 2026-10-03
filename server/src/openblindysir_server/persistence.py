@@ -37,7 +37,7 @@ from openblindysir_server.private_files import (
     unique_json_object,
 )
 
-FORMAT = 4
+FORMAT = 5
 MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 
 
@@ -196,7 +196,7 @@ class SnapshotStore:
                 row = json.loads(
                     _snapshot_bytes(candidate).decode("utf-8"), object_pairs_hook=unique_json_object
                 )
-                if type(row["format"]) is not int or row["format"] not in {1, 2, 3, FORMAT}:
+                if type(row["format"]) is not int or row["format"] not in {1, 2, 3, 4, FORMAT}:
                     raise SnapshotVersionError(
                         "unsupported snapshot format; preserve files and upgrade "
                         "or restore a matching backup"
@@ -329,6 +329,8 @@ class SnapshotStore:
                 listen.offline_since = None
         r = current_round(s.game)
         if r is not None:
+            # A restart always requires the host to resume an interrupted transition.
+            r.auto_advance_at = None
             if r.state is RoundState.OPEN:
                 capture_drafts(r)
                 r.state = RoundState.REVIEW
@@ -367,7 +369,7 @@ class SnapshotStore:
         for bridge in s.bridges.values():
             bridge.state = BridgeState.OFFLINE
         s.last_at, s.recovered = at.mono_ms, True
-        expected_auth = self.fingerprint if payload["format"] == FORMAT else self.legacy_fingerprint
+        expected_auth = self.fingerprint if payload["format"] >= 4 else self.legacy_fingerprint
         if payload["auth"] == expected_auth:
             sessions.restore(
                 payload["sessions"],

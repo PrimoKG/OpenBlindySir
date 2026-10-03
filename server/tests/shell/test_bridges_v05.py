@@ -14,7 +14,7 @@ SECOND = "12345678-1234-1234-1234-123456789abd"
 SECOND_SECRET = "synthetic-second-bridge-private-0123456789abcdef"
 
 
-def hello(identity=BRIDGE_ID, protocol=5):
+def hello(identity=BRIDGE_ID, protocol=6):
     message = json.loads(bridge_hello(catalog()["catalog_hash"], 6))
     return {**message, "bridge_id": identity, "protocol": protocol}
 
@@ -109,18 +109,18 @@ def test_rotation_is_durable_and_contains_no_raw_credentials(tmp_path):
     assert not BridgeCredentials(path, SECRET).recognizes(SECOND_SECRET)
 
 
-@pytest.mark.parametrize("protocol", [0, 3, 4, 6, 10000])
+@pytest.mark.parametrize("protocol", [0, 3, 4, 5, 10000])
 def test_bridge_protocol_mismatch_reports_supported_range(harness: Harness, protocol):
     with harness.bridge_ws() as bridge:
         bridge.send_json(hello(protocol=protocol))
         with pytest.raises(WebSocketDisconnect) as closed:
             bridge.receive_json()
         assert closed.value.code == 1008
-        assert closed.value.reason == "protocol_mismatch;required=5..5"
+        assert closed.value.reason == "protocol_mismatch;required=6..6"
     assert not harness.runtime.bridge.connections
     info = harness.client.get("/api/compatibility").json()
-    assert info["protocol_min"] == info["protocol_max"] == 5
-    assert info["snapshot_format"] == 4
+    assert info["protocol_min"] == info["protocol_max"] == 6
+    assert info["snapshot_format"] == 5
 
 
 def test_player_protocol_mismatch_has_actionable_structured_range(harness: Harness):
@@ -129,7 +129,7 @@ def test_player_protocol_mismatch_has_actionable_structured_range(harness: Harne
         ws.send_json({"t": "HELLO", "client_version": "0.3.0", "protocol": 4})
         error = ws.receive_json()
         assert error["code"] == "protocol_mismatch"
-        assert error["compatibility"]["protocol_min"] == 5
+        assert error["compatibility"]["protocol_min"] == 6
         with pytest.raises(WebSocketDisconnect):
             ws.receive_json()
 

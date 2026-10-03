@@ -3,7 +3,7 @@
 [English guide](user-guide.en.md). Une instance accueille une partie à la fois,
 entre amis dans leur navigateur, sur LAN, VPN ou Internet. Aucun compte à créer.
 Préparez [l'hébergement](deployment.md) ou le [lancement Docker](docker.md).
-Mettez à jour serveur, Bridge et interface ensemble : **protocole 5**.
+Mettez à jour serveur, Bridge et interface ensemble : **protocole 6**.
 Le Bridge s'installe sans clone après publication, par [uvx ou archive native](bridge-installation.md).
 
 ## Préparer et rejoindre la soirée
@@ -45,33 +45,47 @@ La fin du son ne ferme pas nécessairement les réponses : le délai restant est
 affiché. L'hôte peut suspendre son et réponses, reprendre, rejouer, ajouter du temps
 ou fermer. La pause n'entre pas dans les temps de réponse.
 
-Après chaque manche, **Réponses conservées** confirme l'enregistrement. L'hôte
-passe à la suivante. **Tous les morceaux et points sont révélés après la revue
-globale de fin de partie**. Avant cela, vous ne voyez que votre propre réponse.
-Le compteur anonyme n/m est masqué lorsque moins de trois joueurs sont attendus.
+Après chaque manche, **Réponses conservées** confirme l’enregistrement. Par défaut,
+la suivante arrive automatiquement après **2 secondes** ; fermer l’onglet hôte ne
+bloque pas cette transition. La dernière manche ouvre directement la revue finale.
+**Tous les morceaux, réponses des autres et points sont révélés uniquement après
+la publication finale.** Le compteur anonyme n/m est masqué lorsqu’il y a moins de
+trois participants. L’animateur conserve ses informations privées.
+
+Pendant le jeu, la barre hôte reste compacte. **Paramètres** ouvre une modale sans
+mettre la partie en pause ; **Son** ouvre les réglages de volume et de correction
+locale. **Mettre en pause / Reprendre** suspend aussi une transition entre manches.
+Dans **Paramètres → Rythme**, réglez l’intervalle de 0 à 10 secondes ou désactivez
+l’enchaînement automatique pour passer manuellement. Les actions exceptionnelles
+(rejouer, arrêter le son, fermer les réponses, remplacer, terminer) sont dans
+**Actions de la partie**. Les règles/barèmes/dossiers restent fixés pour la partie.
 
 ## Préparer la partie comme hôte
 
 Sur `/host` ou **Accès hôte**, entrez le mot de passe hôte, puis ouvrez
-**Commandes hôte**. Choisissez **Hôte joueur** pour jouer avec les mêmes protections
+**Préparer la partie**. Choisissez **Hôte joueur** pour jouer avec les mêmes protections
 anti-spoiler, ou **Animateur** pour voir morceaux à venir et réponses en direct.
 Passer animateur en cours de partie est permis entre les manches ; revenir joueur
 attend la prochaine partie. Les spectateurs écoutent et voient les résultats sans répondre.
 
-Choisissez les dossiers dans l'arborescence, le nombre de manches, la durée des
-extraits, le délai de réponse, la consigne/barème et la politique des brouillons.
-Cocher parent et enfant ne double pas les morceaux. Le compteur indique les
-morceaux disponibles et encore inédits pendant la session. **Enregistrer et lancer**
-applique le tout atomiquement. Une sélection trop petite propose de réduire les
-manches ou d'autoriser les répétitions. Les sélections favorites restent locales.
+La préparation utilise cinq onglets : **Musique**, **Règles**, **Rythme**,
+**Joueurs et équipes**, **Avancé**. Choisissez les dossiers, consignes, barème,
+rythme et participants. Le résumé et les boutons d’enregistrement/lancement restent
+accessibles en bas de la modale. Fermer avec des modifications non enregistrées
+demande de les abandonner explicitement. Cocher un dossier parent et son enfant ne
+double pas les morceaux. Les comptes distinguent disponibles et non consommés.
+**Enregistrer et lancer** applique le tout atomiquement. Une sélection trop petite
+propose de réduire les manches ou d’autoriser les répétitions. Les favoris sont
+locaux. Le total du barème par manche doit rester entre 0 et 1 000 points ; le mode
+personnalisé possède son propre nombre de points pour une bonne réponse.
 
-Dans les options avancées : pause/reprise déjà disponible, **Normaliser le volume**,
+Dans **Avancé** : **Normaliser le volume**,
 **Éviter les extraits silencieux** et **Équilibrer les dossiers**. L'équilibrage
 alterne les dossiers sélectionnés, mélangés en interne, jusqu'à épuisement ; les
 morceaux restent uniques. Pour une sélection de la racine, il utilise les dossiers
 contenant les fichiers. Aucun barème de rapidité n'est automatique.
 
-Configurez équipes et spectateurs au lobby. **Fermer les inscriptions**
+Configurez équipes et spectateurs dans **Joueurs et équipes** au lobby. **Fermer les inscriptions**
 empêche de nouveaux joueurs d'entrer ; reconnexion et récupération restent possibles.
 Le verrou peut être retiré depuis le panneau hôte, quelle que soit la phase.
 
@@ -83,7 +97,7 @@ Trois choix distincts :
 2. **Dossiers scannés** : sous-dossiers publiés dans son catalogue.
 3. **Dossiers sélectionnés** : ceux cochés pour la prochaine partie.
 
-Dans **Sources et recherche de bibliothèque**, ajoutez/retirez des sous-dossiers relatifs et
+Le bouton **Sources et recherche de bibliothèque** ouvre une modale. Dans celle-ci, ajoutez/retirez des sous-dossiers relatifs et
 demandez **Actualiser**. Le scan est asynchrone : les commandes de dossier restent
 bloquées jusqu'à réception du scan terminé, puis les comptes et dossiers se mettent
 à jour. Si le scan n'est pas confirmé sous 75 s, actualisez la bibliothèque puis
@@ -99,8 +113,11 @@ Un chemin inaccessible affiche les étapes de montage ; le dernier catalogue val
 
 Recherchez par nom de fichier, titre ou artiste importé/corrigé. Filtrez par Bridge,
 dossier, extension, disponibilité et morceaux encore inédits. La recherche de
-dossiers garde les ancêtres dans l'arbre ; les pages de morceaux contiennent au
-plus 100 résultats. Cette bibliothèque reste réservée aux hôtes au lobby, en revue
+dossiers garde les ancêtres dans l’arbre. Le tri par titre, artiste, fichier ou dossier
+est appliqué au catalogue entier, avant pagination de **25 morceaux**. Les filtres
+et la page sont conservés à la fermeture de la modale. Les états distinguent réservé,
+consommé/joué et consommé/annulé. Consulter les titres avant le lancement est permis
+à l’hôte joueur, avec un avertissement sur la surprise. Cette bibliothèque reste réservée aux hôtes au lobby, en revue
 finale et aux résultats, ou au MC pendant le jeu.
 
 Les fichiers MP4/MOV/MKV/AVI et autres conteneurs autorisés fournissent **uniquement
@@ -110,7 +127,7 @@ codec manquant et fichier facultatif de métadonnées : [guide des sources](medi
 
 ## Choisir un morceau comme animateur
 
-Dans **Commandes hôte → Sources et recherche de bibliothèque**, le mode
+Dans **Sources et recherche de bibliothèque**, le mode
 Animateur affiche **Choisir les morceaux (animateur)**. Sélectionnez la **Manche
 à préparer**, recherchez/filtrez le morceau, puis **Choisir pour la manche N**.
 Les résultats montrent Bridge, dossier, nom de fichier, titre/artiste disponibles,
@@ -146,16 +163,34 @@ disponibles, heure de réception serveur et retard audio connu. Une donnée abse
 reste « — ». Les joueurs retirés ayant participé restent dans cette revue.
 Corrigez titre, artiste, featuring, album et année si nécessaire.
 
-Choisissez **0 / +1 / +2 / +3** ou un entier signé entre −1000 et +1000. Zéro choisi
-est **Vérifié** ; zéro par défaut reste **À vérifier**. Entrée ou sortie du champ
-envoie la note au serveur. Attendez **Enregistré** : la navigation et la validation
-attendent la sauvegarde. Les notes reçues survivent au rafraîchissement, à la
-reconnexion et aux snapshots. Du texte local non envoyé peut être perdu.
+Utilisez **Vrai / Faux** pour le titre et/ou l’artiste, **Tout bon / Tout faux**,
+ou le champ numérique manuel entre −1 000 et +1 000. Les critères suivent le mode
+et le barème enregistré : titre à 2 et artiste à 3 donnent 5 pour « Tout bon ».
+En mode personnalisé, le critère est « Réponse ». Une décision manquante reste
+**À vérifier**, distincte de Faux ; aucun rapprochement textuel automatique ne note
+les réponses. La saisie manuelle est identifiée et remplace les critères.
+
+Les filtres **Uniquement les manches à vérifier** et **Prochaine réponse à vérifier**
+accélèrent la revue. **Noter les réponses absentes à zéro** ne touche pas aux
+brouillons capturés. Attendez l’accusé serveur avant de changer de manche ou publier.
+Une erreur de sauvegarde reste visible ; vérifiez et renvoyez votre correction.
+Les critères et notes enregistrés survivent à la reconnexion et aux snapshots,
+et sont conservés dans les récapitulatifs publiés.
+
+**Corriger les informations du morceau** conserve titre, artiste, featuring, album
+et année pour **toutes les parties de la session**, même après réinitialisation de
+la réserve. Cela ne modifie pas les fichiers musicaux ni les archives déjà publiées.
+La recherche utilise les titres et artistes corrigés.
 
 Les totaux provisoires additionnent toutes les manches et les corrections finales.
-Les équipes additionnent les points individuels. La politique de brouillons
+Les équipes additionnent les points individuels et passent en premier dans le podium,
+les totaux de revue et l’historique. Le classement individuel reste disponible ; les
+joueurs sans équipe y restent. Les ex æquo partagent leur rang. La politique de brouillons
 `manual` permet une décision humaine ; `zero` impose zéro, à vérifier explicitement.
-Les corrections finales −/+ sont facultatives ; **Réinitialiser les corrections**
+Les corrections finales −/+ sont facultatives ; un **Motif facultatif** peut expliquer
+une correction (120 caractères maximum). Enregistrez-le avant publication : il est
+privé pendant la revue, puis apparaît dans les résultats, historique et exports.
+Montant et motif sont enregistrés ensemble ; **Réinitialiser les corrections**
 réinitialise ces corrections, pas les notes par manche.
 Ces raccourcis et la remise à zéro attendent aussi l'accusé serveur avant une
 nouvelle modification ou la publication.
@@ -202,10 +237,14 @@ préparation, la lecture, la pause et la revue. La confirmation explique les eff
 
 Aucun arrêt ne publie les résultats. Un double clic est sans effet supplémentaire.
 Les manches entendues puis annulées apparaissent dans le récapitulatif avec zéro.
-**Nouvelle partie** garde les joueurs encore inscrits, la bibliothèque et les morceaux
-déjà entendus pendant la soirée. Les identités des joueurs retirés sont libérées,
-leurs résultats archivés restent lisibles. **Fin de session** révoque cookies/codes et vide joueurs, partie et morceaux
-entendus, après confirmation. Les archives et métadonnées de bibliothèque restent conservées.
+Deux choix après les résultats : **Nouvelle partie avec les morceaux restants**
+garde les exclusions musicales ; **Recommencer avec toute la bibliothèque** les
+réinitialise après confirmation. Les deux gardent joueurs, équipes, paramètres,
+corrections de métadonnées et archives. Un morceau annulé dès son allocation reste
+consommé, même avant la première note ; le simple préchargement ne le consomme pas.
+Les joueurs retirés sont libérés, leurs résultats archivés restent lisibles.
+**Fin de session** révoque les cookies/codes et vide joueurs/partie/réserve après
+confirmation ; archives et métadonnées restent conservées.
 
 Le snapshot privé restaure identité, réponses, notes, réglages, métadonnées,
 catalogues et historique des 50 dernières parties. Le cache audio RAM est perdu.

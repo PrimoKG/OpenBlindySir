@@ -10,6 +10,7 @@ import {
   Brand,
   Button,
   LiveRegion,
+  Modal,
   RecordMark,
   StageMessage,
   Toast,
@@ -35,9 +36,7 @@ export function PlayerApp(props: { readonly view: AnyView; readonly children?: R
       }
     }
   }, [phaseKey]);
-  const fullReview =
-    view.kind !== "player" &&
-    (view.round?.state === "REVIEW" || view.phase === "FINAL_SCORE_REVIEW");
+  const fullReview = view.kind !== "player" && view.phase === "FINAL_SCORE_REVIEW";
   return (
     <div className={`app ${view.kind === "player" ? "" : "with-host"}`}>
       <a className="skip-link" href="#stage-content">
@@ -69,6 +68,7 @@ export function nameOf(view: AnyView, playerId: string): string {
 }
 
 function Header(props: { readonly view: AnyView }) {
+  const [soundOpen, setSoundOpen] = useState(false);
   const { view } = props;
   const ui = useUi();
   return (
@@ -84,13 +84,26 @@ function Header(props: { readonly view: AnyView }) {
           )}
           <span className="identity">{view.me.nickname}</span>
           {view.phase !== "LOBBY" && (
-            <details className="sound-settings">
-              <summary>{t("audio.settings")}</summary>
-              <div className="sound-popover">
-                <Volume />
-                <Latency />
-              </div>
-            </details>
+            <>
+              <Button
+                onClick={(event) => {
+                  event.currentTarget.focus();
+                  setSoundOpen(true);
+                }}
+              >
+                {t("audio.settings")}
+              </Button>
+              <Modal
+                open={soundOpen}
+                title={t("audio.settings")}
+                onClose={() => setSoundOpen(false)}
+              >
+                <div className="stack">
+                  <Volume />
+                  <Latency />
+                </div>
+              </Modal>
+            </>
           )}
           {view.kind !== "player" && (
             <a className="host-jump" href="#host-controls">
@@ -408,7 +421,7 @@ function RoundScreen(props: { readonly view: AnyView }) {
         return (
           <div className="phase-band">
             <strong>{t("round.reviewEyebrow")}</strong>
-            <span>{t(view.me.participant ? "hostui.reviewHint" : "hostui.reviewHintMc")}</span>
+            <span>{t(round.auto_advance_at != null ? "flow.nextRound" : "flow.waitManual")}</span>
             {view.me.participant && "my_answer" in round && round.my_answer.text && (
               <p className="own-answer">
                 {t("round.yourAnswer", { text: round.my_answer.text })}
@@ -422,7 +435,10 @@ function RoundScreen(props: { readonly view: AnyView }) {
       return (
         <main className="stack">
           <p className="eyebrow">{t("round.reviewEyebrow")}</p>
-          <StageMessage title={t("round.review")} description={t("round.reviewHint")} />
+          <StageMessage
+            title={t("round.review")}
+            description={t(round.auto_advance_at != null ? "flow.nextRound" : "flow.waitManual")}
+          />
           {"my_answer" in round && round.my_answer.text && (
             <p className="own-answer">
               {t("round.yourAnswer", { text: round.my_answer.text })}
@@ -562,7 +578,17 @@ function OpenRound(props: { readonly view: AnyView; readonly round: RoundOpen })
         <p className="notice">{t("round.lateJoin", { time: formatSeconds(engine.lateJoinMs) })}</p>
       )}
       <div className="page-heading">
-        <h1>{t("round.openTitle")}</h1>
+        <h1>
+          {t(
+            view.rules?.answer_mode === "custom"
+              ? "flow.customPrompt"
+              : view.rules?.answer_mode === "title"
+                ? "flow.titlePrompt"
+                : view.rules?.answer_mode === "artist"
+                  ? "flow.artistPrompt"
+                  : "round.openTitle",
+          )}
+        </h1>
         {clip.kind === "ended" && !locked && <p className="muted">{t("audio.endedHint")}</p>}
       </div>
       <Rules view={view} />
@@ -582,7 +608,15 @@ function OpenRound(props: { readonly view: AnyView; readonly round: RoundOpen })
             ref={input}
             value={text}
             maxLength={200}
-            placeholder={t("round.answerPlaceholder")}
+            placeholder={t(
+              view.rules?.answer_mode === "custom"
+                ? "flow.customPrompt"
+                : view.rules?.answer_mode === "title"
+                  ? "flow.titlePrompt"
+                  : view.rules?.answer_mode === "artist"
+                    ? "flow.artistPrompt"
+                    : "round.answerPlaceholder",
+            )}
             aria-describedby="draft-hint"
             onChange={(e) => onChange(e.target.value)}
             autoComplete="off"
@@ -695,7 +729,7 @@ export function Standings(props: {
           </ol>
         </>
       )}
-      <h2>{t("standings.title")}</h2>
+      <h2>{t(props.view.team_standings?.length ? "flow.individual" : "standings.title")}</h2>
       <ol className="standing-list">
         {props.rows.map((row) => (
           <li
@@ -723,15 +757,33 @@ function Results(props: { readonly view: AnyView }) {
         <h1>{t("results.title")}</h1>
         <p className="muted">{t("results.rounds", { count: results.rounds_played })}</p>
       </div>
-      <ol className="podium">
-        {results.podium.map((row) => (
-          <li key={row.player_id} className={row.rank === 1 ? "podium-first" : ""}>
-            <span className="podium-rank">{row.rank}.</span>
-            <span className="podium-name">{nameOf(view, row.player_id)}</span>
-            <strong>{t("standings.points", { score: row.score })}</strong>
-          </li>
-        ))}
-      </ol>
+      {(view.team_standings?.length ?? 0) > 0 ? (
+        <>
+          <h2>{t("flow.teamRanking")}</h2>
+          <ol className="podium">
+            {view.team_standings
+              ?.filter((row) => row.rank <= 3)
+              .map((row) => (
+                <li key={row.team} className={row.rank === 1 ? "podium-first" : ""}>
+                  <span className="podium-rank">{row.rank}.</span>
+                  <span className="podium-name">{row.team}</span>
+                  <strong>{t("standings.points", { score: row.score })}</strong>
+                </li>
+              ))}
+          </ol>
+          <p className="muted">{t("flow.unassigned")}</p>
+        </>
+      ) : (
+        <ol className="podium">
+          {results.podium.map((row) => (
+            <li key={row.player_id} className={row.rank === 1 ? "podium-first" : ""}>
+              <span className="podium-rank">{row.rank}.</span>
+              <span className="podium-name">{nameOf(view, row.player_id)}</span>
+              <strong>{t("standings.points", { score: row.score })}</strong>
+            </li>
+          ))}
+        </ol>
+      )}
       <Standings rows={results.standings} view={view} />
       {results.final_adjustments.length > 0 && (
         <section className="final-adjustments">
@@ -743,6 +795,7 @@ function Results(props: { readonly view: AnyView }) {
                   name: nameOf(view, adj.player_id),
                   delta: formatDelta(adj.delta),
                 })}
+                {adj.note && <p className="muted">{adj.note}</p>}
               </li>
             ))}
           </ul>
@@ -788,6 +841,11 @@ function Rules({ view }: { readonly view: AnyView }) {
       )}
       {rules.answer_mode !== "title" && rules.answer_mode !== "custom" && (
         <span>{t("ux.artistWorth", { points: rules.artist_points })}</span>
+      )}
+      {rules.answer_mode === "custom" && (
+        <span>
+          {t("flow.customPoints")}: {rules.custom_points ?? 1}
+        </span>
       )}
       <small>
         {rules.captured_policy === "zero" ? t("ux.capturedZero") : t("ux.capturedManual")}

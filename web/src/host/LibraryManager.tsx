@@ -11,7 +11,7 @@ import type {
   LibraryTrack,
   MusicalMetadata,
 } from "../protocol";
-import { Button } from "../ui/components";
+import { Button, Modal } from "../ui/components";
 
 export function LibraryManager({
   view,
@@ -20,6 +20,10 @@ export function LibraryManager({
   readonly view: HostView;
   readonly onSelectionPending?: (pending: boolean) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [sort, setSort] = useState("title");
+  const [descending, setDescending] = useState(false);
+  const pageSize = 25;
   const game = useGame();
   const ui = useUi();
   const choices = view.kind === "host_mc" ? (view.mc.manual_choices ?? []) : [];
@@ -124,6 +128,9 @@ export function LibraryManager({
         ext,
         availability,
         offset: String(offset),
+        limit: String(pageSize),
+        sort,
+        descending: String(descending),
       });
       void api.search(params).then((r) => {
         if (!active) return;
@@ -140,6 +147,8 @@ export function LibraryManager({
     };
   }, [
     q,
+    sort,
+    descending,
     bridge,
     folder,
     ext,
@@ -159,272 +168,336 @@ export function LibraryManager({
     setOffset(0);
   };
   return (
-    <details className="disclosure library-manager">
-      <summary>{t("library.manage")}</summary>
-      <div className="stack">
-        {manualAllowed && (
-          <section className="stack manual-picker" aria-label={t("manual.heading")}>
-            <strong>{t("manual.heading")}</strong>
-            <p className="muted">{t("manual.hint")}</p>
-            <label>
-              {t("manual.round")}
-              <select value={roundNumber} onChange={(e) => setRoundNumber(Number(e.target.value))}>
-                {choices.map((c) => (
-                  <option key={c.round_number} value={c.round_number}>
-                    {t("manual.number", { number: c.round_number })}
+    <>
+      <Button
+        onClick={(event) => {
+          event.currentTarget.focus();
+          setOpen(true);
+        }}
+      >
+        {t("library.manage")}
+      </Button>
+      <Modal
+        open={open}
+        title={t("library.manage")}
+        onClose={() => {
+          if (!pendingChoice) setOpen(false);
+        }}
+      >
+        {view.kind === "host_player" && <p className="notice">{t("flow.spoiler")}</p>}
+        <div className="stack">
+          {manualAllowed && (
+            <section className="stack manual-picker" aria-label={t("manual.heading")}>
+              <strong>{t("manual.heading")}</strong>
+              <p className="muted">{t("manual.hint")}</p>
+              <label>
+                {t("manual.round")}
+                <select
+                  value={roundNumber}
+                  onChange={(e) => setRoundNumber(Number(e.target.value))}
+                >
+                  {choices.map((c) => (
+                    <option key={c.round_number} value={c.round_number}>
+                      {t("manual.number", { number: c.round_number })}
+                      {c.locked ? ` · ${t("manual.locked")}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {choice && (
+                <p role="status">
+                  {choice.manual
+                    ? `${t("manual.selected")} ${choice.title || choice.filename || t("manual.unavailable")}`
+                    : t("manual.random")}
+                </p>
+              )}
+              {choice?.locked && <p className="muted">{t("manual.lockedHint")}</p>}
+              {choice?.error && (
+                <p role="alert" className="error">
+                  {choice.error === "BRIDGE_OFFLINE"
+                    ? t("error.bridge_offline")
+                    : t("manual.unavailable")}{" "}
+                  {t("manual.replaceHint")}
+                </p>
+              )}
+              <Button
+                disabled={!choice?.manual || choice.locked || pendingChoice !== null}
+                onClick={() => choose(null)}
+              >
+                {t("manual.clear")}
+              </Button>
+              {choices
+                .filter((c) => c.manual)
+                .map((c) => (
+                  <p className="muted" key={c.round_number}>
+                    {t("manual.number", { number: c.round_number })} ·{" "}
+                    {c.title || c.filename || t("manual.unavailable")}
                     {c.locked ? ` · ${t("manual.locked")}` : ""}
+                  </p>
+                ))}
+            </section>
+          )}
+          <p className="muted">{t("library.sourcesHint")}</p>
+          {library?.bridges.map((b) => (
+            <SourceManager key={b.bridge_id} bridge={b} refresh={refresh} />
+          ))}
+          <p className="muted">{t("library.mountHint")}</p>
+          <div className="library-filters">
+            <label>
+              {t("library.search")}
+              <input
+                type="search"
+                value={q}
+                maxLength={256}
+                onChange={(e) => filter(setQuery, e.target.value)}
+              />
+            </label>
+            <label>
+              {t("library.bridge")}
+              <select value={bridge} onChange={(e) => filter(setBridge, e.target.value)}>
+                <option value="">{t("library.all")}</option>
+                {library?.bridges.map((b) => (
+                  <option key={b.bridge_id} value={b.bridge_id}>
+                    {b.name}
                   </option>
                 ))}
               </select>
             </label>
-            {choice && (
-              <p role="status">
-                {choice.manual
-                  ? `${t("manual.selected")} ${choice.title || choice.filename || t("manual.unavailable")}`
-                  : t("manual.random")}
-              </p>
-            )}
-            {choice?.locked && <p className="muted">{t("manual.lockedHint")}</p>}
-            {choice?.error && (
-              <p role="alert" className="error">
-                {choice.error === "BRIDGE_OFFLINE"
-                  ? t("error.bridge_offline")
-                  : t("manual.unavailable")}{" "}
-                {t("manual.replaceHint")}
-              </p>
-            )}
+            <label>
+              {t("library.folder")}
+              <input
+                value={folder}
+                maxLength={1024}
+                onChange={(e) => filter(setFolder, e.target.value)}
+              />
+            </label>
+            <label>
+              {t("library.type")}
+              <select value={ext} onChange={(e) => filter(setExt, e.target.value)}>
+                <option value="">{t("library.all")}</option>
+                {[
+                  ".mp3",
+                  ".flac",
+                  ".wav",
+                  ".m4a",
+                  ".aac",
+                  ".ogg",
+                  ".oga",
+                  ".opus",
+                  ".aiff",
+                  ".aif",
+                  ".wma",
+                  ".mp4",
+                  ".mov",
+                  ".m4v",
+                  ".3gp",
+                  ".mkv",
+                  ".mka",
+                  ".webm",
+                  ".avi",
+                  ".wmv",
+                  ".asf",
+                ].map((e) => (
+                  <option key={e}>{e}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t("library.availability")}
+              <select
+                value={availability}
+                onChange={(e) => filter(setAvailability, e.target.value)}
+              >
+                {[
+                  "all",
+                  "available",
+                  "unavailable",
+                  "online",
+                  "offline",
+                  "fresh",
+                  "used",
+                  "reserved",
+                ].map((value) => (
+                  <option value={value} key={value}>
+                    {t(`library.${value}` as "library.all")}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="row wrap">
+            <label>
+              {t("flow.sort")}
+              <select value={sort} onChange={(event) => filter(setSort, event.target.value)}>
+                {["title", "artist", "filename", "folder"].map((value) => (
+                  <option key={value} value={value}>
+                    {t(`library.${value}` as "library.folder")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="folder-option">
+              <input
+                type="checkbox"
+                checked={descending}
+                onChange={(event) => {
+                  setDescending(event.target.checked);
+                  setOffset(0);
+                }}
+              />
+              {t("flow.descending")}
+            </label>
+          </div>
+          {loading && <p role="status">{t("app.loading")}</p>}
+          {error && (
+            <p role="alert" className="error">
+              {error} <Button onClick={() => refresh()}>{t("app.retry")}</Button>
+            </p>
+          )}
+          {result && <p role="status">{t("library.results", { count: result.total })}</p>}
+          {!loading && result?.total === 0 && <p>{t("library.empty")}</p>}
+          <ul className="list library-tracks">
+            {result?.tracks.map((track) => (
+              <li key={`${track.bridge_id}:${track.track_id}`}>
+                <div>
+                  <strong>{track.title || track.filename}</strong>
+                  <p className="muted">
+                    {[
+                      track.artist,
+                      track.folder,
+                      library?.bridges.find((b) => b.bridge_id === track.bridge_id)?.name,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  <p className="muted">
+                    {[
+                      track.title ? track.filename : "",
+                      track.duration_ms
+                        ? `${Math.round(track.duration_ms / 1000)} s`
+                        : t("manual.durationUnknown"),
+                      track.available ? t("manual.available") : t("manual.unavailable"),
+                      track.consumption === "cancelled"
+                        ? t("review.cancelledShort")
+                        : track.played
+                          ? t("manual.played")
+                          : "",
+                      track.reserved ? t("manual.reserved") : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  {manualAllowed && !track.in_pool && (
+                    <p className="muted">{t("manual.outsideSources")}</p>
+                  )}
+                </div>
+                <div className="row wrap">
+                  {manualAllowed && (
+                    <Button
+                      disabled={
+                        !choice ||
+                        choice.locked ||
+                        pendingChoice !== null ||
+                        !track.available ||
+                        !track.in_pool ||
+                        (track.played && !view.host.settings.allow_repeats) ||
+                        (track.reserved &&
+                          !(
+                            choice.bridge_id === track.bridge_id &&
+                            choice.track_id === track.track_id
+                          ))
+                      }
+                      onClick={() => choose(track)}
+                    >
+                      {t("manual.choose", { number: roundNumber })}
+                    </Button>
+                  )}
+                  <Button onClick={() => setEditing(track)}>{t("ux.editTrack")}</Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="row wrap">
             <Button
-              disabled={!choice?.manual || choice.locked || pendingChoice !== null}
-              onClick={() => choose(null)}
+              disabled={!offset || loading}
+              onClick={() => setOffset((n) => Math.max(0, n - pageSize))}
             >
-              {t("manual.clear")}
+              {t("library.previous")}
             </Button>
-            {choices
-              .filter((c) => c.manual)
-              .map((c) => (
-                <p className="muted" key={c.round_number}>
-                  {t("manual.number", { number: c.round_number })} ·{" "}
-                  {c.title || c.filename || t("manual.unavailable")}
-                  {c.locked ? ` · ${t("manual.locked")}` : ""}
-                </p>
-              ))}
-          </section>
-        )}
-        <p className="muted">{t("library.sourcesHint")}</p>
-        {library?.bridges.map((b) => (
-          <SourceManager key={b.bridge_id} bridge={b} refresh={refresh} />
-        ))}
-        <p className="muted">{t("library.mountHint")}</p>
-        <div className="library-filters">
+            <Button
+              disabled={loading || offset + pageSize >= (result?.total ?? 0)}
+              onClick={() => setOffset((n) => n + pageSize)}
+            >
+              {t("library.next")}
+            </Button>
+            <span role="status">
+              {t("flow.page", {
+                page: Math.floor(offset / pageSize) + 1,
+                total: Math.max(1, Math.ceil((result?.total ?? 0) / pageSize)),
+              })}
+            </span>
+            <Button onClick={() => refresh()}>{t("library.refresh")}</Button>
+          </div>
+          {editing && (
+            <MetadataEditor
+              key={`${editing.bridge_id}:${editing.track_id}`}
+              track={editing}
+              onSaved={() => {
+                setEditing(null);
+                refresh();
+              }}
+            />
+          )}
           <label>
-            {t("library.search")}
+            {t("library.import")}
             <input
-              type="search"
-              value={q}
-              maxLength={256}
-              onChange={(e) => filter(setQuery, e.target.value)}
+              type="file"
+              accept="application/json,.json"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (file.size > 1024 * 1024) {
+                  setError(t("error.payload_too_large"));
+                  return;
+                }
+                try {
+                  const imported = await api.importMetadata(JSON.parse(await file.text()));
+                  if (imported.ok) {
+                    setNotice(
+                      `${t("library.imported", { count: imported.data.accepted })} ${imported.data.issues.map((i) => `${i.row}: ${t(`library.issue.${i.code}` as "library.issue.invalid")}`).join(" · ")}`,
+                    );
+                    refresh();
+                  } else setError(tCode("error", imported.error));
+                } catch {
+                  setError(t("error.invalid_message"));
+                }
+              }}
             />
           </label>
-          <label>
-            {t("library.bridge")}
-            <select value={bridge} onChange={(e) => filter(setBridge, e.target.value)}>
-              <option value="">{t("library.all")}</option>
-              {library?.bridges.map((b) => (
-                <option key={b.bridge_id} value={b.bridge_id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {t("library.folder")}
-            <input
-              value={folder}
-              maxLength={1024}
-              onChange={(e) => filter(setFolder, e.target.value)}
-            />
-          </label>
-          <label>
-            {t("library.type")}
-            <select value={ext} onChange={(e) => filter(setExt, e.target.value)}>
-              <option value="">{t("library.all")}</option>
-              {[
-                ".mp3",
-                ".flac",
-                ".wav",
-                ".m4a",
-                ".aac",
-                ".ogg",
-                ".oga",
-                ".opus",
-                ".aiff",
-                ".aif",
-                ".wma",
-                ".mp4",
-                ".mov",
-                ".m4v",
-                ".3gp",
-                ".mkv",
-                ".mka",
-                ".webm",
-                ".avi",
-                ".wmv",
-                ".asf",
-              ].map((e) => (
-                <option key={e}>{e}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {t("library.availability")}
-            <select value={availability} onChange={(e) => filter(setAvailability, e.target.value)}>
-              {["all", "available", "unavailable", "online", "offline", "fresh"].map((value) => (
-                <option value={value} key={value}>
-                  {t(`library.${value}` as "library.all")}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {loading && <p role="status">{t("app.loading")}</p>}
-        {error && (
-          <p role="alert" className="error">
-            {error} <Button onClick={() => refresh()}>{t("app.retry")}</Button>
-          </p>
-        )}
-        {result && <p role="status">{t("library.results", { count: result.total })}</p>}
-        {!loading && result?.total === 0 && <p>{t("library.empty")}</p>}
-        <ul className="list library-tracks">
-          {result?.tracks.map((track) => (
-            <li key={`${track.bridge_id}:${track.track_id}`}>
-              <div>
-                <strong>{track.title || track.filename}</strong>
-                <p className="muted">
-                  {[
-                    track.artist,
-                    track.folder,
-                    library?.bridges.find((b) => b.bridge_id === track.bridge_id)?.name,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-                <p className="muted">
-                  {[
-                    track.filename,
-                    track.ext,
-                    track.duration_ms
-                      ? `${Math.round(track.duration_ms / 1000)} s`
-                      : t("manual.durationUnknown"),
-                    track.available ? t("manual.available") : t("manual.unavailable"),
-                    track.played ? t("manual.played") : "",
-                    track.reserved ? t("manual.reserved") : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-                {manualAllowed && !track.in_pool && (
-                  <p className="muted">{t("manual.outsideSources")}</p>
-                )}
-              </div>
-              <div className="row wrap">
-                {manualAllowed && (
-                  <Button
-                    disabled={
-                      !choice ||
-                      choice.locked ||
-                      pendingChoice !== null ||
-                      !track.available ||
-                      !track.in_pool ||
-                      (track.played && !view.host.settings.allow_repeats) ||
-                      (track.reserved &&
-                        !(
-                          choice.bridge_id === track.bridge_id && choice.track_id === track.track_id
-                        ))
-                    }
-                    onClick={() => choose(track)}
-                  >
-                    {t("manual.choose", { number: roundNumber })}
-                  </Button>
-                )}
-                <Button onClick={() => setEditing(track)}>{t("ux.editTrack")}</Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-        <div className="row wrap">
+          {notice && <p role="status">{notice}</p>}
           <Button
-            disabled={!offset || loading}
-            onClick={() => setOffset((n) => Math.max(0, n - 100))}
-          >
-            {t("library.previous")}
-          </Button>
-          <Button
-            disabled={loading || offset + 100 >= (result?.total ?? 0)}
-            onClick={() => setOffset((n) => n + 100)}
-          >
-            {t("library.next")}
-          </Button>
-          <Button onClick={() => refresh()}>{t("library.refresh")}</Button>
-        </div>
-        {editing && (
-          <MetadataEditor
-            key={`${editing.bridge_id}:${editing.track_id}`}
-            track={editing}
-            onSaved={() => {
-              setEditing(null);
-              refresh();
-            }}
-          />
-        )}
-        <label>
-          {t("library.import")}
-          <input
-            type="file"
-            accept="application/json,.json"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              if (file.size > 1024 * 1024) {
-                setError(t("error.payload_too_large"));
+            onClick={async () => {
+              const data = await api.metadata();
+              if (!data.ok) {
+                setError(tCode("error", data.error));
                 return;
               }
-              try {
-                const imported = await api.importMetadata(JSON.parse(await file.text()));
-                if (imported.ok) {
-                  setNotice(
-                    `${t("library.imported", { count: imported.data.accepted })} ${imported.data.issues.map((i) => `${i.row}: ${t(`library.issue.${i.code}` as "library.issue.invalid")}`).join(" · ")}`,
-                  );
-                  refresh();
-                } else setError(tCode("error", imported.error));
-              } catch {
-                setError(t("error.invalid_message"));
-              }
+              const url = URL.createObjectURL(
+                new Blob([JSON.stringify(data.data, null, 2)], { type: "application/json" }),
+              );
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = "openblindysir-metadata.json";
+              link.click();
+              window.setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}
-          />
-        </label>
-        {notice && <p role="status">{notice}</p>}
-        <Button
-          onClick={async () => {
-            const data = await api.metadata();
-            if (!data.ok) {
-              setError(tCode("error", data.error));
-              return;
-            }
-            const url = URL.createObjectURL(
-              new Blob([JSON.stringify(data.data, null, 2)], { type: "application/json" }),
-            );
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "openblindysir-metadata.json";
-            link.click();
-            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-          }}
-        >
-          {t("library.exportMetadata")}
-        </Button>
-        {view.phase === "IN_GAME" && <p className="muted">{t("review.privateHint")}</p>}
-      </div>
-    </details>
+          >
+            {t("library.exportMetadata")}
+          </Button>
+          {view.phase === "IN_GAME" && <p className="muted">{t("review.privateHint")}</p>}
+        </div>
+      </Modal>
+    </>
   );
 }
 
