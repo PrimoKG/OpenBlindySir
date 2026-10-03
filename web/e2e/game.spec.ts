@@ -27,7 +27,6 @@ async function resetRoom(page: Page): Promise<void> {
     data: { host_password: HOST },
   });
   expect(elevated.ok()).toBe(true);
-  await page.goto("/host");
   await endTestSession(page);
 }
 test.beforeEach(async ({ page, browserName }) => {
@@ -447,15 +446,19 @@ async function openModeOptions(page: Page): Promise<void> {
 }
 
 async function endTestSession(page: Page): Promise<void> {
+  // Stop the application's socket before opening the harness socket. Otherwise
+  // they can supersede each other and a close can be mistaken for a room reset.
+  await page.goto("/healthz");
   await page.evaluate(async () => {
     const ws = new WebSocket(
       `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/ws`,
     );
-    await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
       ws.onopen = () =>
         ws.send(JSON.stringify({ t: "HELLO", client_version: "0.3.0", protocol: 6 }));
       ws.onmessage = (event) => {
         const msg = JSON.parse(String(event.data));
+        if (msg.t === "ERROR") reject(new Error(`Room reset failed: ${msg.code}`));
         if (msg.t === "STATE")
           ws.send(
             JSON.stringify({
@@ -466,7 +469,12 @@ async function endTestSession(page: Page): Promise<void> {
             }),
           );
       };
-      ws.onclose = () => resolve();
+      ws.onclose = (event) => {
+        if (event.code === 4004)
+          resolve(); // SESSION_ENDED
+        else reject(new Error(`Unexpected room reset close: ${event.code}`));
+      };
     });
   });
+  expect((await page.request.get("/api/session")).status()).toBe(401);
 }
