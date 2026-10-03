@@ -284,3 +284,16 @@ Cela ne remplace pas les essais sur votre LAN/VPN, votre musique ou vos appareil
 G1/G2 restent à mesurer. Les parcours graphiques WebKit headless sont testés ;
 ils ne valident pas l'audio Safari/iOS. Aucune soirée/VPS n'est déployée
 automatiquement. [Référence Docker Compose](https://docs.docker.com/compose/).
+
+### Conserver les montages supplémentaires
+
+Le lanceur `tools/docker-host.ps1` inclut automatiquement le fichier local
+`.local/docker/sources.override.yaml` s’il existe. Il doit contenir les volumes
+supplémentaires du Bridge. `start` les conserve lors d’un rebuild/recréation ;
+`stop` ne supprime pas les volumes de données. Gardez ce fichier avec votre
+configuration privée, en plus de `hosting.env`. Les montages musicaux supplémentaires doivent rester en lecture seule.
+
+Après une mise à jour, rechargez les onglets et mettez tous les Bridges au protocole
+6. Les snapshots 1 à 4 sont lus puis sauvegardés au format 5 ; un redémarrage ne
+relance pas automatiquement une transition interrompue. L’hôte reprend la partie
+explicitement dans ses paramètres.

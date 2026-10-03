@@ -77,6 +77,6 @@ def test_enum_def_must_be_a_protocol_enum(monkeypatch: pytest.MonkeyPatch) -> No
 def test_real_protocol_generates_without_any() -> None:
     out = gen_ts_types.generate()
     assert ": any" not in out
-    assert "export const PROTOCOL_VERSION = 5;" in out
+    assert "export const PROTOCOL_VERSION = 6;" in out
     assert out.endswith("\n")
     assert "\r" not in out

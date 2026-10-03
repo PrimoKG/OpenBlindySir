@@ -51,6 +51,9 @@ class SourceView(OutboundModel):
 
 
 class GameSettings(OutboundModel):
+    auto_advance: bool = True
+    intermission_s: int = 2
+    custom_points: int = 1
     rounds: int
     clip_seconds: int
     answer_grace_s: int
@@ -77,6 +80,9 @@ class SettingsPatch(InboundModel):
     answer_grace_s: Annotated[int, Field(ge=0, le=120)] | None = None
     sources: Annotated[list[SourceSelection], Field(max_length=64)] | None = None
     auto_start: bool | None = None
+    auto_advance: bool | None = None
+    intermission_s: Annotated[int, Field(ge=0, le=10)] | None = None
+    custom_points: Annotated[int, Field(ge=0, le=1000)] | None = None
     prefetch_depth: Annotated[int, Field(ge=1, le=2)] | None = None
     allow_repeats: bool | None = None
     answer_mode: Literal["title", "artist", "both", "custom"] | None = None

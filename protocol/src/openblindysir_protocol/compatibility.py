@@ -1,4 +1,4 @@
-"""Explicit compatibility information; protocol 5 remains a development protocol."""
+"""Explicit compatibility information; protocol 6 remains a development protocol."""
 
 import re
 
@@ -11,7 +11,7 @@ class Compatibility(OutboundModel):
     protocol: int = PROTOCOL_VERSION
     protocol_min: int = PROTOCOL_MIN
     protocol_max: int = PROTOCOL_MAX
-    snapshot_format: int = 4
+    snapshot_format: int = 5
     history_format: int = 2
 
 

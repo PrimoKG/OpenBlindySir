@@ -69,8 +69,13 @@ export function startGame(): Host {
   return { t: "HOST", cmd: "start_game", expected_phase: "LOBBY", args: {} };
 }
 
-export function newGame(): Host {
-  return { t: "HOST", cmd: "new_game", expected_phase: "FINAL_RESULTS", args: {} };
+export function newGame(resetLibrary = false): Host {
+  return {
+    t: "HOST",
+    cmd: "new_game",
+    expected_phase: "FINAL_RESULTS",
+    args: { reset_library: resetLibrary },
+  };
 }
 
 export function roundCmd(view: AnyView, cmd: RoundCmd): Host {
@@ -120,12 +125,23 @@ export function addTime(view: AnyView): Host {
   };
 }
 
-export function scoreDraft(round: AnyView | string, playerId: string, points: number): Host {
+export function scoreDraft(
+  round: AnyView | string,
+  playerId: string,
+  points: number,
+  judgement?: {
+    judgement: "manual" | "criteria";
+    title_correct?: boolean | null;
+    artist_correct?: boolean | null;
+    custom_correct?: boolean | null;
+    expected_revision?: number;
+  },
+): Host {
   return {
     t: "HOST",
     cmd: "score_draft",
     round_id: typeof round === "string" ? round : roundId(round),
-    args: { player_id: playerId, points },
+    args: { player_id: playerId, points, ...judgement },
   };
 }
 
@@ -145,12 +161,22 @@ export function adjust(playerId: string, delta: number, opId: string, note?: str
   return { t: "HOST", cmd: "adjust", expected_phase: "IN_GAME", args };
 }
 
-export function finalSet(playerId: string, delta: number): Host {
+export function finalSet(
+  playerId: string,
+  delta: number,
+  note?: string | null,
+  expected?: { delta: number; note: string | null },
+): Host {
   return {
     t: "HOST",
     cmd: "final_set",
     expected_phase: "FINAL_SCORE_REVIEW",
-    args: { player_id: playerId, delta },
+    args: {
+      player_id: playerId,
+      delta,
+      note: note ?? null,
+      ...(expected ? { expected_delta: expected.delta, expected_note: expected.note } : {}),
+    },
   };
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import * as cmd from "../app/commands";
 import { useGame, useUi } from "../app/hooks";
 import { t, tCode } from "../i18n";
@@ -11,7 +11,7 @@ import type {
   SettingsPatch,
 } from "../protocol";
 import { readLocal, writeLocal } from "../storage";
-import { Button } from "../ui/components";
+import { Button, Tabs } from "../ui/components";
 
 export function selectedCapacity(
   library: LibraryResponse | null,
@@ -69,7 +69,23 @@ export function settingsKey(settings: GameSettings): string {
   );
 }
 
-export function SetupPanel({ view }: { readonly view: HostView }) {
+export function SetupPanel({
+  view,
+  onDirtyChange,
+  players,
+  advanced,
+}: {
+  readonly view: HostView;
+  readonly onDirtyChange?: (dirty: boolean) => void;
+  readonly players?: ReactNode;
+  readonly advanced?: ReactNode;
+}) {
+  const tabId = useId();
+  const [tab, setTab] = useState("music");
+  const tabs = ["music", "rules", "rhythm", "players", "advanced"].map((id) => ({
+    id,
+    label: t(`flow.${id}` as "flow.music"),
+  }));
   const game = useGame();
   const ui = useUi();
   const saved = view.host.settings;
@@ -103,6 +119,9 @@ export function SetupPanel({ view }: { readonly view: HostView }) {
   }, [key]);
   const dirty = settingsKey(draft) !== settingsKey(saved);
   useEffect(() => {
+    onDirtyChange?.(dirty || pending);
+  }, [dirty, pending, onDirtyChange]);
+  useEffect(() => {
     if (!dirty) setPending(false);
   }, [dirty]);
   useEffect(() => {
@@ -133,7 +152,12 @@ export function SetupPanel({ view }: { readonly view: HostView }) {
     Number.isInteger(draft.answer_grace_s) &&
     draft.answer_grace_s >= 0 &&
     draft.answer_grace_s <= 120 &&
-    [draft.title_points ?? 1, draft.artist_points ?? 1].every(
+    Number.isInteger(draft.intermission_s ?? 2) &&
+    (draft.intermission_s ?? 2) >= 0 &&
+    (draft.intermission_s ?? 2) <= 10 &&
+    (draft.answer_mode !== "both" ||
+      (draft.title_points ?? 1) + (draft.artist_points ?? 1) <= 1000) &&
+    [draft.title_points ?? 1, draft.artist_points ?? 1, draft.custom_points ?? 1].every(
       (p) => Number.isInteger(p) && p >= 0 && p <= 1000,
     );
   const save = (start: boolean) => {
@@ -153,7 +177,13 @@ export function SetupPanel({ view }: { readonly view: HostView }) {
     );
   };
   const checkbox = (
-    field: "auto_start" | "allow_repeats" | "normalize_audio" | "avoid_silence" | "balance_folders",
+    field:
+      | "auto_advance"
+      | "auto_start"
+      | "allow_repeats"
+      | "normalize_audio"
+      | "avoid_silence"
+      | "balance_folders",
     label: string,
   ) => (
     <label className="folder-option">
@@ -173,201 +203,279 @@ export function SetupPanel({ view }: { readonly view: HostView }) {
         save(false);
       }}
     >
-      <h2>{t("hostui.setup")}</h2>
-      <div className="setup-fields">
+      <Tabs id={tabId} tabs={tabs} value={tab} onChange={setTab} />
+      <section
+        className="stack"
+        role="tabpanel"
+        id={`${tabId}-panel-rhythm`}
+        aria-labelledby={`${tabId}-rhythm`}
+        hidden={tab !== "rhythm"}
+      >
+        {checkbox("auto_advance", t("flow.autoAdvance"))}
         <label>
-          {t("hostui.rounds")}
-          <input
-            type="number"
-            min={1}
-            max={200}
-            value={draft.rounds}
-            onChange={(e) => set("rounds", Number(e.target.value))}
-          />
-        </label>
-        <label>
-          {t("hostui.clipSeconds")}
-          <input
-            type="number"
-            min={limits.clip_min_s}
-            max={limits.clip_max_s}
-            value={draft.clip_seconds}
-            onChange={(e) => set("clip_seconds", Number(e.target.value))}
-          />
-        </label>
-      </div>
-      <label>
-        {t("hostui.grace")}
-        <input
-          type="number"
-          min={0}
-          max={120}
-          value={draft.answer_grace_s}
-          onChange={(e) => set("answer_grace_s", Number(e.target.value))}
-        />
-      </label>
-      <label>
-        {t("ux.answerMode")}
-        <select
-          value={draft.answer_mode ?? "both"}
-          onChange={(e) => set("answer_mode", e.target.value)}
-        >
-          <option value="both">{t("ux.modeBoth")}</option>
-          <option value="title">{t("ux.modeTitle")}</option>
-          <option value="artist">{t("ux.modeArtist")}</option>
-          <option value="custom">{t("ux.modeCustom")}</option>
-        </select>
-      </label>
-      <div className="setup-fields">
-        <label>
-          {t("ux.titlePoints")}
+          {t("flow.gap")}
           <input
             type="number"
             min={0}
-            max={1000}
-            value={draft.title_points ?? 1}
-            onChange={(e) => set("title_points", Number(e.target.value))}
+            max={10}
+            value={draft.intermission_s ?? 2}
+            onChange={(event) => set("intermission_s", Number(event.target.value))}
           />
         </label>
-        <label>
-          {t("ux.artistPoints")}
-          <input
-            type="number"
-            min={0}
-            max={1000}
-            value={draft.artist_points ?? 1}
-            onChange={(e) => set("artist_points", Number(e.target.value))}
-          />
-        </label>
-      </div>
-      <label>
-        {t("ux.instructions")}
-        <textarea
-          rows={2}
-          maxLength={500}
-          value={draft.instructions ?? ""}
-          onChange={(e) => set("instructions", e.target.value)}
-        />
-      </label>
-      <label>
-        {t("ux.capturedPolicy")}
-        <select
-          value={draft.captured_policy ?? "manual"}
-          onChange={(e) => set("captured_policy", e.target.value)}
-        >
-          <option value="manual">{t("ux.capturedManual")}</option>
-          <option value="zero">{t("ux.capturedZero")}</option>
-        </select>
-      </label>
-      <h3>{t("hostui.library")}</h3>
-      <p className="muted">
-        {view.host.bridge.state === "ONLINE" ? t("hostui.bridgeOnline") : t("hostui.bridgeOffline")}
-      </p>
-      <p className="muted">{t("hostui.libraryHint")}</p>
-      <Button type="button" onClick={() => setRetry((n) => n + 1)}>
-        {t("library.refresh")}
-      </Button>
-      {error && (
-        <p className="error" role="alert">
-          {error} <Button onClick={() => setRetry((n) => n + 1)}>{t("app.retry")}</Button>
-        </p>
-      )}
-      {!library && !error && <p role="status">{t("hostui.libraryLoading")}</p>}
-      <label>
-        {t("library.searchFolders")}
-        <input type="search" value={folderQuery} onChange={(e) => setFolderQuery(e.target.value)} />
-      </label>
-      {library?.bridges.map((bridge) => (
-        <ul className="tree" key={bridge.bridge_id}>
-          <Folder
-            node={bridge.root}
-            bridgeId={bridge.bridge_id}
-            selected={selected}
-            toggle={toggle}
-            query={folderQuery}
-          />
-        </ul>
-      ))}
-      {library?.bridges.length === 0 && <p>{t("hostui.libraryEmpty")}</p>}
-      <div className="capacity-card" role="status">
-        <strong>{t("ux.capacity", { count: fresh, rounds: draft.rounds })}</strong>
-        <p className="muted">{t("ux.sessionNoRepeat")}</p>
-      </div>
-      {checkbox("allow_repeats", t("hostui.allowRepeats"))}
-      {tooMany && capacity > 0 && (
-        <div className="notice">
-          <p>{t("ux.insufficientTracks", { count: capacity, rounds: draft.rounds })}</p>
-          <Button onClick={() => set("rounds", capacity)}>
-            {t("ux.reduceRounds", { count: capacity })}
-          </Button>
-        </div>
-      )}
-      <details className="disclosure">
-        <summary>{t("hostui.advanced")}</summary>
-        <div className="stack">
-          {checkbox("auto_start", t("hostui.autoStart"))}
-          {checkbox("normalize_audio", t("ux.normalize"))}
-          {checkbox("avoid_silence", t("ux.avoidSilence"))}
-          {checkbox("balance_folders", t("library.balance"))}
-        </div>
-      </details>
-      {(library?.issues?.length ?? 0) > 0 && (
-        <details className="disclosure">
-          <summary>{t("ux.libraryIssues")}</summary>
-          <ul>
-            {library?.issues?.map((issue) => (
-              <li key={`${issue.bridge_id}:${issue.filename}`}>
-                {issue.filename} — {tCode("error", issue.code)}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-      <details className="disclosure">
-        <summary>{t("ux.presets")}</summary>
-        <div className="stack">
+        <p className="muted">{t("flow.rhythmHint")}</p>
+        <div className="setup-fields">
           <label>
-            {t("ux.presetName")}
+            {t("hostui.rounds")}
             <input
-              maxLength={40}
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
+              type="number"
+              min={1}
+              max={200}
+              value={draft.rounds}
+              onChange={(e) => set("rounds", Number(e.target.value))}
             />
           </label>
-          <Button
-            disabled={!presetName.trim() || !valid}
-            onClick={() => {
-              const next = [
-                ...presets.filter((p) => p.name !== presetName.trim()),
-                { name: presetName.trim(), settings: draft },
-              ].slice(-20);
-              setPresets(next);
-              writeLocal("selections", JSON.stringify(next));
-              setPresetName("");
-            }}
-          >
-            {t("ux.savePreset")}
-          </Button>
-          <p className="muted">{t("ux.presetLocal")}</p>
-          {presets.map((preset) => (
-            <div className="row wrap" key={preset.name}>
-              <Button onClick={() => setDraft({ ...draft, ...preset.settings } as GameSettings)}>
-                {preset.name}
-              </Button>
-              <Button
-                aria-label={t("ux.deletePreset", { name: preset.name })}
-                onClick={() => {
-                  const next = presets.filter((p) => p.name !== preset.name);
-                  setPresets(next);
-                  writeLocal("selections", JSON.stringify(next));
-                }}
-              >
-                ×
-              </Button>
-            </div>
-          ))}
+          <label>
+            {t("hostui.clipSeconds")}
+            <input
+              type="number"
+              min={limits.clip_min_s}
+              max={limits.clip_max_s}
+              value={draft.clip_seconds}
+              onChange={(e) => set("clip_seconds", Number(e.target.value))}
+            />
+          </label>
         </div>
-      </details>
+        <label>
+          {t("hostui.grace")}
+          <input
+            type="number"
+            min={0}
+            max={120}
+            value={draft.answer_grace_s}
+            onChange={(e) => set("answer_grace_s", Number(e.target.value))}
+          />
+        </label>
+      </section>
+      <section
+        className="stack"
+        role="tabpanel"
+        id={`${tabId}-panel-rules`}
+        aria-labelledby={`${tabId}-rules`}
+        hidden={tab !== "rules"}
+      >
+        <label>
+          {t("ux.answerMode")}
+          <select
+            value={draft.answer_mode ?? "both"}
+            onChange={(e) => set("answer_mode", e.target.value)}
+          >
+            <option value="both">{t("ux.modeBoth")}</option>
+            <option value="title">{t("ux.modeTitle")}</option>
+            <option value="artist">{t("ux.modeArtist")}</option>
+            <option value="custom">{t("ux.modeCustom")}</option>
+          </select>
+        </label>
+        <div className="setup-fields">
+          <label hidden={draft.answer_mode === "artist" || draft.answer_mode === "custom"}>
+            {t("ux.titlePoints")}
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={draft.title_points ?? 1}
+              onChange={(e) => set("title_points", Number(e.target.value))}
+            />
+          </label>
+          <label hidden={draft.answer_mode === "title" || draft.answer_mode === "custom"}>
+            {t("ux.artistPoints")}
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={draft.artist_points ?? 1}
+              onChange={(e) => set("artist_points", Number(e.target.value))}
+            />
+          </label>
+        </div>
+        <label>
+          {t("ux.instructions")}
+          <textarea
+            rows={2}
+            maxLength={500}
+            value={draft.instructions ?? ""}
+            onChange={(e) => set("instructions", e.target.value)}
+          />
+        </label>
+        <label>
+          {t("ux.capturedPolicy")}
+          <select
+            value={draft.captured_policy ?? "manual"}
+            onChange={(e) => set("captured_policy", e.target.value)}
+          >
+            <option value="manual">{t("ux.capturedManual")}</option>
+            <option value="zero">{t("ux.capturedZero")}</option>
+          </select>
+        </label>
+        {draft.answer_mode === "custom" && (
+          <label>
+            {t("flow.customPoints")}
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={draft.custom_points ?? 1}
+              onChange={(event) => set("custom_points", Number(event.target.value))}
+            />
+          </label>
+        )}
+      </section>
+      <section
+        className="stack"
+        role="tabpanel"
+        id={`${tabId}-panel-music`}
+        aria-labelledby={`${tabId}-music`}
+        hidden={tab !== "music"}
+      >
+        <h3>{t("hostui.library")}</h3>
+        <p className="muted">
+          {view.host.bridge.state === "ONLINE"
+            ? t("hostui.bridgeOnline")
+            : t("hostui.bridgeOffline")}
+        </p>
+        <p className="muted">{t("hostui.libraryHint")}</p>
+        <Button type="button" onClick={() => setRetry((n) => n + 1)}>
+          {t("library.refresh")}
+        </Button>
+        {error && (
+          <p className="error" role="alert">
+            {error} <Button onClick={() => setRetry((n) => n + 1)}>{t("app.retry")}</Button>
+          </p>
+        )}
+        {!library && !error && <p role="status">{t("hostui.libraryLoading")}</p>}
+        <label>
+          {t("library.searchFolders")}
+          <input
+            type="search"
+            value={folderQuery}
+            onChange={(e) => setFolderQuery(e.target.value)}
+          />
+        </label>
+        {library?.bridges.map((bridge) => (
+          <ul className="tree" key={bridge.bridge_id}>
+            <Folder
+              node={bridge.root}
+              bridgeId={bridge.bridge_id}
+              selected={selected}
+              toggle={toggle}
+              query={folderQuery}
+            />
+          </ul>
+        ))}
+        {library?.bridges.length === 0 && <p>{t("hostui.libraryEmpty")}</p>}
+        <div className="capacity-card" role="status">
+          <strong>{t("ux.capacity", { count: fresh, rounds: draft.rounds })}</strong>
+          <p className="muted">{t("ux.sessionNoRepeat")}</p>
+        </div>
+        {checkbox("allow_repeats", t("hostui.allowRepeats"))}
+        {tooMany && capacity > 0 && (
+          <div className="notice">
+            <p>{t("ux.insufficientTracks", { count: capacity, rounds: draft.rounds })}</p>
+            <Button onClick={() => set("rounds", capacity)}>
+              {t("ux.reduceRounds", { count: capacity })}
+            </Button>
+          </div>
+        )}
+      </section>
+      <section
+        className="stack"
+        role="tabpanel"
+        id={`${tabId}-panel-advanced`}
+        aria-labelledby={`${tabId}-advanced`}
+        hidden={tab !== "advanced"}
+      >
+        <details className="disclosure" open>
+          <summary>{t("hostui.advanced")}</summary>
+          <div className="stack">
+            {checkbox("auto_start", t("hostui.autoStart"))}
+            {checkbox("normalize_audio", t("ux.normalize"))}
+            {checkbox("avoid_silence", t("ux.avoidSilence"))}
+            {checkbox("balance_folders", t("library.balance"))}
+          </div>
+        </details>
+        {(library?.issues?.length ?? 0) > 0 && (
+          <details className="disclosure">
+            <summary>{t("ux.libraryIssues")}</summary>
+            <ul>
+              {library?.issues?.map((issue) => (
+                <li key={`${issue.bridge_id}:${issue.filename}`}>
+                  {issue.filename} — {tCode("error", issue.code)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        <details className="disclosure">
+          <summary>{t("ux.presets")}</summary>
+          <div className="stack">
+            <label>
+              {t("ux.presetName")}
+              <input
+                maxLength={40}
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+              />
+            </label>
+            <Button
+              disabled={!presetName.trim() || !valid}
+              onClick={() => {
+                const next = [
+                  ...presets.filter((p) => p.name !== presetName.trim()),
+                  { name: presetName.trim(), settings: draft },
+                ].slice(-20);
+                setPresets(next);
+                writeLocal("selections", JSON.stringify(next));
+                setPresetName("");
+              }}
+            >
+              {t("ux.savePreset")}
+            </Button>
+            <p className="muted">{t("ux.presetLocal")}</p>
+            {presets.map((preset) => (
+              <div className="row wrap" key={preset.name}>
+                <Button onClick={() => setDraft({ ...draft, ...preset.settings } as GameSettings)}>
+                  {preset.name}
+                </Button>
+                <Button
+                  aria-label={t("ux.deletePreset", { name: preset.name })}
+                  onClick={() => {
+                    const next = presets.filter((p) => p.name !== preset.name);
+                    setPresets(next);
+                    writeLocal("selections", JSON.stringify(next));
+                  }}
+                >
+                  ×
+                </Button>
+              </div>
+            ))}
+          </div>
+        </details>
+        {advanced}
+      </section>
+      <section
+        className="stack"
+        role="tabpanel"
+        id={`${tabId}-panel-players`}
+        aria-labelledby={`${tabId}-players`}
+        hidden={tab !== "players"}
+      >
+        {players}
+      </section>
+      {draft.answer_mode === "both" &&
+        (draft.title_points ?? 1) + (draft.artist_points ?? 1) > 1000 && (
+          <p className="error" role="alert">
+            {t("flow.scaleBound")}
+          </p>
+        )}
       {!valid && (
         <p role="alert" className="error">
           {t("ux.settingsInvalid", { min: limits.clip_min_s, max: limits.clip_max_s })}
@@ -381,27 +489,37 @@ export function SetupPanel({ view }: { readonly view: HostView }) {
           </p>
         ))}
       {capacity === 0 && library && <p className="notice">{t("ux.noPlayableTracks")}</p>}
-      <div className="row wrap setup-actions">
-        <Button type="submit" disabled={!dirty || !valid || pending}>
-          {t("hostui.save")}
-        </Button>
-        <Button
-          kind="primary"
-          disabled={
-            !valid ||
-            pending ||
-            capacity === 0 ||
-            tooMany ||
-            view.host.start_blockers.includes("no_competitors")
-          }
-          onClick={() => save(true)}
-        >
-          {pending ? t("ux.saving") : dirty ? t("ux.saveAndStart") : t("hostui.start")}
-        </Button>
+      <div className="setup-footer stack">
+        <strong>
+          {t("flow.summary", {
+            rounds: draft.rounds,
+            seconds: draft.clip_seconds,
+            players: view.players.filter((p) => !p.spectator && (!p.is_host || view.me.participant))
+              .length,
+          })}
+        </strong>
+        <div className="row wrap setup-actions">
+          <Button type="submit" disabled={!dirty || !valid || pending}>
+            {t("hostui.save")}
+          </Button>
+          <Button
+            kind="primary"
+            disabled={
+              !valid ||
+              pending ||
+              capacity === 0 ||
+              tooMany ||
+              view.host.start_blockers.includes("no_competitors")
+            }
+            onClick={() => save(true)}
+          >
+            {pending ? t("ux.saving") : dirty ? t("ux.saveAndStart") : t("hostui.start")}
+          </Button>
+        </div>
+        <p className="muted" role="status">
+          {dirty ? t("hostui.unsaved") : t("hostui.saved")}
+        </p>
       </div>
-      <p className="muted" role="status">
-        {dirty ? t("hostui.unsaved") : t("hostui.saved")}
-      </p>
     </form>
   );
 }
@@ -428,7 +546,10 @@ function Folder(props: {
         <span>
           {props.node.name}{" "}
           <small className="muted">
-            ({props.node.fresh_count ?? props.node.track_count}/{props.node.track_count})
+            {t("flow.freshCount", {
+              fresh: props.node.fresh_count ?? props.node.track_count,
+              total: props.node.available_count ?? props.node.track_count,
+            })}
           </small>
         </span>
       </label>

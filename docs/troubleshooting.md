@@ -114,7 +114,7 @@ que pour son premier UUID. Rotation : conserver UUID, délivrer un nouveau fichi
 reconnecter uniquement ce Bridge. Voir [FR](v0.5.md) / [EN](v0.5.en.md).
 
 Incompatibilité : contrôler `/api/compatibility`, mettre à jour les trois composants
-au protocole 5 et recharger l'onglet. Un format snapshot/historique inconnu n'est
+au protocole 6 et recharger l'onglet. Un format snapshot/historique inconnu n'est
 pas une invitation à effacer l'état : conserver les deux copies et le registre,
 utiliser la version compatible ou le backup pré-migration. Historique vide après
 90 jours/50 parties/16 Mio : consulter la politique de rétention ; une sauvegarde

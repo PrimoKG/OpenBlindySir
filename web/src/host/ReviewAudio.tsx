@@ -13,7 +13,7 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
   const latestVolume = useRef(0.8);
   const [mode, setMode] = useState<"excerpt" | "full">("excerpt");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [base, setBase] = useState(0);
@@ -48,13 +48,30 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
     setPosition(offset);
     setLoaded(false);
     setLoading(true);
-    setError(false);
+    setError(null);
     try {
       const response = await fetch(
         `/api/host/review/${round.round_id}/audio?mode=${selected}&offset=${offset}`,
         { credentials: "same-origin", cache: "no-store", signal: controller.signal },
       );
-      if (!response.ok) throw new Error("unavailable");
+      if (!response.ok) {
+        let code = "";
+        try {
+          const body = await response.json();
+          code = String(body.error?.code ?? body.code ?? body.error ?? "");
+        } catch {
+          /* A gateway may return a non-JSON error. */
+        }
+        const message =
+          response.status === 401 || response.status === 403
+            ? t("flow.audioForbidden")
+            : code.toLowerCase().includes("bridge_offline")
+              ? t("flow.audioOffline")
+              : response.status === 404 || code.toLowerCase().includes("source")
+                ? t("flow.audioChanged")
+                : t("flow.audioGeneration");
+        throw new Error(message);
+      }
       const data = await response.blob();
       if (version !== generation.current) return;
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
@@ -69,10 +86,16 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
       setPosition(offset);
       setLoading(false);
       if (autoplay) await player.play();
-    } catch {
+    } catch (failure) {
       if (version === generation.current) {
         setLoading(false);
-        setError(true);
+        setError(
+          failure instanceof DOMException && failure.name === "NotAllowedError"
+            ? t("flow.audioBlocked")
+            : failure instanceof Error
+              ? failure.message
+              : t("flow.audioGeneration"),
+        );
       }
     }
   };
@@ -86,15 +109,15 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
   const clock = (seconds: number) =>
     `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
   const play = () => {
-    setError(false);
-    void audio.current?.play().catch(() => setError(true));
+    setError(null);
+    void audio.current?.play().catch(() => setError(t("flow.audioBlocked")));
   };
   return (
     <section className="review-audio stack" aria-label={t("review.listen")}>
       <div className="row wrap">
         <strong>{t(mode === "full" ? "review.full" : "review.excerpt")}</strong>
         <Button
-          disabled={loading}
+          disabled={loading || (!loaded && !round.bridge_online)}
           onClick={() => {
             if (!loaded) void load(mode, base);
             else if (playing) audio.current?.pause();
@@ -103,7 +126,12 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
         >
           {t(playing ? "review.pause" : "review.play")}
         </Button>
-        <Button disabled={loading} onClick={() => void load(mode === "full" ? "excerpt" : "full")}>
+        <Button
+          disabled={
+            loading || !round.bridge_online || (mode !== "full" && !round.full_review_allowed)
+          }
+          onClick={() => void load(mode === "full" ? "excerpt" : "full")}
+        >
           {t(mode === "full" ? "review.backExcerpt" : "review.listenFull")}
         </Button>
       </div>
@@ -120,7 +148,7 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
           if (objectUrl.current) {
             setLoaded(false);
             setPlaying(false);
-            setError(true);
+            setError(t("flow.audioGeneration"));
           }
         }}
         onEnded={() => {
@@ -181,7 +209,7 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
       {loading && <p role="status">{t("app.loading")}</p>}
       {error && (
         <p role="alert" className="error">
-          {t("review.audioError")}{" "}
+          {error}{" "}
           <Button
             onClick={() => {
               if (loaded) play();
@@ -192,6 +220,8 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
           </Button>
         </p>
       )}
+      {!round.bridge_online && <p className="notice">{t("flow.audioOffline")}</p>}
+      {!round.full_review_allowed && <p className="muted">{t("flow.fullUnavailable")}</p>}
       {mode === "full" && <p className="muted">{t("review.fullHint")}</p>}
     </section>
   );

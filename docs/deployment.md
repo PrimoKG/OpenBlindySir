@@ -245,6 +245,6 @@ passer `--credentials` au Bridge ; conserver ses choix de racine et URL locaux.
 Révocation depuis le panneau hôte ou `bridge-revoke`, rotation avec le même UUID et
 un nouveau fichier de sortie. Voir [les commandes natives/Docker V0.5](v0.5.md).
 Sauvegarder tout `STATE_DIR`, registre d'identités compris, et les fichiers de
-configuration privés. Logiciel 0.5.0.dev0, protocole 5, snapshot 4, historique 2 :
+configuration privés. Logiciel 0.5.0.dev0, protocole 6, snapshot 5, historique 2 :
 aucune publication ni gel. [Retour arrière](operations.md) exige un backup antérieur
 à la migration pour reprendre V0.3.

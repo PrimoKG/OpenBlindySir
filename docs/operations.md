@@ -74,7 +74,7 @@ reste en dehors de l'archive. Vérifier `--version`, `doctor`, puis registration
 hors partie. Démarrer le serveur et les Bridges, recharger les onglets joueurs,
 tester le son et une manche synthétique avant d'inviter.
 
-**Compatibilité :** V0.5 = logiciel `0.5.0.dev0`, protocole 5 et plage 5 à 5.
+**Compatibilité :** V0.5 = logiciel `0.5.0.dev0`, protocole 6 et plage 6 à 6.
 Le serveur publie `/api/compatibility` et renvoie ses formats lors d'un refus de
 connexion. Recharger un ancien onglet puis mettre à jour les trois composants.
 Le Bridge/protocole Python portent une version exacte commune. Pas de downgrade
@@ -82,7 +82,7 @@ automatique ou de protocole mixte. Cette V0.5 n'est pas publiée et ne fige pas 
 
 ## Sauvegardes et retour arrière
 
-V0.5 écrit le **snapshot 4** et lit 1/2/3/4 ; l'historique **2** migre les records
+V0.5 écrit le **snapshot 5** et lit 1/2/3/4 ; l'historique **2** migre les records
 anciens/version 1. Un format futur inconnu arrête le démarrage : préserver les
 fichiers et utiliser la version capable de les lire. Ce refus ne retombe pas sur un
 backup plus ancien. Une corruption connue tente `session.previous.json` ; si les
@@ -105,7 +105,7 @@ résultats courants ne sont pas effacés par cette action. Limite snapshot : 64 
 par fichier ; prévoir jusqu'à 256 Mio avec les copies et écritures temporaires.
 Les catalogues cumulés sont bornés à 200 000 pistes. Voir [les opérations V0.5](v0.5.md).
 
-V0.3 **ne lit pas** le snapshot 4. Pour revenir : arrêter les services, restaurer
+V0.3 **ne lit pas** le snapshot 5. Pour revenir : arrêter les services, restaurer
 **l'installation entière, build web/Bridges compris, et le backup pré-migration**
 avec ses secrets. Conserver privément l'état récent pour analyse ; ses réponses ne
 se fusionnent pas automatiquement dans l'ancien format. Un backup V0.5 nécessite

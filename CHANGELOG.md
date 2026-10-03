@@ -10,6 +10,18 @@ the version is 0.x, the API and protocol may change between minor versions.
 
 ### V0.5 — development, 0.5.0.dev0
 
+- Continuous server-driven rounds (2-second default), pause/resume intermissions,
+  manual pace option and final-only scoring; compact host tools and tabbed modals.
+- Search/sort/paginate the complete catalogue in a persistent modal; playing-host
+  preflight browsing, explicit consumed/reserved/cancelled states and reserve reset.
+- Weighted semantic title/artist/custom judgements, manual override, unchecked
+  review navigation, absent-only zero batch, revision guards and correction reasons.
+- Session-wide metadata corrections, immutable historical values, team-first podium,
+  private replay capability hints/errors and readable responsive controls.
+- Protocol 6 (6..6), snapshot 5 with formats 1–4 migration; history remains format 2.
+- Docker launcher preserves local sources.override.yaml across recreation; FR/EN
+  usage/install guides describe modal controls, pace, scoring and preserved state.
+
 - UUID-bound private Bridge secrets, operator issuance/rotation, host revocation,
   per-owner capabilities/status and authentication rechecks after network waits.
 - Online-only random choices and 45-second offline recovery; prepared clips
@@ -20,7 +32,7 @@ the version is 0.x, the API and protocol may change between minor versions.
   catalogue and credential caps. New boundary/migration/crash regression tests.
 - Skip links, phase announcements, dialog focus, named audio progress and
   keyboard/history/reflow/200%-text/reduced-motion verification.
-- Software 0.5.0.dev0, protocol 5 (5..5), snapshot 4, history 2; legacy migrations,
+- Software 0.5.0.dev0, protocol 6 (6..6), snapshot 5, history 2; legacy migrations,
   unknown-version refusal and cookies preserved on Bridge rotation.
 - Docker/native commands, private credential profile, FR/EN guides, ADR 0015,
   threat model and Chromium/WebKit CI. No release published or protocol frozen.

@@ -85,7 +85,7 @@ class BridgeInfo:
     state: BridgeState
     catalog_hash: str
     track_count: int
-    protocol: int = 5
+    protocol: int = 6
     formats: tuple[str, ...] = ("aac",)
     allow_full_review: bool = False
     source_error: str | None = None
@@ -223,6 +223,9 @@ class Round:
     track_entry: CatalogEntryData | None = None
     bridge_name: str = ""
     metadata_revision: int = 0
+    auto_advance_at: int | None = None
+    judgements: dict[str, dict[str, bool | None]] = field(default_factory=dict)
+    score_revisions: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -255,6 +258,9 @@ class AssetRecord:
 
 @dataclass(slots=True)
 class Settings:
+    auto_advance: bool = True
+    intermission_s: int = 2
+    custom_points: int = 1
     rounds: int = 20
     clip_seconds: int = 25
     answer_grace_s: int = 15
@@ -273,6 +279,9 @@ class Settings:
 
     def copy(self) -> "Settings":
         return Settings(
+            auto_advance=self.auto_advance,
+            intermission_s=self.intermission_s,
+            custom_points=self.custom_points,
             rounds=self.rounds,
             clip_seconds=self.clip_seconds,
             answer_grace_s=self.answer_grace_s,
@@ -305,6 +314,7 @@ class GameState:
     unavailable: set[TrackRef] = field(default_factory=set)
     ending: EndGameMode | None = None
     final_draft: dict[str, int] = field(default_factory=dict)
+    final_notes: dict[str, str] = field(default_factory=dict)
     finalized_at: int | None = None
     finalized_wall_ms: int | None = None
     started_wall_ms: int | None = None
@@ -337,6 +347,7 @@ class SessionState:
     metadata: dict[TrackRef, Metadata] = field(default_factory=dict)
     imported_metadata: dict[TrackRef, Metadata] = field(default_factory=dict)
     metadata_issues: list[dict[str, Any]] = field(default_factory=list)
+    consumed_cancelled: set[TrackRef] = field(default_factory=set)
     joins_locked: bool = False
     persistence_status: str = "disabled"
 

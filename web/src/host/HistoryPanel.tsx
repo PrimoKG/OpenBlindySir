@@ -111,7 +111,21 @@ export function HistoryPanel({ view }: { readonly view: HostView }) {
           <section className="stack" aria-label={t("history.recap")}>
             <h3>{new Date(record.finished_at).toLocaleString(getLanguage())}</h3>
             <ExportResults record={record} />
-            <ol className="list">
+            {record.teams.length > 0 && (
+              <>
+                <h3>{t("flow.teamRanking")}</h3>
+                <ul className="list">
+                  {record.teams.map((team) => (
+                    <li key={team.team}>
+                      {team.rank}. {team.team} — {t("history.score", { count: team.score })}
+                    </li>
+                  ))}
+                </ul>
+                <p>{t("flow.unassigned")}</p>
+                <h3>{t("flow.individual")}</h3>
+              </>
+            )}
+            <ul className="list">
               {record.results.standings.map((row) => (
                 <li key={row.player_id}>
                   {row.rank}.{" "}
@@ -119,7 +133,7 @@ export function HistoryPanel({ view }: { readonly view: HostView }) {
                   {t("history.score", { count: row.score })}
                 </li>
               ))}
-            </ol>
+            </ul>
             <Recap rows={record.results.recap} players={record.players} />
           </section>
         )}
@@ -131,6 +145,7 @@ export function HistoryPanel({ view }: { readonly view: HostView }) {
       </div>
       <ConfirmDialog
         open={deletion !== null}
+        title={t(deletion === "all" ? "history.purge" : "history.delete")}
         message={t(deletion === "all" ? "history.purgeConfirm" : "history.deleteConfirm")}
         onCancel={() => setDeletion(null)}
         onConfirm={() => void remove()}

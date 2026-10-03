@@ -67,6 +67,7 @@ class TeamStanding(OutboundModel):
 
 
 class GameRules(OutboundModel):
+    custom_points: int = 1
     answer_mode: str
     title_points: int
     artist_points: int
@@ -179,6 +180,7 @@ class RoundOpen(OutboundModel):
 
 
 class RoundPlayerReview(OutboundModel):
+    auto_advance_at: int | None = None
     state: Literal["REVIEW"]
     round_id: RoundId
     number: int
@@ -212,6 +214,11 @@ class RoundMcOpen(OutboundModel):
 
 
 class ReviewRow(OutboundModel):
+    judgement: str = "manual"
+    title_correct: bool | None = None
+    artist_correct: bool | None = None
+    custom_correct: bool | None = None
+    score_revision: int = 0
     player_id: PlayerId
     text: str | None
     status: AnswerStatus
@@ -226,6 +233,8 @@ class ReviewRow(OutboundModel):
 
 
 class ReviewRound(OutboundModel):
+    full_review_allowed: bool = False
+    bridge_online: bool = False
     round_id: RoundId
     number: int
     track: RevealTrack | None
@@ -240,6 +249,7 @@ class ReviewRound(OutboundModel):
 
 
 class RoundHostReview(OutboundModel):
+    auto_advance_at: int | None = None
     state: Literal["REVIEW"]
     round_id: RoundId
     number: int
@@ -317,6 +327,10 @@ class PoolStatus(OutboundModel):
 
 
 class HistoryEntry(OutboundModel):
+    judgement: str = "manual"
+    title_correct: bool | None = None
+    artist_correct: bool | None = None
+    custom_correct: bool | None = None
     round_id: RoundId
     number: int
     text: str | None
@@ -331,12 +345,14 @@ class HistoryEntry(OutboundModel):
 
 
 class AdjustmentEntry(OutboundModel):
+    kind: str = "adjustment"
     delta: int
     round_number: int | None
     note: str | None
 
 
 class FinalReviewRow(OutboundModel):
+    draft_note: str | None = None
     player_id: PlayerId
     score_before: int
     draft_delta: int
@@ -397,6 +413,7 @@ class McPanel(OutboundModel):
 
 
 class FinalAdjustmentShown(OutboundModel):
+    note: str | None = None
     player_id: PlayerId
     delta: int
 

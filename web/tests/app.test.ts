@@ -153,7 +153,7 @@ describe("host commands read their keys from the displayed view", () => {
       t: "HOST",
       cmd: "final_set",
       expected_phase: "FINAL_SCORE_REVIEW",
-      args: { player_id: "p_1", delta: 2 },
+      args: { player_id: "p_1", delta: 2, note: null },
     });
     const op = cmd.newOpId();
     expect(op).toMatch(/^[0-9a-f]{32}$/);

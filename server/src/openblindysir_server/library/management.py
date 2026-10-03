@@ -59,6 +59,9 @@ async def search(
     ext: str = "",
     availability: str = "all",
     offset: int = 0,
+    limit: int = 100,
+    sort: str = "filename",
+    descending: bool = False,
 ) -> Response:
     state = app_state(request)
     denied = host_access(request, state)
@@ -68,7 +71,10 @@ async def search(
         len(q) > 256
         or len(folder) > 1024
         or offset < 0
-        or availability not in {"all", "available", "unavailable", "online", "offline", "fresh"}
+        or not 1 <= limit <= 100
+        or sort not in {"title", "artist", "filename", "folder"}
+        or availability
+        not in {"all", "available", "unavailable", "online", "offline", "fresh", "used", "reserved"}
     ):
         return error(400, ErrorCode.INVALID_ARGS)
     s = state.runtime.engine.state
@@ -100,6 +106,8 @@ async def search(
                 or (availability == "online" and not online)
                 or (availability == "offline" and online)
                 or (availability == "fresh" and (not available or ref in s.played))
+                or (availability == "used" and ref not in s.played)
+                or (availability == "reserved" and (ref not in reserved or ref in s.played))
             ):
                 continue
             if normalized(q) not in normalized(
@@ -107,28 +115,46 @@ async def search(
             ):
                 continue
             total += 1
-            if offset < total <= offset + 100:
-                found.append(
-                    LibraryTrack(
-                        bridge_name=catalog.bridge_name,
-                        duration_ms=asset.track_duration_ms if asset else None,
-                        played=ref in s.played,
-                        reserved=ref in reserved,
-                        in_pool=ref in pool,
-                        bridge_id=b,
-                        track_id=tid,
-                        filename=posixpath.basename(entry.relpath),
-                        folder=entry.folder,
-                        ext=entry.ext,
-                        available=available,
-                        title=title,
-                        artist=artist,
-                        featuring=meta.featuring,
-                        album=meta.album,
-                        year=meta.year,
-                    )
+            found.append(
+                LibraryTrack(
+                    consumption=(
+                        "cancelled"
+                        if ref in s.consumed_cancelled
+                        else "played"
+                        if ref in s.played
+                        else "reserved"
+                        if ref in reserved
+                        else "available"
+                    ),
+                    bridge_name=catalog.bridge_name,
+                    duration_ms=asset.track_duration_ms if asset else None,
+                    played=ref in s.played,
+                    reserved=ref in reserved and ref not in s.played,
+                    in_pool=ref in pool,
+                    bridge_id=b,
+                    track_id=tid,
+                    filename=posixpath.basename(entry.relpath),
+                    folder=entry.folder,
+                    ext=entry.ext,
+                    available=available,
+                    title=title,
+                    artist=artist,
+                    featuring=meta.featuring,
+                    album=meta.album,
+                    year=meta.year,
                 )
-    return JSONResponse(LibrarySearch(total=total, tracks=found).model_dump(mode="json"))
+            )
+    found.sort(
+        key=lambda track: (
+            normalized(getattr(track, sort) or track.filename),
+            track.bridge_id,
+            track.track_id,
+        ),
+        reverse=descending,
+    )
+    return JSONResponse(
+        LibrarySearch(total=total, tracks=found[offset : offset + limit]).model_dump(mode="json")
+    )
 
 
 @router.post("/api/host/library/sources")

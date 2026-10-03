@@ -110,6 +110,7 @@ def test_player_review_has_only_my_answer() -> None:
         "round_id",
         "number",
         "my_answer",
+        "auto_advance_at",
     }
 
 

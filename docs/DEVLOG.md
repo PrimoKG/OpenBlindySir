@@ -1427,3 +1427,85 @@ Le test CLI concerné est relancé. Les résultats complets de
 l'audit ci-dessus restent applicables au code. Vérification des options CLI,
 des liens locaux des quatre guides, de l'hygiène du contenu destiné au commit
 et de l'absence d'erreurs de whitespace avant intégration.
+
+## 2026-10-03 — Rythme continu, préparation en modales et correction sémantique
+
+Mise en œuvre du plan validé après l'observation vidéo : transitions pilotées par
+le serveur (2 s par défaut, réglables de 0 à 10 s, mode manuel), pause des
+intermissions et notation/publication uniquement en revue finale. La barre hôte
+reste compacte ; paramètres et son s'ouvrent à la demande sans pause implicite.
+La préparation regroupe Musique, Règles, Rythme, Joueurs/équipes et Avancé, avec
+résumé/actions persistants, navigation clavier et confirmation d'abandon.
+
+Le catalogue possède sa propre modale, des filtres, un tri global avant pagination
+de 25 pistes et la conservation de la recherche/page. Le reset de bibliothèque
+ne supprime ni joueurs, ni équipes, ni paramètres, ni métadonnées, ni archives.
+Une piste allouée puis annulée est consommée même avant écoute ; le préchargement
+seul ne consomme rien. Les réservations sont comptées une seule fois et excluent
+les pistes déjà consommées. La correction de métadonnées vaut pour toute la
+session, sans modifier les fichiers ni les résultats déjà publiés.
+
+La notation distingue vrai/faux titre/artiste (ou critère personnalisé), tout
+bon/tout faux et saisie manuelle signée, selon le barème. Une décision incomplète
+reste à vérifier. Les révisions protègent les changements concurrents et les
+accusés distinguent deux décisions de même total. La revue filtre les éléments
+à vérifier ; le lot zéro ignore les brouillons capturés et attend chaque accusé.
+Les corrections finales gardent un motif facultatif privé jusqu'à publication,
+stocké atomiquement avec le montant et exporté dans les résultats/historiques.
+Les équipes deviennent prioritaires sur le podium et dans les totaux/historiques.
+
+Les dialogues conservent le focus, interceptent Échap sans fermer leur parent,
+et ne se referment plus après une ouverture dans une nouvelle phase. WebKit ne
+focalisant pas forcément les boutons cliqués, les déclencheurs de modales le font
+explicitement. Les contrôles audio affichent les capacités et les erreurs utiles ;
+les diagnostics techniques restent dans un détail repliable. Libellés adaptés au
+mode, absence de doubles rangs et réduction des informations répétées.
+
+Protocole **6**, snapshot **5**, historique **2**, logiciel **0.5.0.dev0** inchangé.
+Le schéma généré/verrouillé est actualisé. Migration des snapshots 1–4, y compris
+l'authentification du format 4, et champs d'archives ajoutés par défaut. Guides
+utilisateur FR/EN, Docker, installation, protocole, opérations et changelog mis à jour.
+Le lanceur Docker conserve `.local/docker/sources.override.yaml` lors des recreations.
+
+Validation locale :
+
+- Python Windows : **941 réussites, 2 exclusions Unix/symlinks, 11 intégrations
+  désélectionnées** ; après le dernier ajustement de pause, 13 régressions ciblées réussies.
+- Linux Python 3.13 : **936 réussites, 6 exclusions propres à Windows** à la première
+  passe, avec un échec d'environnement Hypothesis sur montage en lecture seule.
+  Relance avec `HYPOTHESIS_STORAGE_DIRECTORY=/tmp/hypothesis` : **14 réussites**, dont
+  le test de propriétés précédemment bloqué ; les 937 tests Linux concernés sont validés.
+- Intégration réelle serveur/Bridge : **10 réussites**, puis relance réussie de la
+  partie à dix bots après adaptation de son assertion au champ `note:null` ajouté.
+- Web : **32 tests Vitest réussis**, lint, TypeScript et build réussis.
+- Suite Chromium/WebKit : **81 réussites et 4 exclusions audio explicites** ; le
+  dernier échec concernait le retour du focus WebKit au bouton de catalogue.
+  Après correction, les quatre parcours catalogue/podium/reset passent dans les
+  deux navigateurs. Les 82 parcours uniques concernés sont donc validés, dont
+  les parties complètes Chromium à 1280/320 px, les modales à 320/390/1280 px,
+  clavier, contraste, texte à 200 %, mouvement réduit et protection anti-fuite.
+- Ruff, format, Pyright, génération/schéma et `uv lock --check --offline` réussis.
+- Images Docker app/Bridge construites ; contrôles isolés UID 10001, registre hashé,
+  permissions privées, reprise après crash, conservation de session, révocation/
+  rotation ciblée et FFmpeg Bridge réussis. Contrôles Compose privé/public réussis.
+
+Déploiement Docker Desktop autorisé : sauvegarde privée des trois volumes et
+configurations, tags locaux de retour arrière avant reconstruction. HTTPS avec CA
+existante, protocole 6/snapshot 5, app/Caddy sains et Bridge connecté vérifiés.
+Comparaison avec la sauvegarde : authentification, identités/joueurs/équipes,
+réglages, exclusions, métadonnées et valeurs archivées conservés (champs nouveaux
+par défaut uniquement). Les deux montages musicaux restent en lecture seule ;
+21 pistes disponibles, dont les 16 du montage supplémentaire. Les secrets,
+sauvegardes, images, médias et traces restent hors Git.
+
+Commandes de référence : `ruff check .`, `ruff format --check .`, `python -m
+pyright`, `python tools/gen_ts_types.py --check`, `uv lock --check --offline`,
+`pytest -p no:cacheprovider`, `pytest -m integration`, `npm run lint`, `npm test`,
+`npm run build`, `playwright test --project=chromium --project=webkit`, puis
+`.\tools\docker-host.ps1 start -NoBrowser` (build app/Bridge, Compose avec override,
+attente de santé, conservation des volumes). Les variantes locales isolent les
+ports/répertoires de test et fournissent les binaires FFmpeg/browsers installés.
+
+Limites : WebKit headless ne valide pas Safari/iOS audio, aucune mesure acoustique,
+lecteur d'écran ou appareils physiques dans cette passe. Aucune release, archive
+native de distribution, publication de package ou tag de version n'est produit.

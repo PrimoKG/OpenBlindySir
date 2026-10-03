@@ -59,7 +59,7 @@ to stay connected. `doctor --json` is copyable without paths, URL, UUID or secre
 | `network`, reconnecting | Check URL from the music device, DNS/VPN/firewall/proxy and WebSocket forwarding. No inbound Bridge port needed. |
 | `certificate` | Correct address, system time and trusted CA; configure SSL_CERT_FILE for private Python TLS. |
 | `authentication` | Check the private credential's UUID/secret and revocation; never use game/host passwords. See V0.5 identity-file precedence. |
-| `protocol` | Update server, Bridge and web UI to protocol **5** together; reload old web tabs. |
+| `protocol` | Update server, Bridge and web UI to protocol **6** together; reload old web tabs. |
 | `catalogue` | Check proxy upload limits, server private diagnostics and duplicate Bridge identity; retry outside a game. |
 | Empty catalogue | Check accessible root/mount, scanned subfolders, extensions, then selected game sources. Scan does not decode all files. |
 | Missing/unreadable/no-audio source | Rescan and select a replacement. Only first audio stream of video files is used. |
@@ -103,10 +103,10 @@ or matching Docker profiles, keep secrets and state, replace the whole Bridge
 archive or pin the Python release, and reload browser tabs. Check version, local
 doctor and registration outside a game, then test synthetic audio.
 
-V0.5 uses software `0.5.0.dev0`, protocol 5 and admitted range 5 to 5. Inspect
+V0.5 uses software `0.5.0.dev0`, protocol 6 and admitted range 6 to 6. Inspect
 `/api/compatibility`, update all components and reload stale tabs. No mixed protocol
 or automatic downgrade; this development version is unpublished and does not freeze
-the protocol. Snapshot **4** reads 1/2/3/4; history **2** migrates old/version-1 records.
+the protocol. Snapshot **5** reads 1/2/3/4; history **2** migrates old/version-1 records.
 Unknown future formats stop startup and never silently select an older backup.
 Known corruption tries `session.previous.json`; preserve files if both are invalid.
 Current playback returns as interrupted review, with no persisted audio or auto-start.
@@ -124,7 +124,7 @@ Snapshots are capped at 64 MiB each; allow up to 256 MiB for both copies and tem
 writes. Combined stored catalogues are capped at 200,000 tracks. See [V0.5](v0.5.en.md).
 
 Rollback to V0.3 requires its entire server/web/Bridge installation **and the
-pre-upgrade state backup**: it cannot read snapshot 4. Keep a private recent copy;
+pre-upgrade state backup**: it cannot read snapshot 5. Keep a private recent copy;
 new answers cannot be merged automatically. Restore V0.5 backups with a compatible
 V0.5 installation and preserved registry/secrets. Verify health, host identity,
 catalogues and exports. Human score review remains required.

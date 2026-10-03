@@ -184,8 +184,8 @@ mainteneur. Ne désactivez pas ces protections ; le parcours uvx est une alterna
 
 ## Versions et mises à jour
 
-V0.5 utilise le **protocole 5**, plage admise 5 à 5. Bridge, serveur et build web doivent annoncer
-exactement ce protocole ; les protocoles 2/3/4 sont refusés. Le paquet Bridge dépend
+V0.5 utilise le **protocole 6**, plage admise 6 à 6. Bridge, serveur et build web doivent annoncer
+exactement ce protocole ; les protocoles 2/3/4/5 sont refusés. Le paquet Bridge dépend
 de la **même version exacte** du paquet protocole. Les versions `.dev` du dépôt ne
 sont pas des releases. Pour garder une release précise, après publication,
 remplacez `VERSION` ci-dessous par la version publiée correspondant au serveur :

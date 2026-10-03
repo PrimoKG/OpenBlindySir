@@ -57,7 +57,7 @@ function playerView(): PlayerView {
     kind: "player",
     session: {
       epoch: "example-epoch",
-      protocol: 5,
+      protocol: 6,
       server_version: "0.1.0",
       recovered: false,
       persistence_status: "disabled",
@@ -109,6 +109,7 @@ function manualFixture() {
     ],
   };
   const track: LibraryTrack = {
+    consumption: "available",
     bridge_id: bridgeId,
     bridge_name: "Synth Bridge",
     track_id: "a".repeat(24),
@@ -177,7 +178,9 @@ test("MC confirms a numbered choice before launch, including mobile keyboard acc
   await page.route("**/api/host/library/search**", (route) =>
     route.fulfill({ json: { total: 1, tracks: [track] } }),
   );
-  await page.getByText("Sources et recherche de bibliothèque", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Sources et recherche de bibliothèque", exact: true })
+    .click();
   await page.getByRole("combobox", { name: "Manche à préparer", exact: true }).selectOption("2");
   const choose = page.getByRole("button", { name: "Choisir pour la manche 2", exact: true });
   await choose.focus();
@@ -195,7 +198,7 @@ test("MC confirms a numbered choice before launch, including mobile keyboard acc
       }),
     )
     .toBe(true);
-  await expect(page.getByRole("button", { name: "Lancer la partie", exact: true })).toBeDisabled();
+  await expect(page.locator(".host-toolbar")).toHaveAttribute("disabled", "");
   h.show(view); // an unrelated state echo is not a confirmation
   await expect(choose).toBeDisabled();
   const confirmed = {
@@ -222,7 +225,7 @@ test("MC confirms a numbered choice before launch, including mobile keyboard acc
   await expect(
     page.getByText("Choix confirmé : Titre synthétique privé", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Lancer la partie", exact: true })).toBeEnabled();
+  await expect(page.locator(".host-toolbar")).not.toHaveAttribute("disabled", "");
   await layout(page);
   h.show({
     ...confirmed,
@@ -240,7 +243,9 @@ test("MC acknowledgement deadline is not extended by repeated states", async ({ 
   await page.route("**/api/host/library/search**", (route) =>
     route.fulfill({ json: { total: 1, tracks: [track] } }),
   );
-  await page.getByText("Sources et recherche de bibliothèque", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Sources et recherche de bibliothèque", exact: true })
+    .click();
   const choose = page.getByRole("button", { name: "Choisir pour la manche 1", exact: true });
   await expect(choose).toBeEnabled();
   await page.clock.install();
@@ -253,7 +258,7 @@ test("MC acknowledgement deadline is not extended by repeated states", async ({ 
   ).toBeVisible();
   await expect(choose).toBeEnabled();
   await page.getByRole("combobox", { name: "Langue", exact: true }).selectOption("en");
-  await page.getByText("Library sources and search", { exact: true }).click();
+  await page.getByRole("button", { name: "Library sources and search", exact: true }).click();
   await expect(page.getByText("Choose tracks (MC)", { exact: true })).toBeVisible();
 });
 
@@ -276,6 +281,9 @@ function hostView(mc = false): HostView {
         answer_grace_s: 15,
         sources: [],
         auto_start: true,
+        auto_advance: true,
+        intermission_s: 2,
+        custom_points: 1,
         prefetch_depth: 1,
         allow_repeats: false,
         answer_mode: "both",
@@ -360,6 +368,8 @@ function globalReview(
           excerpt_duration_ms: 25000,
           track_duration_ms: 120000,
           metadata_revision: 0,
+          full_review_allowed: true,
+          bridge_online: true,
           track,
           answers,
         },
@@ -367,6 +377,7 @@ function globalReview(
       final_review: players.map((p) => ({
         player_id: p.id,
         score_before: 0,
+        draft_note: null,
         draft_delta: 0,
         score_after: 0,
         history: [],
@@ -418,6 +429,18 @@ async function harness(
       socket?.close({ code });
     },
   };
+}
+
+async function settings(page: Page, tab: string) {
+  const dialog = page
+    .locator(".workspace-modal")
+    .filter({ has: page.getByRole("tab", { name: tab, exact: true }) });
+  if (!(await dialog.isVisible()))
+    await page
+      .getByRole("button", { name: "Préparer la partie", exact: true })
+      .or(page.getByRole("button", { name: "Paramètres", exact: true }))
+      .click();
+  await dialog.getByRole("tab", { name: tab, exact: true }).click();
 }
 
 async function layout(page: Page) {
@@ -512,6 +535,7 @@ test("V0.5 history is fetched on demand, exported and deleted with keyboard conf
   });
   await harness(page, { ...view, host: { ...view.host, history_count: 1 } });
   expect(requests).toBe(0);
+  await settings(page, "Avancé");
   const summary = page.locator(".party-history > summary");
   await summary.focus();
   await summary.press("Enter");
@@ -526,7 +550,7 @@ test("V0.5 history is fetched on demand, exported and deleted with keyboard conf
   const remove = page.getByRole("button", { name: /Supprimer la partie du/ });
   await remove.focus();
   await remove.press("Enter");
-  const dialog = page.getByRole("dialog", { name: "On confirme ?" });
+  const dialog = page.getByRole("dialog", { name: "Supprimer cette partie", exact: true });
   await expect(dialog.getByRole("button", { name: "Annuler", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
@@ -565,6 +589,7 @@ test("V0.5 history purge errors are announced and retry stays available", async 
         }),
   );
   await harness(page, { ...view, host: { ...view.host, history_count: 1 } });
+  await settings(page, "Avancé");
   await page.locator(".party-history > summary").click();
   await expect(page.locator(".party-history").getByRole("status")).toContainText(
     "Sauvegarde indisponible",
@@ -598,7 +623,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
           bridge_id: first,
           name: "Appareil salon",
           version: "0.5.0.dev0",
-          protocol: 5,
+          protocol: 6,
           state: "ONLINE",
           track_count: 8,
           jobs_in_flight: 0,
@@ -610,7 +635,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
           bridge_id: second,
           name: "Appareil absent",
           version: "0.5.0.dev0",
-          protocol: 5,
+          protocol: 6,
           state: "OFFLINE",
           track_count: 4,
           jobs_in_flight: 0,
@@ -622,9 +647,11 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
     },
   });
   await page.setViewportSize({ width: 320, height: 900 });
+  await settings(page, "Avancé");
   await page.locator(".bridge-connections > summary").click();
   await expect(page.locator(".bridge-card").last()).toContainText("Hors ligne");
   await expect(page.locator(".bridge-card").last()).toContainText("45");
+  await settings(page, "Avancé");
   const revoke = page.getByRole("button", {
     name: "Révoquer le secret du Bridge Appareil absent",
     exact: true,
@@ -633,6 +660,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
   await revoke.press("Enter");
   await page
     .getByRole("dialog")
+    .last()
     .getByRole("button", { name: "Confirmer", exact: true })
     .press("Enter");
   await expect.poll(() => revoked).toContain(second);
@@ -671,9 +699,9 @@ test("V0.5 incompatible client stops reload loops and shows the required range",
     route.fulfill({
       json: {
         server_version: "0.5.0.dev0",
-        protocol: 5,
-        protocol_min: 5,
-        protocol_max: 5,
+        protocol: 6,
+        protocol_min: 6,
+        protocol_max: 6,
         snapshot_format: 4,
         history_format: 2,
       },
@@ -682,7 +710,7 @@ test("V0.5 incompatible client stops reload loops and shows the required range",
   h.error("protocol_mismatch");
   h.disconnect(1008);
   await expect(page.getByRole("heading", { name: "Version incompatible" })).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("5 à 5");
+  await expect(page.getByRole("status")).toContainText("6 à 6");
   await expect(
     page.getByRole("button", { name: "Recharger après mise à jour", exact: true }),
   ).toBeEnabled();
@@ -704,6 +732,11 @@ test("local score editing waits for acknowledgement and confirms unchecked answe
       order: 1,
       near_tie: false,
       late_start_ms: 0,
+      judgement: "manual",
+      title_correct: null,
+      artist_correct: null,
+      custom_correct: null,
+      score_revision: 0,
       points_draft: 0,
       reviewed: false,
       score_before: 4,
@@ -742,7 +775,18 @@ test("local score editing waits for acknowledgement and confirms unchecked answe
       review_rounds: review.host.review_rounds.map((r) => ({
         ...r,
         answers: r.answers.map((row, i) =>
-          i === 0 ? { ...row, points_draft: 12, reviewed: true } : row,
+          i === 0
+            ? {
+                ...row,
+                judgement: "manual",
+                title_correct: null,
+                artist_correct: null,
+                custom_correct: null,
+                score_revision: 1,
+                points_draft: 12,
+                reviewed: true,
+              }
+            : row,
         ),
       })),
     },
@@ -752,7 +796,7 @@ test("local score editing waits for acknowledgement and confirms unchecked answe
   await page
     .getByRole("button", { name: "VALIDER LES SCORES ET AFFICHER LES RÉSULTATS", exact: true })
     .click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog").last();
   await expect(dialog).toContainText("2 réponses restent à vérifier");
   await dialog.getByRole("button", { name: "Confirmer", exact: true }).click();
   await expect
@@ -796,7 +840,7 @@ test("final correction buttons and reset wait for the server echo before publica
       ...review.host,
       final_review:
         review.host.final_review?.map((row, i) =>
-          i === 0 ? { ...row, draft_delta: 1, score_after: 1 } : row,
+          i === 0 ? { ...row, draft_note: null, draft_delta: 1, score_after: 1 } : row,
         ) ?? null,
     },
   };
@@ -825,6 +869,11 @@ test("numeric round scores cannot overwrite a preset awaiting confirmation", asy
         order: 1,
         near_tie: false,
         late_start_ms: 0,
+        judgement: "manual",
+        title_correct: null,
+        artist_correct: null,
+        custom_correct: null,
+        score_revision: 0,
         points_draft: 0,
         reviewed: false,
         score_before: 0,
@@ -832,7 +881,7 @@ test("numeric round scores cannot overwrite a preset awaiting confirmation", asy
       },
     ]),
   );
-  await page.locator("table.review").getByRole("button", { name: "+2", exact: true }).click();
+  await page.locator("table.review").getByRole("button", { name: "Tout bon", exact: true }).click();
   await expect(page.getByLabel(`Points pour ${players[0].nickname}`, { exact: true })).toBeDisabled(
     { timeout: 2000 },
   );
@@ -853,7 +902,7 @@ test("metadata clearing waits for the server revision and restores the fallback"
     year: null,
   });
   ui.show(review);
-  await page.getByRole("button", { name: "Corriger le titre et l’artiste" }).click();
+  await page.getByRole("button", { name: "Corriger les informations du morceau" }).click();
   const editor = page.locator(".metadata-editor");
   await editor.getByLabel("Titre", { exact: true }).fill("");
   await editor.getByRole("button", { name: "Enregistrer", exact: true }).click();
@@ -962,7 +1011,9 @@ test("library search sends filters and gives keyboard access to an empty result"
     queries.push(route.request().url());
     return route.fulfill({ json: { total: 0, tracks: [] } });
   });
-  await page.getByText("Sources et recherche de bibliothèque", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Sources et recherche de bibliothèque", exact: true })
+    .click();
   await page.getByLabel("Rechercher un morceau", { exact: true }).fill("Été");
   await page.getByRole("combobox", { name: "Format source", exact: true }).selectOption(".mp4");
   await expect
@@ -1016,7 +1067,9 @@ test("source edits wait for a completed scan before allowing another folder chan
       json: { ok: true, status: "requested", scan_revision: revision },
     });
   });
-  await page.getByText("Sources et recherche de bibliothèque", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Sources et recherche de bibliothèque", exact: true })
+    .click();
   const source = page.locator(".source-card");
   const add = source.getByRole("button", { name: "Ajouter au scan", exact: true });
   await source.getByRole("textbox").fill("B");
@@ -1066,7 +1119,9 @@ test("source confirmation cancels a stalled library request at its deadline", as
     ],
   };
   await harness(page, hostView(), library);
-  await page.getByText("Sources et recherche de bibliothèque", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Sources et recherche de bibliothèque", exact: true })
+    .click();
   const source = page.locator(".source-card");
   await expect(source).toBeVisible();
   await page.clock.install();
@@ -1120,6 +1175,7 @@ test("preflight reduces the requested rounds and saves before starting atomicall
       },
     ],
   });
+  await settings(page, "Musique");
   await page.locator(".tree input").first().check();
   await expect(page.getByRole("button", { name: "Enregistrer et lancer" })).toBeDisabled();
   await expect(page.getByText("2 morceaux neufs pour 20 manches", { exact: true })).toBeVisible();
@@ -1206,12 +1262,12 @@ for (const width of [320, 390, 1280]) {
     for (const nickname of [base.me.nickname, "Exemple"]) {
       ui.show({ ...open, me: { ...base.me, nickname } });
       await expect(page.locator(".identity")).toHaveText(nickname);
-      await page.getByText("Son", { exact: true }).click();
-      const soundBox = await page.locator(".sound-popover").boundingBox();
+      await page.getByRole("button", { name: "Son", exact: true }).click();
+      const soundBox = await page.getByRole("dialog", { name: "Son", exact: true }).boundingBox();
       expect(soundBox?.x).toBeGreaterThanOrEqual(0);
       expect((soundBox?.x ?? 0) + (soundBox?.width ?? 0)).toBeLessThanOrEqual(width);
       await layout(page);
-      await page.getByText("Son", { exact: true }).click();
+      await page.keyboard.press("Escape");
     }
     await expect(page.locator(".answer-progress")).toHaveCount(0); // server hides the counter
     await expect(
@@ -1244,6 +1300,7 @@ for (const width of [320, 390, 1280]) {
       game,
       round: {
         state: "REVIEW",
+        auto_advance_at: null,
         round_id: roundId,
         number: 1,
         my_answer: { status: "CAPTURED", text: "Exemple de réponse", draft_text: null },
@@ -1302,7 +1359,7 @@ for (const width of [320, 390, 1280]) {
         rounds_played: 20,
         recap: [],
         finished_at: 0,
-        final_adjustments: [{ player_id: players[1].id, delta: -1 }],
+        final_adjustments: [{ player_id: players[1].id, delta: -1, note: null }],
       },
     });
     await expect(page.getByRole("heading", { name: "Résultats", exact: true })).toBeVisible();
@@ -1314,6 +1371,7 @@ for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 850 });
     const base = hostView();
     const ui = await harness(page, base);
+    await settings(page, "Avancé");
     await expect(page.getByText("Participants et connexion", { exact: true })).toBeVisible();
     await expect(page.locator(".player-ops")).not.toHaveAttribute("open", "");
     await layout(page);
@@ -1328,6 +1386,7 @@ for (const width of [320, 390, 1280]) {
         ready_check: { ready: 2, expected: 3, can_force: true, timeout_at: 60000 },
       },
     });
+    await settings(page, "Actions de la partie");
     await expect(page.getByText("2/3 prêts")).toBeVisible();
     await page.getByRole("button", { name: "Lancer quand même" }).click();
     await expect
@@ -1342,6 +1401,11 @@ for (const width of [320, 390, 1280]) {
       order: i === 2 ? null : i + 1,
       near_tie: i === 1,
       late_start_ms: i === 1 ? 2300 : 0,
+      judgement: "manual",
+      title_correct: null,
+      artist_correct: null,
+      custom_correct: null,
+      score_revision: 0,
       points_draft: 0,
       reviewed: false,
       score_before: 0,
@@ -1364,7 +1428,20 @@ for (const width of [320, 390, 1280]) {
     ui.show(
       globalReview(
         base,
-        answers.map((row, i) => (i === 0 ? { ...row, points_draft: -2, reviewed: true } : row)),
+        answers.map((row, i) =>
+          i === 0
+            ? {
+                ...row,
+                judgement: "manual",
+                title_correct: null,
+                artist_correct: null,
+                custom_correct: null,
+                score_revision: 1,
+                points_draft: -2,
+                reviewed: true,
+              }
+            : row,
+        ),
       ),
     );
     await expect(
@@ -1382,6 +1459,7 @@ for (const width of [320, 390, 1280]) {
         final_review: players.map((p) => ({
           player_id: p.id,
           score_before: 3,
+          draft_note: null,
           draft_delta: -1,
           score_after: 2,
           history: [],
@@ -1395,8 +1473,8 @@ for (const width of [320, 390, 1280]) {
     await page
       .getByRole("button", { name: "VALIDER LES SCORES ET AFFICHER LES RÉSULTATS" })
       .click();
-    const dialog = page.getByRole("dialog", { name: "On confirme ?" });
-    await expect(dialog).toContainText("3 correction(s)");
+    const dialog = page.getByRole("dialog").last();
+    await expect(dialog).toContainText("3 Corrections finales");
     await expect(dialog.getByRole("button", { name: "Annuler" })).toBeFocused();
     await dialog.press("Escape");
     await expect(dialog).not.toBeVisible();
@@ -1538,6 +1616,7 @@ test("library and diagnostic requests expose loading, errors and retry", async (
   );
   // A new catalogue causes the existing UI to reload the folder tree.
   await page.reload();
+  await settings(page, "Musique");
   await expect(page.locator(".setup").getByRole("alert")).toContainText("Serveur injoignable");
   fail = false;
   await page.locator(".setup").getByRole("button", { name: "Réessayer" }).click();
@@ -1545,6 +1624,7 @@ test("library and diagnostic requests expose loading, errors and retry", async (
   await page.route("**/api/host/diagnostics", (route) =>
     route.fulfill({ status: 503, json: { error: "network" } }),
   );
+  await settings(page, "Avancé");
   await page.getByText("Diagnostic", { exact: true }).click();
   const diagnostics = page.locator("details", {
     has: page.getByText("Diagnostic", { exact: true }),
@@ -1554,6 +1634,7 @@ test("library and diagnostic requests expose loading, errors and retry", async (
     route.fulfill({ json: { example: true } }),
   );
   await diagnostics.getByRole("button", { name: "Réessayer" }).click();
+  await diagnostics.getByText("Avancé", { exact: true }).click();
   await expect(diagnostics.locator("pre")).toContainText('"example": true');
 });
 
@@ -1680,4 +1761,256 @@ test("audio failure leaves the game reachable and offers a retry", async ({ page
   await expect(page.getByRole("alert")).toContainText("Le son n’a pas pu démarrer.");
   await expect(page.getByRole("heading", { name: "Joueurs (3)" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Tester mon audio", exact: true })).toBeEnabled();
+});
+
+test("preparation tabs preserve drafts, guard Escape and restore opening focus", async ({
+  page,
+}) => {
+  const base = hostView();
+  const ui = await harness(page, base);
+  await expect(page.locator(".setup")).not.toBeVisible();
+  const opener = page.getByRole("button", { name: "Préparer la partie", exact: true });
+  await opener.focus();
+  await opener.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Préparer la partie", exact: true });
+  const music = dialog.getByRole("tab", { name: "Musique", exact: true });
+  await music.focus();
+  await music.press("ArrowRight");
+  await expect(dialog.getByRole("tab", { name: "Règles", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  const clip = dialog.getByLabel("Durée des extraits (s)", { exact: true });
+  await clip.fill("9");
+  await dialog.getByRole("tab", { name: "Musique", exact: true }).click();
+  await dialog.getByRole("tab", { name: "Rythme", exact: true }).click();
+  await expect(clip).toHaveValue("9");
+  await page.keyboard.press("Escape");
+  const confirmation = page.getByRole("dialog", {
+    name: "Abandonner les modifications ?",
+    exact: true,
+  });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button", { name: "Annuler", exact: true }).click();
+  await expect(dialog).toBeVisible();
+  ui.show({
+    ...base,
+    host: { ...base.host, settings: { ...base.host.settings, clip_seconds: 9 } },
+  });
+  await expect(dialog.getByText("✓ Enregistré", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(opener).toBeFocused();
+});
+
+test("equal score acknowledgements still retain distinct title and artist decisions", async ({
+  page,
+}) => {
+  const base = hostView();
+  const ui = await harness(page, base);
+  const row: ReviewRow = {
+    player_id: players[0].id,
+    text: "Example answer",
+    status: "LOCKED",
+    elapsed_ms: 1000,
+    order: 1,
+    near_tie: false,
+    late_start_ms: 0,
+    points_draft: 0,
+    reviewed: false,
+    score_before: 0,
+    received_at_wall_ms: null,
+    judgement: "manual",
+    title_correct: null,
+    artist_correct: null,
+    custom_correct: null,
+    score_revision: 0,
+  };
+  const review = globalReview(
+    {
+      ...base,
+      rules: {
+        answer_mode: "both",
+        title_points: 2,
+        artist_points: 3,
+        custom_points: 1,
+        instructions: "",
+        captured_policy: "manual",
+      },
+    },
+    [row],
+  );
+  ui.show(review);
+  const title = page.locator(".criterion").first();
+  const artist = page.locator(".criterion").last();
+  await title.getByRole("button", { name: "Vrai", exact: true }).click();
+  await expect(artist.getByRole("button", { name: "Faux", exact: true })).toBeDisabled();
+  const echo = (changes: Partial<ReviewRow>) =>
+    ui.show({
+      ...review,
+      host: {
+        ...review.host,
+        review_rounds: review.host.review_rounds.map((round) => ({
+          ...round,
+          answers: [{ ...row, ...changes }],
+        })),
+      },
+    });
+  echo({ points_draft: 2, judgement: "criteria", title_correct: true, score_revision: 1 });
+  await expect(artist.getByRole("button", { name: "Faux", exact: true })).toBeEnabled();
+  await expect(page.locator(".review-status")).toHaveText("À vérifier");
+  await artist.getByRole("button", { name: "Faux", exact: true }).click();
+  echo({ points_draft: 2, judgement: "criteria", title_correct: true, score_revision: 1 });
+  await expect(artist.getByRole("button", { name: "Faux", exact: true })).toBeDisabled();
+  echo({
+    points_draft: 2,
+    judgement: "criteria",
+    title_correct: true,
+    artist_correct: false,
+    reviewed: true,
+    score_revision: 2,
+  });
+  await expect(artist.getByRole("button", { name: "Faux", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.locator(".review-status")).toHaveText("✓ Vérifiée");
+  await page.getByRole("button", { name: "Tout bon", exact: true }).click();
+  await expect
+    .poll(() =>
+      ui.sent.some((raw) => {
+        const message = JSON.parse(raw);
+        return (
+          message.cmd === "score_draft" &&
+          message.args.points === 5 &&
+          message.args.expected_revision === 2
+        );
+      }),
+    )
+    .toBe(true);
+});
+
+test("correction reasons block publication until the combined server echo", async ({ page }) => {
+  const base = hostView();
+  const ui = await harness(page, base);
+  const review = globalReview(base, []);
+  const rows =
+    review.host.final_review?.map((row, index) =>
+      index === 0 ? { ...row, draft_delta: 1, score_after: 1 } : row,
+    ) ?? [];
+  const corrected = { ...review, host: { ...review.host, final_review: rows } };
+  ui.show(corrected);
+  const row = page.locator(".final-table tr", { hasText: players[0].nickname });
+  const publish = page.getByRole("button", {
+    name: "VALIDER LES SCORES ET AFFICHER LES RÉSULTATS",
+    exact: true,
+  });
+  await row.getByLabel("Motif facultatif", { exact: true }).fill("Example bonus reason");
+  await expect(publish).toBeDisabled();
+  await row.getByRole("button", { name: "Enregistrer le motif", exact: true }).click();
+  ui.show(corrected);
+  await expect(publish).toBeDisabled();
+  ui.show({
+    ...corrected,
+    host: {
+      ...corrected.host,
+      final_review: rows.map((value, index) =>
+        index === 0 ? { ...value, draft_note: "Example bonus reason" } : value,
+      ),
+    },
+  });
+  await expect(publish).toBeEnabled();
+  await expect
+    .poll(() =>
+      ui.sent.some((raw) => {
+        const message = JSON.parse(raw);
+        return (
+          message.cmd === "final_set" &&
+          message.args.note === "Example bonus reason" &&
+          message.args.delta === 1 &&
+          message.args.expected_delta === 1
+        );
+      }),
+    )
+    .toBe(true);
+});
+
+test("the library modal remembers its page and sends sorting before pagination", async ({
+  page,
+}) => {
+  await harness(page, hostView());
+  const requests: URLSearchParams[] = [];
+  await page.route("**/api/host/library/search**", (route) => {
+    requests.push(new URL(route.request().url()).searchParams);
+    return route.fulfill({ json: { total: 80, tracks: [] } });
+  });
+  const opener = page.getByRole("button", {
+    name: "Sources et recherche de bibliothèque",
+    exact: true,
+  });
+  await opener.click();
+  const dialog = page.getByRole("dialog", {
+    name: "Sources et recherche de bibliothèque",
+    exact: true,
+  });
+  await dialog.getByRole("combobox", { name: "Trier par", exact: true }).selectOption("artist");
+  await expect.poll(() => requests.at(-1)?.get("sort")).toBe("artist");
+  await dialog.getByRole("button", { name: "Page suivante", exact: true }).click();
+  await expect.poll(() => requests.at(-1)?.get("offset")).toBe("25");
+  await page.keyboard.press("Escape");
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await expect(dialog.getByRole("combobox", { name: "Trier par", exact: true })).toHaveValue(
+    "artist",
+  );
+  await expect(dialog).toContainText("Page 2 sur 4");
+  await expect.poll(() => requests.at(-1)?.get("limit")).toBe("25");
+});
+
+test("team podium comes first and restarting the full library requires explicit confirmation", async ({
+  page,
+}) => {
+  const base = hostView();
+  const ui = await harness(page, base);
+  ui.show({
+    ...base,
+    phase: "FINAL_RESULTS",
+    team_standings: [
+      { team: "Example team", score: 10, rank: 1, members: [players[0].id, players[1].id] },
+    ],
+    final_results: {
+      finished_at: 60,
+      rounds_played: 2,
+      standings,
+      podium: standings,
+      recap: [],
+      final_adjustments: [],
+    },
+    host: { ...base.host, commands: ["new_game", "end_session"] },
+  });
+  await expect(page.locator(".podium")).toContainText("Example team");
+  await expect(page.locator(".podium")).not.toContainText(players[0].nickname);
+  await expect(
+    page.getByRole("heading", { name: "Classement individuel", exact: true }),
+  ).toBeVisible();
+  const opener = page.getByRole("button", {
+    name: "Recommencer avec toute la bibliothèque",
+    exact: true,
+  });
+  await opener.click();
+  const dialog = page.getByRole("dialog", {
+    name: "Recommencer avec toute la bibliothèque",
+    exact: true,
+  });
+  await page.keyboard.press("Escape");
+  expect(ui.sent.some((raw) => JSON.parse(raw).cmd === "new_game")).toBe(false);
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await dialog.getByRole("button", { name: "Confirmer", exact: true }).click();
+  await expect
+    .poll(() =>
+      ui.sent.some((raw) => {
+        const message = JSON.parse(raw);
+        return message.cmd === "new_game" && message.args.reset_library === true;
+      }),
+    )
+    .toBe(true);
 });

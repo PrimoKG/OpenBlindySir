@@ -108,6 +108,8 @@ export function LiveRegion(props: { readonly children: ReactNode; readonly asser
 }
 
 export function ConfirmDialog(props: {
+  readonly title?: string;
+  readonly children?: ReactNode;
   readonly open: boolean;
   readonly message: string;
   readonly onConfirm: () => void;
@@ -137,14 +139,16 @@ export function ConfirmDialog(props: {
       ref={ref}
       onCancel={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         props.onCancel();
       }}
       className="dialog"
       aria-labelledby={titleId}
       aria-describedby={messageId}
     >
-      <h2 id={titleId}>{t("hostui.confirmTitle")}</h2>
+      <h2 id={titleId}>{props.title ?? t("hostui.confirmTitle")}</h2>
       <p id={messageId}>{props.message}</p>
+      {props.children}
       <div className="row">
         <Button onClick={props.onCancel}>{t("hostui.cancel")}</Button>
         <Button kind="primary" onClick={props.onConfirm}>
@@ -152,6 +156,101 @@ export function ConfirmDialog(props: {
         </Button>
       </div>
     </dialog>
+  );
+}
+
+/** Native modal: focus containment, Escape, and return to the opening control. */
+export function Modal(props: {
+  readonly open: boolean;
+  readonly title: string;
+  readonly onClose: () => void;
+  readonly children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (props.open && !dialog.open) {
+      opener.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      dialog.showModal();
+      dialog.querySelector<HTMLButtonElement>("button")?.focus();
+    } else if (!props.open && dialog.open) {
+      dialog.close();
+      if (opener.current?.isConnected) opener.current.focus();
+    }
+  }, [props.open]);
+  useEffect(() => {
+    if (!props.open) return;
+    const previous = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.documentElement.style.overflow = previous;
+    };
+  }, [props.open]);
+  return (
+    <dialog
+      ref={ref}
+      className="dialog workspace-modal"
+      aria-label={props.title}
+      onCancel={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        props.onClose();
+      }}
+    >
+      <header className="modal-heading">
+        <h2 id={titleId}>{props.title}</h2>
+        <Button onClick={props.onClose} aria-label={t("flow.close")}>
+          ×
+        </Button>
+      </header>
+      {props.children}
+    </dialog>
+  );
+}
+
+export function Tabs(props: {
+  readonly id: string;
+  readonly tabs: readonly { id: string; label: string }[];
+  readonly value: string;
+  readonly onChange: (id: string) => void;
+}) {
+  const id = props.id;
+  return (
+    <div className="tabs" role="tablist" aria-label={t("flow.sections")}>
+      {props.tabs.map((tab, index) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          id={`${id}-${tab.id}`}
+          aria-controls={`${id}-panel-${tab.id}`}
+          aria-selected={tab.id === props.value}
+          tabIndex={tab.id === props.value ? 0 : -1}
+          onClick={() => props.onChange(tab.id)}
+          onKeyDown={(event) => {
+            let next: number;
+            if (event.key === "ArrowRight") next = (index + 1) % props.tabs.length;
+            else if (event.key === "ArrowLeft")
+              next = (index + props.tabs.length - 1) % props.tabs.length;
+            else if (event.key === "Home") next = 0;
+            else if (event.key === "End") next = props.tabs.length - 1;
+            else return;
+            event.preventDefault();
+            const target = props.tabs[next];
+            if (target) {
+              props.onChange(target.id);
+              document.getElementById(`${id}-${target.id}`)?.focus();
+            }
+          }}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

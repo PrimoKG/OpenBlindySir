@@ -189,6 +189,7 @@ def _rules(s: SessionState) -> GameRules:
         answer_mode=cfg.answer_mode,
         title_points=cfg.title_points,
         artist_points=cfg.artist_points,
+        custom_points=cfg.custom_points,
         instructions=cfg.instructions,
         captured_policy=cfg.captured_policy,
     )
@@ -196,12 +197,16 @@ def _rules(s: SessionState) -> GameRules:
 
 def _paused(s: SessionState) -> PauseInfo | None:
     r = current_round(s.game)
-    if r is None or r.paused_at is None or r.state is not RoundState.OPEN:
+    if r is None or r.paused_at is None or r.state not in {RoundState.OPEN, RoundState.REVIEW}:
         return None
     assert r.deadline is not None
     return PauseInfo(
         paused_at=r.paused_at,
-        remaining_ms=r.deadline - (r.resume_at or r.paused_at),
+        remaining_ms=max(
+            0,
+            ((r.auto_advance_at if r.state is RoundState.REVIEW else r.deadline) or 0)
+            - (r.resume_at or r.paused_at),
+        ),
         clip_offset_s=r.pause_offset_s,
         resume_at=r.resume_at,
     )
@@ -319,7 +324,7 @@ def _final_results(s: SessionState, ranking: list[StandingRow]) -> FinalResults 
     if g.phase is not GamePhase.FINAL_RESULTS:
         return None
     shown = [
-        FinalAdjustmentShown(player_id=event.player_id, delta=event.delta)
+        FinalAdjustmentShown(player_id=event.player_id, delta=event.delta, note=event.note)
         for event in s.journal.active(g.game_id)
         if event.kind is ScoreKind.FINAL_ADJUSTMENT
     ]
@@ -456,6 +461,9 @@ def _review_rows(s: SessionState, r: Round) -> list[ReviewRow]:
                 - (r.score_draft.get(pid, 0) if r.included else 0)
                 + s.game.final_draft.get(pid, 0),
                 received_at_wall_ms=answer.received_at_wall_ms,
+                judgement="criteria" if pid in r.judgements else "manual",
+                score_revision=r.score_revisions.get(pid, 0),
+                **r.judgements.get(pid, {}),
             )
         )
     return rows
@@ -574,7 +582,11 @@ def _round_player(
         return _round_open_player(s, r, p)
     if r.state is RoundState.REVIEW:
         return RoundPlayerReview(
-            state="REVIEW", round_id=r.id, number=r.number, my_answer=_my_answer(r, p.id)
+            state="REVIEW",
+            round_id=r.id,
+            number=r.number,
+            my_answer=_my_answer(r, p.id),
+            auto_advance_at=r.auto_advance_at,
         )
     if r.state is RoundState.REVEALED:
         return _revealed(s, r)
@@ -595,7 +607,11 @@ def _round_host_pm(
         return _round_open_player(s, r, p)
     if r.state is RoundState.REVIEW:
         return RoundPlayerReview(
-            state="REVIEW", round_id=r.id, number=r.number, my_answer=_my_answer(r, p.id)
+            state="REVIEW",
+            round_id=r.id,
+            number=r.number,
+            my_answer=_my_answer(r, p.id),
+            auto_advance_at=r.auto_advance_at,
         )
     if r.state is RoundState.REVEALED:
         return _revealed(s, r)
@@ -642,6 +658,7 @@ def _round_mc(
             round_id=r.id,
             number=r.number,
             my_answer=MyAnswer(status=AnswerStatus.NONE, text=None, draft_text=None),
+            auto_advance_at=r.auto_advance_at,
         )
     if r.state is RoundState.REVEALED:
         return _revealed(s, r)
@@ -664,6 +681,9 @@ def _settings(s: SessionState) -> GameSettings:
         answer_mode=settings.answer_mode,
         title_points=settings.title_points,
         artist_points=settings.artist_points,
+        custom_points=settings.custom_points,
+        auto_advance=settings.auto_advance,
+        intermission_s=settings.intermission_s,
         instructions=settings.instructions,
         captured_policy=settings.captured_policy,
         normalize_audio=settings.normalize_audio,
@@ -770,6 +790,8 @@ def _history(s: SessionState, player_id: str) -> list[HistoryEntry]:
         status = answer.status if answer.status is not AnswerStatus.DRAFT else AnswerStatus.NONE
         entries.append(
             HistoryEntry(
+                judgement="criteria" if player_id in r.judgements else "manual",
+                **r.judgements.get(player_id, {}),
                 round_id=r.id,
                 number=r.number,
                 text=answer.text if status is not AnswerStatus.NONE else None,
@@ -796,12 +818,14 @@ def _adjustments(s: SessionState, player_id: str) -> list[AdjustmentEntry]:
     numbers = {r.id: r.number for r in s.game.rounds}
     return [
         AdjustmentEntry(
+            kind=event.kind.value,
             delta=event.delta,
             round_number=numbers.get(event.round_id) if event.round_id else None,
             note=event.note,
         )
         for event in s.journal.active(s.game.game_id)
-        if event.kind is ScoreKind.ADJUSTMENT and event.player_id == player_id
+        if event.kind in {ScoreKind.ADJUSTMENT, ScoreKind.FINAL_ADJUSTMENT}
+        and event.player_id == player_id
     ]
 
 
@@ -814,6 +838,7 @@ def _final_rows(s: SessionState, ranking: list[StandingRow]) -> list[FinalReview
             if s.game.phase is GamePhase.FINAL_SCORE_REVIEW
             else row.score,
             draft_delta=draft.get(row.player_id, 0),
+            draft_note=s.game.final_notes.get(row.player_id),
             score_after=(
                 _draft_score(s, row.player_id)
                 if s.game.phase is GamePhase.FINAL_SCORE_REVIEW
@@ -836,8 +861,9 @@ def _draft_score(s: SessionState, pid: str) -> int:
 def _review_rounds(s: SessionState) -> list[ReviewRound]:
     result = []
     for r in s.game.rounds:
-        if r.official_start_at is None:
+        if r.official_start_at is None and r.state is not RoundState.CANCELLED:
             continue
+        bridge = s.bridges.get(r.slot.track_ref.bridge_id) if r.slot.track_ref else None
         asset = s.assets.get(r.slot.asset_id or "")
         reason = r.cancel_reason or r.close_reason
         result.append(
@@ -853,6 +879,8 @@ def _review_rounds(s: SessionState) -> list[ReviewRound]:
                 excerpt_duration_ms=asset.clip_duration_ms if asset else None,
                 track_duration_ms=asset.track_duration_ms if asset else None,
                 metadata_revision=r.metadata_revision,
+                full_review_allowed=bool(bridge and bridge.allow_full_review),
+                bridge_online=bool(bridge and bridge.state is BridgeState.ONLINE),
             )
         )
     return result

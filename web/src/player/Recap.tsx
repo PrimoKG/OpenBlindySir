@@ -20,7 +20,7 @@ export function PlayerHistory({ row }: { readonly row: FinalReviewRow }) {
               </small>
               {!entry.included && <small>{t("review.cancelledShort")}</small>}
             </div>
-            <p className="history-answer">{entry.text ?? t("round.noAnswer")}</p>
+            {entry.text && <p className="history-answer">{entry.text}</p>}
             <div className="history-meta">
               <span>
                 {entry.status === "CAPTURED"
@@ -88,6 +88,10 @@ export function recapCsv(record: GameRecord): string {
       "received_at_wall_ms",
       "included",
       "near_tie",
+      "judgement",
+      "title_correct",
+      "artist_correct",
+      "custom_correct",
     ],
   ];
   for (const row of record.results.recap ?? []) {
@@ -114,8 +118,12 @@ export function recapCsv(record: GameRecord): string {
         h.received_at_wall_ms,
         h.included ? 1 : 0,
         h.near_tie ? 1 : 0,
+        h.judgement,
+        h.title_correct == null ? "" : String(h.title_correct),
+        h.artist_correct == null ? "" : String(h.artist_correct),
+        h.custom_correct == null ? "" : String(h.custom_correct),
       ]);
-    for (const a of row.adjustments)
+    for (const a of row.adjustments.filter((entry) => entry.kind !== "final_adjustment"))
       rows.push([
         record.game_id,
         name(row.player_id),
@@ -152,7 +160,7 @@ export function recapCsv(record: GameRecord): string {
         "",
         0,
         a.delta,
-        "",
+        a.note ?? "",
         row.score_after,
         "",
         "",
@@ -185,7 +193,7 @@ export function recapCsv(record: GameRecord): string {
         "",
       ]);
   }
-  return `\uFEFF${rows.map((row) => row.map(cell).join(";")).join("\r\n")}\r\n`;
+  return `\uFEFF${rows.map((row) => [...row, ...Array(Math.max(0, (rows[0]?.length ?? 0) - row.length)).fill("")].map(cell).join(";")).join("\r\n")}\r\n`;
 }
 
 function download(data: string, type: string, filename: string) {

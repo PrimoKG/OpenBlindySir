@@ -92,7 +92,7 @@ def test_play_disappears_from_view_at_end_of_clip() -> None:
     assert r.state is RoundState.OPEN
 
 
-def test_skip_cancels_and_keeps_number_and_track_unplayed() -> None:
+def test_skip_cancels_and_keeps_number_and_track_consumed() -> None:
     sc = Scenario()
     sc.start()
     r = sc.current()
@@ -100,7 +100,7 @@ def test_skip_cancels_and_keeps_number_and_track_unplayed() -> None:
     assert sc.on_round("skip").error is None
     assert r.state is RoundState.CANCELLED
     assert sc.current().number == 1
-    assert track not in sc.s.played
+    assert track in sc.s.played
 
 
 def test_skip_open_round_stops_play() -> None:
