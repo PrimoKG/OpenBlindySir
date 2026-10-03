@@ -19,6 +19,7 @@ from openblindysir_server.logging import get, log_event
 from openblindysir_server.ratelimit import TokenBucket
 
 BATCH_DELAY_S = 0.05
+CRITICAL_QUEUE_MAX = 64
 LOG = get("ws")
 ViewProvider = Callable[[str], OutboundModel]
 
@@ -41,10 +42,19 @@ class PlayerConnection:
     wake: asyncio.Event = field(default_factory=asyncio.Event)
 
     def push_critical(self, text: str) -> None:
+        if self.close_code is not None:
+            return
+        if len(self.critical) >= CRITICAL_QUEUE_MAX:
+            self.critical.clear()
+            self.pending_state = None
+            self.request_close(1013)
+            return
         self.critical.append(text)
         self.wake.set()
 
     def push_state(self, text: str) -> None:
+        if self.close_code is not None:
+            return
         self.pending_state = text
         self.wake.set()
 

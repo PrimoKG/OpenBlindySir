@@ -13,6 +13,12 @@ export function PlayerHistory({ row }: { readonly row: FinalReviewRow }) {
               <strong>{t("ux.historyRound", { number: entry.number })}</strong>
               <span>{entry.track?.title ?? entry.track?.display_name ?? "—"}</span>
               {entry.track?.artist && <small>{entry.track.artist}</small>}
+              <small>
+                {[entry.track?.featuring, entry.track?.album, entry.track?.year]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </small>
+              {!entry.included && <small>{t("review.cancelledShort")}</small>}
             </div>
             <p className="history-answer">{entry.text ?? t("round.noAnswer")}</p>
             <div className="history-meta">
@@ -24,6 +30,11 @@ export function PlayerHistory({ row }: { readonly row: FinalReviewRow }) {
                     : t("round.noAnswer")}
               </span>
               <span>{entry.elapsed_ms !== null ? formatSeconds(entry.elapsed_ms) : "—"}</span>
+              {entry.received_at_wall_ms != null && (
+                <time dateTime={new Date(entry.received_at_wall_ms).toISOString()}>
+                  {new Date(entry.received_at_wall_ms).toLocaleTimeString()}
+                </time>
+              )}
               <span>{formatRank(entry.order, entry.near_tie)}</span>
               <strong>{formatDelta(entry.points)}</strong>
             </div>
@@ -71,6 +82,12 @@ export function recapCsv(record: GameRecord): string {
       "correction",
       "note",
       "final_score",
+      "featuring",
+      "album",
+      "year",
+      "received_at_wall_ms",
+      "included",
+      "near_tie",
     ],
   ];
   for (const row of record.results.recap ?? []) {
@@ -91,6 +108,12 @@ export function recapCsv(record: GameRecord): string {
         0,
         "",
         row.score_after,
+        h.track?.featuring,
+        h.track?.album,
+        h.track?.year,
+        h.received_at_wall_ms,
+        h.included ? 1 : 0,
+        h.near_tie ? 1 : 0,
       ]);
     for (const a of row.adjustments)
       rows.push([
@@ -108,6 +131,12 @@ export function recapCsv(record: GameRecord): string {
         a.delta,
         a.note,
         row.score_after,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
       ]);
     for (const a of record.results.final_adjustments.filter((a) => a.player_id === row.player_id))
       rows.push([
@@ -125,6 +154,12 @@ export function recapCsv(record: GameRecord): string {
         a.delta,
         "",
         row.score_after,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
       ]);
     if (row.history.length === 0 && row.adjustments.length === 0)
       rows.push([
@@ -142,6 +177,12 @@ export function recapCsv(record: GameRecord): string {
         0,
         "",
         row.score_after,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
       ]);
   }
   return `\uFEFF${rows.map((row) => row.map(cell).join(";")).join("\r\n")}\r\n`;

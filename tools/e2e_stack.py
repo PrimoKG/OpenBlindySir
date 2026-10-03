@@ -43,6 +43,8 @@ def main() -> int:
         "OPENBLINDYSIR_BRIDGE_SECRET": SECRET,
         "OPENBLINDYSIR_BRIDGE_CONFIG": str(work / "bridge.toml"),
         "OPENBLINDYSIR_BRIDGE_NAME": "Demo",
+        # Synthetic sources only: exercise opt-in full review without changing production defaults.
+        "OPENBLINDYSIR_BRIDGE_ALLOW_FULL_REVIEW": "true",
     }
     children: list[subprocess.Popen[bytes]] = []
 

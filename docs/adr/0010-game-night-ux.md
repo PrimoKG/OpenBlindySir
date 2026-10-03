@@ -1,6 +1,6 @@
 # 0010 — Correction privée et commandes de soirée explicites
 
-Statut : Accepté · Date : 2026-10-03
+Statut : Accepté ; correction privée par manche remplacée par [0011](0011-global-review-and-private-replay.md) en V0.2 · Date : 2026-10-03
 
 ## Contexte
 

@@ -113,7 +113,9 @@ async function answer(page: Page, text: string): Promise<void> {
   await expect(
     page
       .getByText("✓ Réponse enregistrée")
-      .or(page.locator(".review").getByText(text, { exact: true })),
+      .or(page.getByText(`Ta réponse : ${text}`, { exact: true }))
+      .or(page.locator(".review").getByText(text, { exact: true }))
+      .or(page.getByRole("heading", { name: "REVUE DE FIN DE PARTIE", exact: true })),
   ).toBeVisible();
 }
 
@@ -131,13 +133,7 @@ function framesSince(s: Seat, from: number): string {
   return s.frames.slice(from).join("\n");
 }
 
-async function playRound(
-  host: Seat,
-  alice: Seat,
-  bob: Seat,
-  n: number,
-  points: Record<string, number>,
-): Promise<void> {
+async function playRound(host: Seat, alice: Seat, bob: Seat, n: number): Promise<void> {
   const start = { alice: alice.frames.length, bob: bob.frames.length };
   await expect(alice.page.getByText(`MANCHE ${n} / 2`)).toBeVisible({ timeout: 90_000 });
   await expect(alice.page.getByLabel("Ta réponse")).toBeVisible({ timeout: 90_000 });
@@ -175,27 +171,17 @@ async function playRound(
   }
   await answer(host.page, `rep-H-${n}`);
 
-  // REVIEW: the player sees only their own answer; the host sees every row and scores.
-  await expect(alice.page.getByText("L'hôte note les réponses…")).toBeVisible({ timeout: 60_000 });
-  await expect(alice.page.getByText(`Ta réponse : rep-A-${n}`)).toBeVisible();
-  for (const other of [`rep-B-${n}`, `rep-H-${n}`]) {
+  // Closed rounds preserve each player's own answer; all scoring waits for global review.
+  if (n === 1) {
+    await expect(alice.page.getByText("Réponses conservées.")).toBeVisible({ timeout: 60_000 });
+    await expect(alice.page.getByText(`Ta réponse : rep-A-${n}`)).toBeVisible();
+  } else
+    await expect(alice.page.getByText("L'hôte vérifie les scores…")).toBeVisible({
+      timeout: 60_000,
+    });
+  for (const other of [`rep-B-${n}`, `rep-H-${n}`])
     await expect(alice.page.locator("body")).not.toContainText(other);
-  }
   await expect(alice.page.locator("main")).not.toContainText(TIME);
-  for (const name of ["Alice", "Bob", "Hote"]) {
-    await expect(reviewRow(host.page, name)).toContainText(TIME);
-  }
-  for (const [name, pts] of Object.entries(points)) {
-    await score(host.page, name, pts);
-  }
-
-  for (const name of ["Alice", "Bob", "Hote"]) {
-    if (!(name in points)) {
-      const zero = reviewRow(host.page, name).getByRole("button", { name: "0", exact: true });
-      await zero.click();
-      await expect(zero).toHaveAttribute("aria-pressed", "true");
-    }
-  }
 
   // Nothing in the WebSocket traffic of a player spoils the round before REVEALED.
   for (const [s, from, others] of [
@@ -216,16 +202,6 @@ async function playRound(
     const reports = sent.filter((m) => m.t === "PLAYBACK_REPORT") as { late_ms?: number }[];
     expect(reports.length).toBeGreaterThanOrEqual(n);
     expect(reports.every((r) => (r.late_ms ?? 0) < 60_000)).toBe(true);
-  }
-
-  await host.page.getByRole("button", { name: "Publier" }).click();
-  // Reveal: everybody sees the track, every answer, the times and the points.
-  for (const s of [alice, bob]) {
-    await expect(s.page.getByText("C'était…")).toBeVisible();
-    for (const text of [`rep-A-${n}`, `rep-B-${n}`, `rep-H-${n}`]) {
-      await expect(s.page.locator("table")).toContainText(text);
-    }
-    await expect(s.page.locator("table")).toContainText(TIME);
   }
 }
 
@@ -267,16 +243,57 @@ for (const viewport of [
     await startButton.click();
     await expect(alice.page.locator(".countdown")).toBeVisible({ timeout: 90_000 });
 
-    await playRound(host, alice, bob, 1, { Alice: 2, Bob: 1 });
+    await playRound(host, alice, bob, 1);
     await capture(alice.page, info, "player-reveal");
     await h.getByRole("button", { name: "Manche suivante" }).click();
-    await playRound(host, alice, bob, 2, { Alice: 1, Hote: 3 });
-    await h.getByRole("button", { name: "Vérification finale" }).click();
+    await playRound(host, alice, bob, 2);
+    await expect(
+      h.getByRole("heading", { name: "REVUE DE FIN DE PARTIE", exact: true }),
+    ).toBeVisible();
+    const replayRequests: string[] = [];
+    h.on("request", (request) => {
+      if (request.url().includes("/api/host/review/") && request.url().includes("/audio"))
+        replayRequests.push(request.url());
+    });
+    const playerPlays = alice.frames.filter((raw) => JSON.parse(raw).t === "PLAY").length;
+    const privatePlayer = h.getByRole("region", { name: "Réécoute privée" });
+    expect(replayRequests).toHaveLength(0);
+    await privatePlayer.getByRole("button", { name: "Écouter", exact: true }).click();
+    await expect(privatePlayer.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await privatePlayer.getByRole("button", { name: "Pause", exact: true }).click();
+    await privatePlayer.getByRole("button", { name: "Écouter le morceau complet" }).click();
+    await expect(privatePlayer.getByText("Morceau complet", { exact: true })).toBeVisible();
+    await expect(privatePlayer.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await privatePlayer.getByRole("button", { name: "Revenir à l’extrait" }).click();
+    await expect(privatePlayer.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await privatePlayer.getByRole("button", { name: "Pause", exact: true }).click();
+    expect(replayRequests.some((url) => new URL(url).searchParams.get("mode") === "full")).toBe(
+      true,
+    );
+    expect(alice.frames.filter((raw) => JSON.parse(raw).t === "PLAY")).toHaveLength(playerPlays);
+    await expect(privatePlayer.getByRole("alert")).toHaveCount(0);
+    for (const [number, points] of [
+      [1, { Alice: 2, Bob: 1, Hote: 0 }],
+      [2, { Alice: 1, Bob: 0, Hote: 3 }],
+    ] as const) {
+      await h
+        .locator(".review-navigation")
+        .getByRole("button", { name: new RegExp(`^${number}\\.`) })
+        .click();
+      for (const [name, value] of Object.entries(points)) {
+        if (value) await score(h, name, value);
+        else {
+          const zero = reviewRow(h, name).getByRole("button", { name: "0", exact: true });
+          await zero.click();
+          await expect(zero).toHaveAttribute("aria-pressed", "true");
+        }
+      }
+    }
 
     // Final review: Bob +2, the host corrects themself −1; players never see the draft.
     const review = h.locator(".final-review");
-    const bobRow = review.locator("tr", { hasText: "Bob" });
-    const hostRow = review.locator("tr", { hasText: "Hote" });
+    const bobRow = review.locator(".final-table tr", { hasText: "Bob" });
+    const hostRow = review.locator(".final-table tr", { hasText: "Hote" });
     await bobRow.getByRole("button", { name: "Ajouter un point à Bob", exact: true }).click();
     await expect(bobRow).toContainText("1 → +1 → 2");
     await bobRow.getByRole("button", { name: "Ajouter un point à Bob", exact: true }).click();
@@ -284,9 +301,7 @@ for (const viewport of [
     await hostRow.getByRole("button", { name: "Retirer un point à Hote", exact: true }).click();
     await expect(hostRow).toContainText("3 → −1 → 2");
     await expect(alice.page.getByText("L'hôte vérifie les scores…")).toBeVisible();
-    await expect(alice.page.locator(".standing-list li", { hasText: "Bob" })).toContainText(
-      "1 pts",
-    );
+    await expect(alice.page.locator(".standings")).toHaveCount(0);
     await expect(alice.page.locator("body")).not.toContainText("+2");
     await capture(h, info, "host-final-review");
     await capture(alice.page, info, "player-final-waiting");
@@ -371,17 +386,19 @@ test("an MC hosts a round with a captured draft and starts another game", async 
   await h.getByRole("button", { name: "Fermer les réponses" }).click();
   await expect(reviewRow(h, "ExampleBob")).toContainText("Brouillon capturé · non validé");
   await expect(reviewRow(h, "ExampleBob")).toContainText("example-captured-draft");
-  await expect(bob.page.getByText("(non validée)")).toBeVisible();
+  await expect(bob.page.getByText("L'hôte vérifie les scores…")).toBeVisible();
   await expect(alice.page.locator("body")).not.toContainText("example-captured-draft");
   await score(h, "ExampleAlice", 2);
   await score(h, "ExampleBob", 1);
   await capture(h, info, "host-mc-review");
-  await h.getByRole("button", { name: "Publier", exact: true }).click();
-  await expect(bob.page.locator("table")).toContainText("example-captured-draft");
-  await h.getByRole("button", { name: "Vérification finale", exact: true }).click();
+  await expect(bob.page.locator("body")).not.toContainText("example-mc-answer");
   await h.getByRole("button", { name: "VALIDER LES SCORES ET AFFICHER LES RÉSULTATS" }).click();
   await h.getByRole("button", { name: "Confirmer", exact: true }).click();
   await expect(alice.page.getByRole("heading", { name: "Résultats", exact: true })).toBeVisible();
+  await bob.page.locator(".recap summary").filter({ hasText: "ExampleBob" }).click();
+  await expect(bob.page.locator(".recap details").filter({ hasText: "ExampleBob" })).toContainText(
+    "example-captured-draft",
+  );
   await h.getByRole("button", { name: "Nouvelle partie", exact: true }).click();
   await expect(h.getByRole("heading", { name: "Tout le monde s’installe." })).toBeVisible();
   await expect(
@@ -407,7 +424,7 @@ async function endTestSession(page: Page): Promise<void> {
     );
     await new Promise<void>((resolve) => {
       ws.onopen = () =>
-        ws.send(JSON.stringify({ t: "HELLO", client_version: "0.1.0", protocol: 2 }));
+        ws.send(JSON.stringify({ t: "HELLO", client_version: "0.3.0", protocol: 5 }));
       ws.onmessage = (event) => {
         const msg = JSON.parse(String(event.data));
         if (msg.t === "STATE")

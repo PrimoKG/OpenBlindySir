@@ -64,7 +64,7 @@ AUDIO_EXTENSIONS: frozenset[str] = frozenset(
         ".aiff", ".aif", ".webm", ".mka", ".ape", ".wv", ".dsf", ".dff", ".mp2", ".mpa",
         ".caf", ".ac3", ".amr", ".au", ".snd",
         # Video containers often carry music (clips, music videos).
-        ".mp4", ".m4v", ".mov", ".3gp",
+        ".mp4", ".m4v", ".mov", ".3gp", ".mkv", ".avi", ".wmv", ".asf",
     }
 )  # fmt: skip
 

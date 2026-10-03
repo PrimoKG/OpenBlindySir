@@ -1,101 +1,155 @@
 # OpenBlindySir — Bridge : fonctionnement et sécurité
 
-> Extrait de la spécification canonique (docs/architecture.md, §11). Ce document fait autorité pour cette section.
+Référence V0.5 développement, protocole 5 (plage 5 à 5). [Architecture](architecture.md),
+[formats et métadonnées](media-and-metadata.md), [ADR 0011](adr/0011-global-review-and-private-replay.md)
+et [ADR 0012](adr/0012-dynamic-sources-and-metadata.md).
 
-## 11. Bridge
+## Configuration et racine autorisée
 
-**Configuration**
-- Assistant au premier lancement : URL du serveur, dossier, secret (saisie masquée), nom affiché du Bridge.
-- **Emplacement unique du fichier `config.toml`** :
-  - Windows : `%APPDATA%\OpenBlindySir\bridge\config.toml`
-  - Linux et macOS : `~/.config/openblindysir/bridge/config.toml`
-- Ce fichier contient aussi un `bridge_id` UUID, généré une seule fois.
-- Ordre de priorité : arguments CLI, puis variables d'environnement, puis fichier.
-- `ws://` et `http://` sont refusés sauf vers `localhost`. **La vérification TLS est toujours active**, sans option pour la désactiver.
-- Les fichiers temporaires vont dans un dossier privé préfixé `openblindysir-bridge-`.
-- Le User-Agent HTTP et WebSocket est `OpenBlindySir-Bridge/<version>`.
+L'assistant local demande URL, racine musicale, secret masqué et nom. Le fichier
+privé `config.toml` est dans `%APPDATA%\OpenBlindySir\bridge` sous Windows,
+`$XDG_CONFIG_HOME/openblindysir/bridge` (sinon `~/.config/openblindysir/bridge`)
+sous Linux, et `~/Library/Application Support/OpenBlindySir/bridge` sous macOS
+(une configuration historique Linux déjà présente reste reconnue).
+Le fichier et ses parents ne doivent pas être des liens/junctions ; la racine
+est contrôlée dès `init`, `check-config` et `doctor`, avant le scan.
+L'UUID `bridge_id` reste stable ;
+chaque installation conserve son propre fichier/volume. Priorité CLI > variables
+d'environnement > fichier. HTTP/WS est refusé hors localhost ; TLS reste vérifié.
+Le serveur ne peut ni changer cette racine ni fournir une commande FFmpeg.
 
-**Scan**
-- Parcours itératif avec `os.scandir`.
-- **Ne suit ni les liens symboliques ni les junctions**, avec des tests explicites `is_symlink()` et `os.path.isjunction()` (attention : `os.walk` suit les junctions sous Windows).
-- Ignore les fichiers cachés et système.
-- Liste blanche d'extensions réglable : `.mp3 .flac .wav .m4a .aac .ogg .oga .opus .aiff .wma`.
-- Pour chaque fichier : `relpath` (séparateurs POSIX, NFC), taille, mtime. **Pas de ffprobe au moment du scan.**
+Le propriétaire peut activer `--allow-full-review`,
+`OPENBLINDYSIR_BRIDGE_ALLOW_FULL_REVIEW=true`, ou `allow_full_review=true` dans
+sa configuration. L'écoute intégrale est désactivée par défaut. Cette autorisation
+locale permet des segments courts réencodés, jamais un upload du fichier original.
 
-**Catalogue**
-- `track_id = "t_" + sha256(relpath)[:16]` : stable et opaque.
-- `catalog_hash` calculé sur les entrées triées.
-- Chaque entrée contient `track_id, relpath, folder, ext, size`.
-- Envoi en gzip par HTTP, environ 600 Ko bruts pour 5 000 morceaux.
+## Scan, sources dynamiques et catalogue
 
-**Connexion** : WSS sortant, heartbeat toutes les 15 s, reconnexion sans fin (backoff 1→30 s avec jitter). À la reconnexion, `HELLO` transmet le `catalog_hash` et le serveur ne redemande le catalogue que s'il a changé.
+Parcours itératif `os.scandir`, maximum 200 000 fichiers et profondeur 32. La
+racine et ses parents ne doivent pas être liens/junctions ; ceux rencontrés au
+parcours, fichiers cachés et système sont ignorés. Le scan ne lance pas ffprobe.
+Les extensions forment une liste blanche fermée commune au protocole et à FFmpeg,
+décrite dans [les formats](media-and-metadata.md). Une extension acceptée ne
+garantit pas qu'un fichier soit décodable ou contienne de l'audio.
 
-**Commandes acceptées, liste exhaustive** : `WELCOME`, `PREPARE`, `CANCEL`, `PING`. Il n'existe ni « lister », ni « lire un fichier », ni « rescanner un chemin », ni argument FFmpeg libre.
+`SCAN_SOURCES` reçoit soit `null` (rafraîchir), soit au plus 64 sous-dossiers
+relatifs POSIX NFC, chacun ≤1 024 caractères. `""` désigne la racine. Chemins
+absolus, `..`, `.` intermédiaire, antislashs, contrôles, liens et dossiers absents
+sont refusés. En cas d'échec, le catalogue précédent reste utilisable et l'erreur
+est présentée à l'hôte. Une modification réussie est persistée localement. Les
+rescans console et distants sont sérialisés et exécutés hors de la boucle réseau.
+Un dossier non monté demande une modification du déploiement local :
+[procédure Docker](docker.md#sources-dynamiques-et-réécoute).
 
-**Exécution des jobs**
-- 1 job à la fois (2 au maximum), file de 4, rejet au-delà.
-- Timeouts : ffprobe 10 s, ffmpeg 30 s (processus tué), upload 60 s.
-- Fichiers temporaires dans un répertoire privé (`tempfile.mkdtemp`, préfixe `openblindysir-bridge-`), supprimés après envoi. Le marqueur `owner.pid` identifie le processus propriétaire. Au démarrage, seuls les dossiers dont le propriétaire est prouvé arrêté sont purgés ; instances actives, anciens dossiers sans marqueur, liens et junctions sont conservés. Sous Windows, la vérification utilise `OpenProcess`/`GetExitCodeProcess`, jamais `os.kill(pid, 0)`.
+Le chemin relatif à la racine reste stable lorsqu'on change la sélection scannée.
+`track_id = "t_" + sha256(relpath NFC)[:16]`. Les dossiers superposés ne dupliquent
+pas les pistes. Une collision NFC ou d'ID exclut toutes les entrées concernées et
+produit un diagnostic de chemin ambigu ; aucun fichier arbitraire n'est choisi.
+Le catalogue contient chemins relatifs, tailles et extensions ; les chemins
+absolus restent locaux. Upload gzip ≤8 MiB, contenu brut ≤32 MiB, 200 000 pistes
+maximum par Bridge. Le serveur connaît les noms de la bibliothèque : protéger
+l'accès hôte et son snapshot privé.
 
-**Avant chaque ouverture de fichier**
-- Nouvelle résolution de `realpath`.
-- Vérification que `commonpath(real, root_real) == root_real`.
-- Vérification qu'il s'agit d'un fichier régulier et que taille et mtime sont cohérents.
+## Connexion et commandes
 
-La fenêtre TOCTOU résiduelle est acceptée : il faudrait un attaquant déjà présent localement.
+WSS sortant, heartbeat 15 s, backoff 1–30 s avec jitter. `HELLO` porte l'UUID et
+le hash du catalogue. À la reconnexion, un changement de hash déclenche son upload.
+Un rescan force aussi l'actualisation des sources/diagnostics même si les fichiers
+et leur hash sont inchangés.
+Scans et uploads de catalogue s'exécutent hors du lecteur WebSocket : PONG et
+CANCEL restent traités pendant une opération lente. Les scans sont sérialisés,
+avec quatre commandes en attente au maximum. Un seul upload catalogue est actif ;
+seul le dernier jeton en attente est conservé. À la déconnexion, ces tâches sont
+annulées et les commandes en attente supprimées.
+Les files de messages sortants du client et du serveur contiennent au plus 64
+messages : une saturation ferme la connexion. Une panne du writer interrompt
+le lecteur, et la reconnexion purge messages et ancien `WELCOME`. Le backoff
+reste borné même après plus de 1 024 échecs consécutifs. Le serveur limite les
+messages Bridge à un burst de 40 puis 20/s, avant leur analyse.
+Liste exhaustive serveur → Bridge : `WELCOME`, `PREPARE`, `CANCEL`, `PING`,
+`SCAN_SOURCES`. Aucun chemin de fichier à encoder, URL externe ou argument FFmpeg
+libre n'est accepté. `track_id` est une clé du catalogue local, jamais un chemin.
 
-**Console**
-- **Aucun nom de fichier par défaut**, seulement `track_id` et durées. L'option `--verbose-paths` sert au débogage.
-- Affichage type :
-  ```
-  OpenBlindySir Bridge 0.1.0 — « Ayoub »
-  Serveur : https://openblindysir.example.com   CONNECTÉ (RTT 32 ms)
-  Dossier : D:\Music — 5 273 pistes (scan 4,2 s)
-  Jobs    : 12 OK · 1 échec · dernier t_9f2c… 0,8 s
-  [r] rescanner   [q] quitter
-  ```
+Jusqu'à huit Bridges actifs coexistent. Un nouvel accès du même UUID remplace
+uniquement sa connexion précédente. Jobs et tokens d'upload sont liés au Bridge
+propriétaire ; un autre Bridge ne peut pas terminer le job ou utiliser son token.
+Le serveur vérifie encore la connexion propriétaire après réception du catalogue.
+Après un upload audio, il revérifie la connexion exacte, le job, l'expiration et
+l'état de l'asset : une annulation, déconnexion ou reconnexion invalide un transfert
+déjà commencé. Les corps HTTP ont un délai total de 60 s ; le gzip doit former
+un unique flux complet, sans suffixe ni autre membre. Un ancien transfert ne peut
+pas écraser celui d'un Bridge reconnecté.
+Un catalogue en réception au plus par UUID, huit globalement, y compris les
+anciennes connexions remplacées : les corps refusés en `429` ne sont ni lus ni
+décompressés et leur token n'est pas consommé. Le Bridge retente ce refus
+temporaire au plus trois fois (0,25/0,5/1 s), conserve le même token et donne
+priorité au nouveau token si le serveur en émet un autre.
+Chaque UUID utilise un secret distinct, stocké haché dans un registre privé avec
+révocation durable. Le bootstrap ancien se lie au premier UUID seulement ; une
+rotation/révocation de cet UUID le désactive. L'authentification est revérifiée
+après HELLO, sur chaque trame et après les corps HTTP. Un secret d'un autre UUID
+ne donne aucun droit sur ses jobs/catalogues/uploads/réécoutes. Plafonds : 64
+identités, huit connexions, 200 000 pistes cumulées. La déduplication musicale
+entre bibliothèques reste future. Sélection/arborescence : `(bridge_id, dossier)`.
+L'hôte joueur en jeu n'accède ni aux noms de sources, ni aux archives, ni à la
+bibliothèque HTTP ; le MC conserve ses permissions. Voir [V0.5](v0.5.md).
 
-**Hors ligne** : le Bridge réessaie indéfiniment et affiche BACKOFF. Le serveur continue avec les assets déjà stockés.
+## Extraction bornée, audio uniquement
 
-**FFmpeg**
-- Recherché dans le PATH ou indiqué par `--ffmpeg`.
-- Vérification de la version et des encodeurs disponibles au démarrage.
-- S'il manque, message clair avec la commande winget, brew ou apt.
-- **FFmpeg n'est pas embarqué en V0.x**, pour éviter les obligations liées aux builds GPL.
-- Gabarit fixe sans shell. `ffprobe` et `ffmpeg` reçoivent tous les deux `-protocol_whitelist file`, `-format_whitelist mp3,flac,wav,mov,ogg,aiff,asf,aac` et l'entrée `file:` + chemin résolu. Le serveur ne fournit jamais d'argument FFmpeg.
-- Les booléens `normalize_audio` et `avoid_silence` choisissent seulement des gabarits fixes. Normalisation `loudnorm=I=-16:TP=-1.5:LRA=11` avant les fondus ; recherche de silence sur trois fenêtres au maximum, chacune bornée à 10 s. Un extrait entièrement silencieux échoue en `SILENT_AUDIO`, sans rejeter un enregistrement simplement faible. Le catalogue initial reste un scan de fichiers, sans audit audio global.
-- FFmpeg détecte le format par le contenu, pas par l'extension. Sans la liste de démultiplexeurs, une playlist `ffconcat` ou HLS nommée `.mp3` pourrait lire d'autres fichiers, y compris hors de la racine. Voir [ADR 0008](adr/0008-ffmpeg-demuxer-whitelist.md) et les tests de régression associés.
+Un job actif, file de quatre. ffprobe : 10 s ; ffmpeg : 30 s ; upload : 60 s.
+Les processus sont tués et récoltés lors d'une annulation ou d'un dépassement.
+stdout est plafonné à 128 KiB et stderr conserve au plus ses 8 derniers KiB.
+Avant ouverture : nouvelle résolution réelle, fichier régulier, confinement dans
+la racine, absence de lien/junction, comparaison taille/mtime au catalogue.
+Une fenêtre TOCTOU locale reste possible : le propriétaire des fichiers doit
+garder le contrôle de la machine et ne pas lancer le Bridge en administrateur.
 
-**Mode `--demo`** : catalogue virtuel de morceaux synthétiques (sinusoïdes, mélodies de bips, clics générés par `ffmpeg -f lavfi`). Il sert au développement, à la CI, aux tests E2E et à essayer un déploiement **sans aucun contenu protégé**.
+Arguments fixes sans shell : `-protocol_whitelist file`, liste fermée
+`mp3,flac,wav,mov,ogg,aiff,asf,aac,matroska,avi`, entrée `file:` résolue et
+`-f` imposé selon l'extension. Pour MOV/MP4 seulement, `enable_drefs=0` et
+`use_absolute_path=0` interdisent les références de données externes. Ces options
+spécifiques au démultiplexeur ne sont pas passées aux autres formats.
+Le démultiplexeur concat, HLS, DASH, les playlists et protocoles réseau sont
+exclus, même lorsqu'ils sont déguisés avec une extension audio/vidéo.
 
-**Packaging**
-| Étape | Option |
-|---|---|
-| V0.1 | `uv run openblindysir-bridge` depuis le dépôt |
-| V0.3 | Distribution `openblindysir-bridge` (PyPI), lancée avec `uvx openblindysir-bridge`. Binaires PyInstaller **onedir** zippés produits par la CI (Windows, macOS, Linux), nommés `OpenBlindySir-Bridge-<version>-<os>-<arch>.zip`, non signés, avec la procédure SmartScreen/Gatekeeper documentée. |
-| Écarté | Nuitka (builds lourds, mêmes alertes antivirus) ; zipapp (exige Python installé) |
-| V1+ | Réécriture en Go, seulement si la distribution pose un vrai problème |
+La première piste audio `a:0` est sélectionnée, indépendamment du drapeau
+« default ». `-map 0:a:0 -vn -sn -dn`, suppression des tags/chapitres : aucune
+vidéo, pochette, sous-titre, donnée ou métadonnée musicale dans le résultat.
+Absence d'audio : `NO_AUDIO` ; fichier illisible : `DECODE_ERROR`. Les détails
+restent dans la console privée avec `--verbose-paths` ; les joueurs voient des
+erreurs génériques. Durée source acceptée : finie, entre 8 s et 24 h.
 
-La publication sur PyPI n'est pas figée avant la V0.3 ; seul le nom est réservé conceptuellement.
+La sortie commune reste AAC/M4A 128 kb/s par défaut, 48 kHz stéréo ; Opus/WebM
+est configurable. Le Bridge borne les extraits à 60 s/4 MiB et les bitrates à
+96/128/160/192 kb/s ; le serveur conserve son plafond de 2 MiB. Normalisation
+`loudnorm=I=-16:TP=-1.5:LRA=11`, fondus et recherche de silence restent contrôlés
+par des gabarits fixes. Trois fenêtres d'analyse maximum ; un extrait entièrement
+silencieux échoue en `SILENT_AUDIO`. Un enregistrement faible n'est pas rejeté
+pour sa seule amplitude. Aucun audit audio global au scan.
 
-**Plusieurs Bridges**
-- **Dès maintenant**, pour un coût quasi nul :
-  - références de morceau `(bridge_id, track_id)` ;
-  - catalogues indexés par `bridge_id` ;
-  - `bridge_id` et `name` transmis dans `HELLO` ;
-  - jobs envoyés au Bridge propriétaire ;
-  - arborescence préfixée par le nom du Bridge ;
-  - serveur considéré comme non fiable.
-- En V0.1, un second Bridge remplace le premier.
-- **Reporté en V1** : un secret par Bridge, la pondération entre bibliothèques, la déduplication, une interface de gestion des Bridges.
+## Réécoute et fichiers temporaires
 
-## Menaces concernant le Bridge (extrait du §12)
+Les seuls extraits joués peuvent rester dans un cache privé du Bridge plafonné
+à 64 MiB, éviction LRU. Une panne de copie du cache ne fait pas échouer un extrait
+déjà uploadé ; les copies partielles sont supprimées. Le SHA-256 du résultat est
+vérifié pour réécouter exactement l'extrait. Le cache permet même la réécoute
+après suppression locale de la source. S'il est perdu, le Bridge peut régénérer
+l'extrait ; le serveur refuse tout résultat dont les octets diffèrent.
 
-| Menace | Impact | Mitigation | Quand |
-|---|---|---|---|
-| Path traversal depuis le serveur | Lecture de fichiers hors du dossier | `track_id` sert de **clé de dictionnaire, jamais de chemin**. ID inconnu : erreur. | V0.1 |
-| Évasion par symlink ou junction | Idem | Liens ignorés au scan, `realpath` et confinement vérifiés au scan **et** à l'ouverture, tests sur un runner Windows. | V0.1 |
-| Serveur malveillant vu du Bridge | Lecture de fichiers, exécution, saturation du PC | Protocole fermé de 4 messages, aucun argument FFmpeg libre, bornes fixées par le Bridge, file limitée, timeouts, préfixe `file:`, `protocol_whitelist` et `format_whitelist` (§10), contrôle de la durée produite. Fuite résiduelle (documentée) : arborescence et noms de fichiers. | V0.1 |
-| Faux Bridge (secret volé) | Diffusion d'audio choisi par l'attaquant, saturation | Secret fort, upload uniquement pour un job en attente (token à usage unique), ≤ 2 Mo, magic bytes, un seul Bridge actif. Rotation par `.env`. Un secret par Bridge en V1. | V0.1 / V1 |
-| Fichier piégé visant FFmpeg | Exécution de code sur le PC | Fichiers fournis par l'utilisateur (risque faible), vérification de la version de FFmpeg, timeouts, et consigne de ne pas lancer le Bridge en administrateur. | V0.1 (doc) |
-| MITM / absence de TLS | Vol des secrets | HTTPS obligatoire (Caddy + HSTS), cookie Secure, le Bridge refuse toute connexion non TLS hors localhost. | V0.1 |
+Une écoute intégrale autorisée localement produit un segment ≤30 s à l'offset
+demandé, sans fondus ni cache de fichier complet. Taille/mtime doivent correspondre
+à la révision mémorisée pendant la manche ; un fichier modifié est refusé. Les
+anciennes recettes sans révision ne permettent pas l'écoute intégrale. Aucun
+fichier complet n'est transmis ou stocké. Le serveur limite la réécoute privée
+à deux transferts simultanés, un par hôte, chacun ≤2 MiB, hors du cache partagé.
+
+Répertoire privé `openblindysir-bridge-*`, marqueur `owner.pid`. Nettoyage au
+quittement ; au démarrage, seuls les répertoires dont le propriétaire est prouvé
+arrêté sont purgés. Instances actives, dossiers sans marqueur, liens/junctions
+sont conservés. Sous Windows : `OpenProcess`/`GetExitCodeProcess`, jamais
+`os.kill(pid, 0)`. La console masque les noms par défaut. Démo `--demo` synthétique
+pour tests et essais. FFmpeg est installé localement en natif, inclus dans l'image
+Bridge Docker ; la V0.3 fournit aussi les builds natifs et wheels/sdists indépendants.
+La publication reste soumise aux contrôles de release et à la configuration PyPI
+du mainteneur. Les contrôles refusent configurations/backups, liens, chemins
+ambigus et contenus absents du manifeste ; voir [la procédure](releasing.md).

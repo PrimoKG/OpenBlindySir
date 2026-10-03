@@ -36,6 +36,9 @@ def test_checkout_build_excludes_local_artifacts(tmp_path: Path) -> None:
     context = Path(result.stdout.strip())
     assert (context / "Dockerfile").is_file()
     assert (context / "web/package-lock.json").is_file()
+    for package in ("protocol", "server", "bridge"):
+        assert (context / package / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
+    assert (context / "bridge/README.md").is_file()
     assert any((context / "server/src").rglob("*.py"))
     assert any((context / "web/src").rglob("*.tsx"))
     assert not (context / "web/test-results").exists()

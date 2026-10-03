@@ -1,11 +1,12 @@
 """HTTP security: headers set by the application on every response (spec §5.5, §12),
 Origin checks, bounded JSON bodies, client IP helpers and coarse browser family."""
 
+import asyncio
 import ipaddress
 from collections.abc import Awaitable, Callable, MutableMapping
 from typing import Any
 
-from starlette.requests import Request
+from starlette.requests import ClientDisconnect, Request
 from starlette.responses import JSONResponse
 
 from openblindysir_protocol.enums import BrowserFamily
@@ -33,6 +34,8 @@ BASE_HEADERS: tuple[tuple[bytes, bytes], ...] = (
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=(), payment=()"),
 )
 HSTS = (b"strict-transport-security", b"max-age=31536000")
+BODY_TIMEOUT_S = 15
+UPLOAD_TIMEOUT_S = 60
 
 
 class SecurityHeadersMiddleware:
@@ -49,6 +52,12 @@ class SecurityHeadersMiddleware:
 
         async def send_with_headers(message: MutableMapping[str, Any]) -> None:
             if message["type"] == "http.response.start":
+                if scope.get("path", "").startswith("/api/"):
+                    message["headers"] = [
+                        (n, v)
+                        for n, v in message.get("headers", [])
+                        if n.lower() != b"cache-control"
+                    ] + [(b"cache-control", b"no-store, private")]
                 names = {name.lower() for name, _ in message.get("headers", [])}
                 extra = [(n, v) for n, v in self.headers if n not in names]
                 message["headers"] = [*message.get("headers", []), *extra]
@@ -84,14 +93,32 @@ async def read_json_body(
     content_type = request.headers.get("content-type", "")
     if content_type.split(";")[0].strip().lower() != "application/json":
         return error(415, ErrorCode.JSON_REQUIRED)
+    return await read_bounded_body(request, limit, timeout_s=BODY_TIMEOUT_S)
+
+
+async def read_bounded_body(
+    request: Request, limit: int, *, timeout_s: float
+) -> bytes | JSONResponse:
+    """Bound both memory and total receive time, even without Content-Length."""
     declared = request.headers.get("content-length")
-    if declared is not None and declared.isdigit() and int(declared) > limit:
-        return error(413, ErrorCode.PAYLOAD_TOO_LARGE)
-    body = bytearray()
-    async for chunk in request.stream():
-        body.extend(chunk)
-        if len(body) > limit:
+    if declared is not None:
+        if not declared or any(c not in "0123456789" for c in declared):
+            return error(400, ErrorCode.INVALID_MESSAGE)
+        # Compare decimal strings: int() rejects some isdigit() characters and very
+        # long integers. Leading zeroes must not turn a small legitimate length into 413.
+        length = declared.lstrip("0") or "0"
+        maximum = str(limit)
+        if len(length) > len(maximum) or (len(length) == len(maximum) and length > maximum):
             return error(413, ErrorCode.PAYLOAD_TOO_LARGE)
+    body = bytearray()
+    try:
+        async with asyncio.timeout(timeout_s):
+            async for chunk in request.stream():
+                if len(body) + len(chunk) > limit:
+                    return error(413, ErrorCode.PAYLOAD_TOO_LARGE)
+                body.extend(chunk)
+    except (TimeoutError, ClientDisconnect):
+        return error(408, ErrorCode.INVALID_MESSAGE)
     return bytes(body)
 
 

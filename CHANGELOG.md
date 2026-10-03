@@ -8,8 +8,73 @@ the version is 0.x, the API and protocol may change between minor versions.
 
 ## [Unreleased]
 
+### V0.5 — development, 0.5.0.dev0
+
+- UUID-bound private Bridge secrets, operator issuance/rotation, host revocation,
+  per-owner capabilities/status and authentication rechecks after network waits.
+- Online-only random choices and 45-second offline recovery; prepared clips
+  continue, MC replacement stays explicit.
+- Immutable completed records, host-only consultation/exports and durable
+  deletion/purge; 50 games/90 days/16 MiB, no audio. Free old journals/assets on new game.
+- Hide sources from playing hosts in STATE/library/diagnostics; cumulative
+  catalogue and credential caps. New boundary/migration/crash regression tests.
+- Skip links, phase announcements, dialog focus, named audio progress and
+  keyboard/history/reflow/200%-text/reduced-motion verification.
+- Software 0.5.0.dev0, protocol 5 (5..5), snapshot 4, history 2; legacy migrations,
+  unknown-version refusal and cookies preserved on Bridge rotation.
+- Docker/native commands, private credential profile, FR/EN guides, ADR 0015,
+  threat model and Chromium/WebKit CI. No release published or protocol frozen.
+
+### Security
+
+- Serialize Bridge credential writes across CLI/host processes, reload while
+  locked, roll back failed mutations and invalidate stale authentication caches.
+  Issue private secrets without overwriting concurrent files; clean failed output
+  and refuse reserved state paths.
+- Limit successful join/leave churn, bound retained identities and clear removed
+  identities on a new game while preserving completed records.
+- Reject malformed Content-Length values without integer conversion, duplicate
+  private JSON keys and invalid recovery types/indices before applying snapshots.
+- Recheck session/host/phase permissions after HTTP bodies and WebSocket HELLO;
+  bind streamed audio acceptance to its exact live Bridge connection and job.
+- Bound Bridge/player message queues and Bridge incoming rates, stop failed writers, purge
+  stale session work and cap reconnection exponents during long outages.
+- Expire rate-limit/connection bookkeeping, bound transient log redaction,
+  escape log control characters, limit recovery-code rotation and apply total
+  HTTP body deadlines.
+- Disable API caching and reject incomplete/trailing/multiple gzip catalogues.
+- Cap simultaneous catalogue receives per identity and globally, before any
+  decompression; preserve upload tokens for bounded retries on temporary 429.
+- Reject linked configuration/root/snapshot ancestors; write private snapshots
+  and backups atomically with exclusive random temporary files and Windows ACLs.
+- Close release staging to expected artifacts and validate package/target names,
+  portable archive paths, links, private backups, sizes and sidecar checksums
+  before publication or smoke extraction.
+
 ### Added
 
+- V0.3 standalone Bridge wheels/sdists with local versions/licenses, exact protocol
+  dependency and isolated uvx support for CPython 3.12–3.14.
+- Masked terminal setup/configure wizard, explicit save/private backups, Windows
+  ACL/Unix 600 atomic configuration, local/configuration/registration diagnostics,
+  safe JSON reports and FFmpeg capability checks with stable exit codes.
+- MC manual choices for numbered unprepared rounds, private revision confirmation,
+  reservations/repeat/source checks, explicit launch and recoverable selection failures.
+- Native PyInstaller onedir builds for Windows/Linux x64 and macOS Intel/arm64,
+  separate FFmpeg, dependency licenses, manifests/checksums and extracted-archive smokes.
+- Validation on supported Python/platform matrices and separate tag-only release
+  with artifact provenance checks and PyPI OIDC (maintainer publisher setup required).
+- French/English Bridge installation, deployment/troubleshooting and backup/rollback
+  guides, plus architecture decisions for distribution and manual MC selection.
+
+- Audio-only extraction from safe video containers, including MP4, MOV, MKV and AVI.
+- Global end-of-game review with durable signed scores, all answers and timings,
+  explicit final confirmation, and private on-demand excerpt/full-track listening.
+- Dynamic folders under each Bridge's authorized root, up to eight simultaneous
+  Bridges, library search/filters and optional validated JSON musical metadata.
+- Local audio latency adjustment, one-use player recovery codes, join locking,
+  live MC answers and optional balanced random selection across folders.
+- French and English V0.2 guides, migration notes and security decisions.
 - Shared answer instructions and manual scoring rules, teams and spectators, QR invitations,
   browser-local saved selections, game history, detailed recaps and CSV/JSON exports.
 - Synchronized pause/resume for playback and answer deadlines, excluding paused time from
@@ -28,8 +93,9 @@ the version is 0.x, the API and protocol may change between minor versions.
 
 ### Changed
 
-- Protocol 2: server, Bridge and web UI must be updated together.
-- Host review reveals the current track privately, supports title/artist corrections and
+- V0.3 introduced protocol 4 and snapshot format 3; V0.5 now uses 5 and 4.
+  Snapshots 1/2 remain readable; downgrade requires a pre-migration backup.
+- Global host review reveals played tracks privately, supports metadata corrections and
   separates unchecked rows from explicit zero scores. Numeric drafts wait for server echoes.
 - Settings can be saved and started atomically; exhausted pools expose recovery actions.
 - Host controls use page scrolling, answer deadlines remain distinct from clip progress,
@@ -41,6 +107,13 @@ the version is 0.x, the API and protocol may change between minor versions.
 
 ### Fixed
 
+- Private replay releases transfers on Bridge loss and rejected uploads; failed seeks
+  retry the requested position and release the previous browser clip.
+- Final correction shortcuts/resets and numeric scores wait for server confirmation
+  before further edits or publication.
+- Source edits wait for completed scans; slow scans/catalog uploads leave heartbeat
+  and audio cancellation responsive, with bounded queues and reconnect cleanup.
+- An old connection's catalogue upload cannot overwrite a reconnected Bridge.
 - Exhausted-session launches and one-track repeat games no longer remain in preparation.
 - Host role permissions match the displayed commands and scoring publication rejects
   unchecked rows unless the host explicitly confirms them.

@@ -15,10 +15,14 @@ class LocalCatalog:
     entries: dict[str, LocalEntry]  # track_id -> entry
     catalog_hash: str
     dropped: int  # collisions or names the protocol cannot carry
+    scanned_folders: tuple[str, ...] = ("",)
+    source_error: str | None = None
+    ambiguous_paths: tuple[str, ...] = ()
 
     @classmethod
     def from_scan(cls, result: ScanResult) -> "LocalCatalog":
         entries: dict[str, LocalEntry] = {}
+        ambiguous: set[str] = set()
         dropped = 0
         for entry in result.entries:
             try:
@@ -27,12 +31,22 @@ class LocalCatalog:
                 dropped += 1
                 continue
             track_id = compute_track_id(entry.relpath)
-            if track_id in entries:
+            if entry.relpath in ambiguous:
                 dropped += 1
+                continue
+            if track_id in entries:
+                previous = entries.pop(track_id)
+                ambiguous.update((previous.relpath, entry.relpath))
+                dropped += 2
                 continue
             entries[track_id] = entry
         rows = [(tid, e.relpath, e.size) for tid, e in entries.items()]
-        return cls(entries=entries, catalog_hash=compute_catalog_hash(rows), dropped=dropped)
+        return cls(
+            entries=entries,
+            catalog_hash=compute_catalog_hash(rows),
+            dropped=dropped,
+            ambiguous_paths=tuple(sorted(ambiguous)),
+        )
 
     def lookup(self, track_id: str) -> LocalEntry | None:
         return self.entries.get(track_id)
@@ -52,5 +66,8 @@ class LocalCatalog:
                 )
                 for tid, entry in sorted(self.entries.items())
             ],
+            scanned_folders=list(self.scanned_folders),
+            source_error=self.source_error,  # type: ignore[arg-type]
+            ambiguous_paths=list(self.ambiguous_paths),
         )
         return gzip.compress(upload.model_dump_json().encode("utf-8"), mtime=0)

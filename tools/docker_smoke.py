@@ -47,7 +47,8 @@ def validate_profiles(env_file: Path, ca_file: Path) -> None:
             base + "\nDOMAIN=blind.example.com\nTLS_HOST=blind.example.com\n"
             "TLS_SERVER_NAME=blind.example.com\nHTTPS_PORT=443\nBIND_IP=0.0.0.0\n"
             "CADDY_PROFILE=public\nBRIDGE_SERVER=https://blind.example.com\n"
-            f"BRIDGE_CA_FILE='{ca_file.resolve().as_posix()}'\n",
+            f"BRIDGE_CA_FILE='{ca_file.resolve().as_posix()}'\n"
+            f"BRIDGE_CREDENTIALS_FILE='{ca_file.resolve().as_posix()}'\n",
             encoding="utf-8",
         )
         public = compose(path, "compose.yaml", "deploy/compose.public.yaml")["services"]
@@ -58,7 +59,23 @@ def validate_profiles(env_file: Path, ca_file: Path) -> None:
         assert remote["environment"]["SSL_CERT_FILE"] == "/trust/root.crt"
         assert not remote.get("ports")
         assert all(volume["read_only"] for volume in remote["volumes"] if volume["type"] == "bind")
-    print("Compose profiles PASS: private, public, standalone Bridge with TLS root.")
+        individual = compose(
+            path, "deploy/compose.bridge-credential.yaml", "deploy/compose.bridge.private.yaml"
+        )["services"]["bridge"]
+        assert individual["environment"]["SSL_CERT_FILE"] == "/trust/root.crt"
+        assert individual["environment"]["OPENBLINDYSIR_BRIDGE_CREDENTIALS_FILE"] == (
+            "/credentials/issued.toml"
+        )
+        credential = next(
+            v for v in individual["volumes"] if v["target"] == "/credentials/issued.toml"
+        )
+        assert credential["read_only"]
+        assert credential["bind"]["create_host_path"] is False
+        assert individual["read_only"]
+        assert individual["cap_drop"] == ["ALL"]
+        assert "no-new-privileges:true" in individual["security_opt"]
+        assert not individual.get("ports")
+    print("Compose profiles PASS: private, public, bootstrap and individual Bridges with TLS root.")
 
 
 def main() -> int:

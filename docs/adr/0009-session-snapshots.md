@@ -39,3 +39,19 @@ la partie. Les écritures restent synchrones : ce choix convient au petit groupe
 et la taille des catalogues/snapshots devra être surveillée sur la vraie bibliothèque.
 Le format local ne promet pas de migration entre versions futures : conserver une
 sauvegarde avant une mise à jour. Pas de SQLite ni de service supplémentaire.
+
+## Évolution V0.2
+
+Les règles de revue/notation/réécoute sont précisées par [ADR 0011](0011-global-review-and-private-replay.md).
+Les sources, formats et métadonnées sont précisés par [ADR 0012](0012-dynamic-sources-and-metadata.md).
+Les décisions historiques restent conservées ; ces deux ADR font autorité pour les changements V0.2.
+
+## Complément V0.5
+
+[ADR 0015](0015-v05-private-bridges-history-compatibility.md) fait autorité pour
+snapshot 4 (lecture 1/2/3/4), historique 2 (migration ancien/1), conservation
+50 parties/90 jours/16 Mio et suppression des deux copies gérées. Les formats
+futurs inconnus bloquent la reprise, même si une ancienne copie est lisible.
+Le registre privé `bridge-credentials.json` est sauvegardé avec les snapshots.
+Changer les mots de passe partie/hôte invalide les cookies ; tourner un secret
+Bridge n'affecte pas les sessions navigateur en format 4.

@@ -30,6 +30,28 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  padding: 0.65rem 1rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 2px solid var(--text);
+}
+.skip-link:focus {
+  transform: none;
+}
+.bridge-card {
+  overflow-wrap: anywhere;
+}
+:focus-visible {
+  outline: 3px solid #184f8c;
+  outline-offset: 3px;
+}
 button,
 input {
   font: inherit;
@@ -445,6 +467,10 @@ input[type="range"] {
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+.history-picker .btn {
+  white-space: normal;
+  text-align: left;
 }
 :is(button, a, input, summary):focus-visible {
   outline: 3px solid var(--accent);
@@ -1573,7 +1599,95 @@ textarea:focus-visible {
 .dialog p {
   white-space: pre-line;
 }
+.global-review-layout {
+  display: grid;
+  grid-template-columns: minmax(11rem, 19rem) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.global-review-layout > *,
+.library-manager,
+.library-results {
+  min-width: 0;
+}
+.review-navigation {
+  position: sticky;
+  top: 1rem;
+}
+.review-navigation ol {
+  max-height: 60vh;
+  overflow: auto;
+}
+.review-navigation .btn {
+  width: 100%;
+  justify-content: start;
+  text-align: left;
+  min-height: 44px;
+}
+.review-navigation [aria-current="step"] {
+  background: var(--accent);
+  color: var(--surface);
+}
+.review-audio {
+  padding: 1rem;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.review-audio input[type="range"] {
+  width: 100%;
+  min-height: 44px;
+}
+.review .answer-time time {
+  display: block;
+}
+.session-controls {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.library-filters,
+.metadata-editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+.source-card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.source-card + .source-card {
+  margin-top: 1rem;
+}
+.library-results li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.language-choice select {
+  min-height: 44px;
+}
+.review h1 {
+  font-size: clamp(1.4rem, 4vw, 2.2rem);
+}
 @media (max-width: 700px) {
+  .global-review-layout {
+    grid-template-columns: 1fr;
+  }
+  .review-navigation {
+    position: static;
+  }
+  .review-navigation ol {
+    max-height: 12rem;
+  }
+  .review .btn-small {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .library-filters,
+  .metadata-editor {
+    grid-template-columns: 1fr;
+  }
   .answer-form {
     scroll-margin-top: 1rem;
   }

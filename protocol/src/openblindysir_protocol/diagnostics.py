@@ -6,9 +6,10 @@ meant to be attached to a public issue.
 
 from typing import Annotated
 
-from pydantic import StringConstraints
+from pydantic import Field, StringConstraints
 
 from openblindysir_protocol.base import JobId, OutboundModel, PlayerId, RoundId
+from openblindysir_protocol.compatibility import Compatibility
 from openblindysir_protocol.enums import (
     AssetRole,
     AssetState,
@@ -19,7 +20,7 @@ from openblindysir_protocol.enums import (
     JobStage,
     RoundState,
 )
-from openblindysir_protocol.views import BridgeStatus
+from openblindysir_protocol.views import BridgeDetail, BridgeStatus
 
 
 class DiagPlayer(OutboundModel):
@@ -43,6 +44,7 @@ class DiagJob(OutboundModel):
     asset_state: AssetState
     stage: JobStage | None
     age_ms: int
+    bridge_id: str | None = None
 
 
 class DiagCacheAsset(OutboundModel):
@@ -81,3 +83,8 @@ class DiagnosticsResponse(OutboundModel):
     cache_cap_bytes: int
     cache: list[DiagCacheAsset]
     rounds: list[DiagRound]
+    compatibility: Compatibility | None = None
+    bridges: list[BridgeDetail] = Field(default_factory=list)
+    persistence_status: str = "disabled"
+    history_count: int = 0
+    history_bytes: int = 0

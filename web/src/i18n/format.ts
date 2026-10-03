@@ -1,4 +1,4 @@
-// Display formats, independent of the browser locale (French typography).
+import { getLanguage } from "./index";
 
 const MINUS = "−";
 const NARROW_NBSP = " ";
@@ -6,7 +6,7 @@ const NARROW_NBSP = " ";
 /** 4237 ms → "4,2 s" (tenth of a second, comma). */
 export function formatSeconds(ms: number): string {
   const tenths = Math.round(Math.max(0, ms) / 100);
-  return `${Math.floor(tenths / 10)},${tenths % 10} s`;
+  return `${Math.floor(tenths / 10)}${getLanguage() === "fr" ? "," : "."}${tenths % 10} s`;
 }
 
 /** +2, −1 (true minus sign), 0. */

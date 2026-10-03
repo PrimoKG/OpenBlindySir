@@ -25,64 +25,62 @@ def check_invariant(sc: Scenario) -> None:
         assert sc.s.journal.score(game_id, pid) == naive_score(sc.s.journal, game_id, pid)
 
 
-def test_publish_creates_one_event_per_non_zero_delta() -> None:
-    sc = Scenario()
+def test_final_publication_creates_one_event_per_non_zero_delta() -> None:
+    sc = Scenario(rounds=1)
     a, b, c3 = sc.player_ids
     sc.to_review()
-    sc.publish({a: 3, b: -1, c3: 0})
+    sc.score({a: 3, b: -1, c3: 0})
+    assert sc.s.journal.events() == ()
+    sc.finalize()
     events = sc.s.journal.events()
-    assert [(ev.player_id, ev.delta, ev.kind) for ev in events] == [
+    assert {(ev.player_id, ev.delta, ev.kind) for ev in events} == {
         (a, 3, ScoreKind.ROUND),
         (b, -1, ScoreKind.ROUND),
-    ]
+    }
     check_invariant(sc)
 
 
 def test_drafts_never_create_events() -> None:
-    sc = Scenario()
+    sc = Scenario(rounds=1)
     a = sc.player_ids[0]
     sc.to_review()
-    sc.on_round("score_draft", {"player_id": a, "points": 3})
-    sc.on_round("score_draft", {"player_id": a, "points": 0})
-    sc.on_round("score_draft", {"player_id": a, "points": -2})
+    for points in (3, 0, -2):
+        assert sc.on_round("score_draft", {"player_id": a, "points": points}).error is None
     assert sc.s.journal.events() == ()
 
 
-def test_host_scores_himself_in_review() -> None:
-    sc = Scenario()
+def test_host_scores_himself_in_global_review() -> None:
+    sc = Scenario(rounds=1)
     assert sc.host_id is not None
     sc.to_review()
-    sc.publish({sc.host_id: 2})
+    sc.score({sc.host_id: 2})
+    sc.finalize()
     assert sc.s.journal.score(sc.s.game.game_id, sc.host_id) == 2
 
 
-def test_undo_revokes_and_restores_draft() -> None:
-    sc = Scenario()
+def test_correcting_a_round_draft_creates_only_the_final_value() -> None:
+    sc = Scenario(rounds=1)
     a = sc.player_ids[0]
     r = sc.to_review()
-    sc.publish({a: 3})
-    sc.host("undo_publish", round_id=r.id, args={})
-    kinds = [ev.kind for ev in sc.s.journal.events()]
-    assert kinds == [ScoreKind.ROUND, ScoreKind.REVOKE]
-    assert sc.s.journal.score(sc.s.game.game_id, a) == 0
-    assert r.score_draft == {a: 3}
-    sc.publish()
-    assert sc.s.journal.score(sc.s.game.game_id, a) == 3
+    sc.score({a: 3})
+    sc.score({a: -1})
+    assert sc.s.journal.events() == ()
+    assert r.score_draft == {a: -1}
+    sc.finalize()
+    assert sc.s.journal.score(sc.s.game.game_id, a) == -1
+    assert len(sc.s.journal.events()) == 1
     check_invariant(sc)
 
 
-def test_adjust_anyone_including_host_and_negative() -> None:
+def test_in_game_adjustment_is_disabled_to_keep_points_private() -> None:
     sc = Scenario()
-    assert sc.host_id is not None
     sc.to_open()
     args = {"player_id": sc.host_id, "delta": -4, "op_id": "op-0000001", "note": "faute"}
-    assert sc.on_phase("adjust", args).error is None
-    assert sc.on_phase("adjust", args).error is ErrorCode.STALE_COMMAND  # same op_id
-    assert sc.s.journal.score(sc.s.game.game_id, sc.host_id) == -4
-    check_invariant(sc)
+    assert sc.on_phase("adjust", args).error is ErrorCode.INVALID_STATE
+    assert sc.s.journal.events() == ()
 
 
-def test_adjust_round_must_belong_to_game() -> None:
+def test_outside_round_adjustment_cannot_publish_points() -> None:
     sc = Scenario()
     sc.to_open()
     args = {
@@ -91,7 +89,8 @@ def test_adjust_round_must_belong_to_game() -> None:
         "op_id": "op-0000002",
         "round_id": "r_000999",
     }
-    assert sc.on_phase("adjust", args).error is ErrorCode.INVALID_ARGS
+    assert sc.on_phase("adjust", args).error is ErrorCode.INVALID_STATE
+    assert sc.s.journal.events() == ()
 
 
 def test_journal_rejects_invalid_events() -> None:

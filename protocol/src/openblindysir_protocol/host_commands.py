@@ -7,9 +7,10 @@ Every variant declares exactly one idempotency key in the envelope (``round_id``
 from collections.abc import Mapping
 from typing import Annotated, Any, Final, Literal, get_args
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, model_validator
 
 from openblindysir_protocol.base import (
+    BridgeId,
     InboundModel,
     NonZeroPoints,
     NoteText,
@@ -19,13 +20,35 @@ from openblindysir_protocol.base import (
     Points,
     RoundId,
     ServerMs,
+    TrackId,
 )
 from openblindysir_protocol.enums import EndGameMode, GamePhase, HostMode
+from openblindysir_protocol.metadata import MusicalMetadata
 from openblindysir_protocol.settings import SettingsPatch
 
 AnyPhase = Literal[
     GamePhase.LOBBY, GamePhase.IN_GAME, GamePhase.FINAL_SCORE_REVIEW, GamePhase.FINAL_RESULTS
 ]
+
+
+class SelectTrackArgs(InboundModel):
+    round_number: Annotated[int, Field(ge=1, le=100)]
+    expected_revision: Annotated[int, Field(ge=0)]
+    bridge_id: BridgeId | None = None
+    track_id: TrackId | None = None
+
+    @model_validator(mode="after")
+    def paired_reference(self) -> "SelectTrackArgs":
+        if (self.bridge_id is None) != (self.track_id is None):
+            raise ValueError("bridge_id and track_id must be paired")
+        return self
+
+
+class HostSelectTrack(InboundModel):
+    t: Literal["HOST"]
+    cmd: Literal["select_track"]
+    expected_phase: Literal[GamePhase.LOBBY, GamePhase.IN_GAME]
+    args: SelectTrackArgs
 
 
 class EmptyArgs(InboundModel):
@@ -85,9 +108,12 @@ class PublishArgs(InboundModel):
     confirm_unreviewed: bool = False
 
 
-class TrackMetadataArgs(InboundModel):
-    title: Annotated[str, StringConstraints(max_length=256)]
-    artist: Annotated[str, StringConstraints(max_length=256)]
+class TrackMetadataArgs(MusicalMetadata):
+    pass
+
+
+class JoinLockArgs(InboundModel):
+    locked: bool
 
 
 class _Host(InboundModel):
@@ -121,8 +147,15 @@ class HostNewGame(_Host):
 
 class HostEndGame(_Host):
     cmd: Literal["end_game"]
-    round_id: RoundId
+    round_id: RoundId | None = None
+    expected_phase: AnyPhase | None = None
     args: EndGameArgs
+
+    @model_validator(mode="after")
+    def _key(self) -> "HostEndGame":
+        if (self.round_id is None) == (self.expected_phase is None):
+            raise ValueError("exactly one idempotency key required")
+        return self
 
 
 class HostEndSession(_Host):
@@ -241,7 +274,13 @@ class HostFinalReset(_Host):
 class HostFinalValidate(_Host):
     cmd: Literal["final_validate"]
     expected_phase: Literal[GamePhase.FINAL_SCORE_REVIEW]
-    args: EmptyArgs
+    args: PublishArgs
+
+
+class HostJoinLock(_Host):
+    cmd: Literal["join_lock"]
+    expected_phase: AnyPhase
+    args: JoinLockArgs
 
 
 class HostKick(_Host):
@@ -263,7 +302,8 @@ class HostParticipation(_Host):
 
 
 HostCommandVariant = (
-    HostConfigure
+    HostSelectTrack
+    | HostConfigure
     | HostSetMode
     | HostStartGame
     | HostNewGame
@@ -290,6 +330,7 @@ HostCommandVariant = (
     | HostKick
     | HostRename
     | HostParticipation
+    | HostJoinLock
 )
 HostCommand = Annotated[HostCommandVariant, Field(discriminator="cmd")]
 
@@ -303,6 +344,10 @@ _PLAY = "pl_play01"
 
 # One valid JSON example per command, used by the permission test (spec §20.1 item 6).
 HOST_COMMAND_EXAMPLES: Final[Mapping[str, dict[str, Any]]] = {
+    "select_track": {
+        "expected_phase": "LOBBY",
+        "args": {"round_number": 1, "expected_revision": 0},
+    },
     "configure": {"expected_phase": "LOBBY", "args": {"rounds": 10}},
     "set_mode": {"expected_phase": "LOBBY", "args": {"mode": "mc"}},
     "start_game": {"expected_phase": "LOBBY", "args": {}},
@@ -336,4 +381,5 @@ HOST_COMMAND_EXAMPLES: Final[Mapping[str, dict[str, Any]]] = {
     "kick": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER}},
     "rename": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER, "nickname": "Yo"}},
     "participation": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER}},
+    "join_lock": {"expected_phase": "LOBBY", "args": {"locked": True}},
 }

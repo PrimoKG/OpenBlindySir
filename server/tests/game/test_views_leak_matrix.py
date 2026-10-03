@@ -54,6 +54,10 @@ def mc() -> Scenario:
 
 def assert_never(text: str) -> None:
     data = json.loads(text)
+    if data.get("kind") == "host_mc":
+        choices = data.get("mc", {}).pop("manual_choices", [])
+        assert not (FORBIDDEN_KEYS - {"track_id"}) & keys_of(choices)
+        text = json.dumps(data)
     assert not FORBIDDEN_KEYS & keys_of(data)
     assert '"t_' not in text  # no track id value
 
@@ -95,17 +99,17 @@ def test_open_host_player_mode_identical_round_and_no_metadata() -> None:
     assert_never(host_text)
 
 
-def test_open_mc_sees_metadata_and_per_player_status_but_no_text(mc: Scenario) -> None:
+def test_open_mc_sees_live_answers_privately(mc: Scenario) -> None:
     mc.to_open()
     a = mc.player_ids[0]
     mc.submit(a, answer_text(a))
+    mc.draft(mc.player_ids[1], "PRIVATE-DRAFT")
     text = mc.host_view().model_dump_json()
     assert CANARY_FOLDER in text
-    assert "track-" in text  # file name shown to the MC
-    assert answer_text(a) not in text
-    view = mc.host_view()
-    assert view.kind == "host_mc"
-    assert any(row.validated for row in view.round.per_player)  # type: ignore[union-attr]
+    assert answer_text(a) in text
+    assert "PRIVATE-DRAFT" in text
+    assert answer_text(a) not in dump(mc, mc.player_ids[1])
+    assert "PRIVATE-DRAFT" not in dump(mc, mc.player_ids[0])
     assert_never(text)
 
 
@@ -174,11 +178,15 @@ def test_review_player_sees_nothing_of_others() -> None:
     assert_never(text)
 
 
-def test_review_host_sees_current_metadata_privately_after_answers_close() -> None:
+def test_closed_round_stays_hidden_until_global_review() -> None:
     sc = Scenario()
     sc.to_open()
     all_answer(sc, except_last=True)
     sc.on_round("close")
+    text = sc.host_view().model_dump_json()
+    assert answer_text(sc.player_ids[0]) not in text
+    assert CANARY_TITLE not in text
+    sc.on_phase("end_game", {"current_round": "score"})
     text = sc.host_view().model_dump_json()
     assert answer_text(sc.player_ids[0]) in text
     assert keys_of(json.loads(text)) >= TIMING_KEYS
@@ -197,32 +205,28 @@ def test_review_mc_also_sees_metadata(mc: Scenario) -> None:
 # --- REVEALED -------------------------------------------------------------------------------
 
 
-def test_revealed_everyone_sees_everything_about_the_round() -> None:
-    sc = Scenario()
+def test_final_results_reveal_played_tracks_and_answers_to_everyone() -> None:
+    sc = Scenario(rounds=1)
     sc.to_open()
     all_answer(sc, except_last=True)
     sc.on_round("close")
-    sc.publish({sc.player_ids[0]: 3})
+    sc.score({sc.player_ids[0]: 3})
+    sc.finalize()
     for pid in sc.s.players:
         text = dump(sc, pid)
         assert answer_text(sc.player_ids[0]) in text
         assert CANARY_TITLE in text
         assert {"elapsed_ms", "order", "near_tie"} <= keys_of(json.loads(text))
-        assert "late_start_ms" not in keys_of(json.loads(text)) or pid == sc.host_id
         assert_never(text)
 
 
-def test_next_track_never_visible_before_its_reveal() -> None:
+def test_previous_and_next_track_stay_hidden_during_game() -> None:
     sc = Scenario(rounds=3)
-    sc.to_open()
-    sc.on_round("close")
-    sc.publish()
-    r1_title = CANARY_TITLE
-    assert r1_title in dump(sc, sc.player_ids[0])
+    sc.to_review()
+    assert CANARY_TITLE not in dump(sc, sc.player_ids[0])
     sc.on_round("next")
     sc.ready()
-    text = dump(sc, sc.player_ids[0])
-    assert CANARY_TITLE not in text
+    assert CANARY_TITLE not in dump(sc, sc.player_ids[0])
 
 
 # --- FINAL_SCORE_REVIEW -----------------------------------------------------------------------
@@ -231,13 +235,13 @@ def test_next_track_never_visible_before_its_reveal() -> None:
 def test_final_review_draft_only_for_hosts() -> None:
     sc = Scenario(rounds=1)
     sc.to_review()
-    sc.publish({sc.player_ids[0]: 2})
-    sc.on_round("to_final_review")
+    sc.score({sc.player_ids[0]: 2})
     sc.on_phase("final_set", {"player_id": sc.player_ids[0], "delta": 7})
     player = json.loads(dump(sc, sc.player_ids[1]))
-    assert not {"draft_delta", "score_after", "final_review"} & keys_of(player)
+    assert not {"draft_delta", "score_after", "final_review", "review_rounds"} & keys_of(player)
+    assert player["standings"] == []
     host = json.loads(sc.host_view().model_dump_json())
-    assert {"draft_delta", "score_after"} <= keys_of(host)
+    assert {"draft_delta", "score_after", "review_rounds"} <= keys_of(host)
 
 
 @pytest.mark.parametrize("phase", ["LOBBY", "OPEN", "REVIEW", "REVEALED", "FINAL"])
@@ -248,8 +252,8 @@ def test_never_relpath_track_id_or_draft_instant(phase: str, mc: Scenario) -> No
     if phase in ("REVIEW", "REVEALED", "FINAL"):
         mc.on_round("close")
     if phase in ("REVEALED", "FINAL"):
-        mc.publish()
-    if phase == "FINAL":
-        mc.on_round("end_game", {"current_round": "score"})
+        mc.on_phase("end_game", {"current_round": "score"})
+    if phase == "REVEALED":
+        mc.finalize()
     for pid in mc.s.players:
         assert_never(dump(mc, pid))

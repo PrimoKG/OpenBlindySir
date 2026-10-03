@@ -4,9 +4,9 @@ import * as cmd from "../app/commands";
 import { useGame } from "../app/hooks";
 import { t, tCode } from "../i18n";
 import { api } from "../net/api";
-import { ExportResults, Recap } from "../player/Recap";
 import type { HostView, LibraryIssue, ViewPlayer } from "../protocol";
 import { Button } from "../ui/components";
+import { HistoryPanel } from "./HistoryPanel";
 
 export function Invite() {
   const canvas = useRef<HTMLCanvasElement | null>(null);
@@ -129,22 +129,7 @@ function ParticipationRow({
 }
 
 export function PartyHistory({ view }: { readonly view: HostView }) {
-  if (!view.host.history?.length) return null;
-  return (
-    <details className="disclosure party-history">
-      <summary>{t("ux.partyHistory")}</summary>
-      {view.host.history.map((record) => (
-        <details className="disclosure" key={record.game_id}>
-          <summary>
-            {new Date(record.finished_at).toLocaleString()} ·{" "}
-            {t("results.rounds", { count: record.results.rounds_played })}
-          </summary>
-          <ExportResults record={record} />
-          <Recap rows={record.results.recap ?? []} players={record.players} />
-        </details>
-      ))}
-    </details>
-  );
+  return <HistoryPanel view={view} />;
 }
 
 export function LibraryIssues({ view }: { readonly view: HostView }) {

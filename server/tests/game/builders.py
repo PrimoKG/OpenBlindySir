@@ -223,6 +223,8 @@ class Scenario:
 
     def current(self) -> Round:
         r = current_round(self.s.game)
+        if r is None and self.s.game.rounds:
+            r = self.s.game.rounds[-1]
         assert r is not None
         return r
 
@@ -230,7 +232,7 @@ class Scenario:
         """From LOBBY or a REVEALED round: start the next round and open it."""
         if self.s.game.phase.value == "LOBBY":
             self.start()
-        elif self.current().state.value == "REVEALED":
+        elif self.current().state.value in {"REVIEW", "REVEALED"}:
             assert self.on_round("next").error is None
         self.ready()
         r = self.current()
@@ -247,12 +249,14 @@ class Scenario:
         assert self.on_round("close").error is None
         return r
 
-    def publish(self, points: dict[str, int] | None = None) -> Round:
+    def score(self, points: dict[str, int] | None = None) -> Round:
         r = self.current()
         for pid, pts in (points or {}).items():
             assert self.on_round("score_draft", {"player_id": pid, "points": pts}).error is None
-        assert self.on_round("publish", {"confirm_unreviewed": True}).error is None
         return r
+
+    def finalize(self) -> None:
+        assert self.on_phase("final_validate", {"confirm_unreviewed": True}).error is None
 
     def view(self, pid: str) -> AnyView:
         return self.engine.view_for(pid)

@@ -8,9 +8,11 @@ from pydantic import TypeAdapter
 
 from openblindysir_protocol.bridge import BridgeToServer, CatalogUpload, ServerToBridge
 from openblindysir_protocol.client import ClientMessage
+from openblindysir_protocol.compatibility import Compatibility
 from openblindysir_protocol.diagnostics import DiagnosticsResponse
 from openblindysir_protocol.host_commands import HostCommand
 from openblindysir_protocol.http import (
+    ConfirmRequest,
     ErrorResponse,
     HealthResponse,
     HostElevateRequest,
@@ -18,19 +20,34 @@ from openblindysir_protocol.http import (
     JoinRequest,
     JoinResponse,
     LibraryResponse,
+    LibrarySearch,
+    MetadataEdit,
     OkResponse,
+    RecoveryCode,
+    RecoveryRequest,
     SessionResponse,
+    SourceUpdate,
 )
 from openblindysir_protocol.server import ServerMessage
 from openblindysir_protocol.settings import WS_PLAYER_MAX_BYTES
 from openblindysir_protocol.text import ANSWER_HARD_MAX, NICKNAME_MAX
 from openblindysir_protocol.version import PROTOCOL_VERSION
-from openblindysir_protocol.views import HostMcView, HostPlayerModeView, PlayerView
+from openblindysir_protocol.views import (
+    GameRecord,
+    HistoryResponse,
+    HostMcView,
+    HostPlayerModeView,
+    PlayerView,
+)
 
 Mode = Literal["validation", "serialization"]
 
 # TS name → (type, JSON Schema mode). Inbound types use "validation", outbound "serialization".
 WEB_ROOTS: Final[dict[str, tuple[Any, Mode]]] = {
+    "ConfirmRequest": (ConfirmRequest, "validation"),
+    "Compatibility": (Compatibility, "serialization"),
+    "GameRecord": (GameRecord, "serialization"),
+    "HistoryResponse": (HistoryResponse, "serialization"),
     "ClientMessage": (ClientMessage, "validation"),
     "HostCommand": (HostCommand, "validation"),
     "ServerMessage": (ServerMessage, "serialization"),
@@ -47,6 +64,11 @@ WEB_ROOTS: Final[dict[str, tuple[Any, Mode]]] = {
     "LibraryResponse": (LibraryResponse, "serialization"),
     "DiagnosticsResponse": (DiagnosticsResponse, "serialization"),
     "HealthResponse": (HealthResponse, "serialization"),
+    "LibrarySearch": (LibrarySearch, "serialization"),
+    "MetadataEdit": (MetadataEdit, "validation"),
+    "SourceUpdate": (SourceUpdate, "validation"),
+    "RecoveryCode": (RecoveryCode, "serialization"),
+    "RecoveryRequest": (RecoveryRequest, "validation"),
 }
 BRIDGE_ROOTS: Final[dict[str, tuple[Any, Mode]]] = {
     "BridgeToServer": (BridgeToServer, "validation"),

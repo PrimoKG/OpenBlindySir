@@ -762,3 +762,668 @@ protégées ; aucune migration future du format local n'est promise.
 **Prochaine étape recommandée** — Mettre à jour les trois composants et rejouer
 une soirée de test sur les appareils et la bibliothèque du mainteneur selon
 `docs/testing.md`, puis consigner les mesures.
+
+
+## 2026-10-03 — Périmètre V0.2 : revue globale, sources et audio des vidéos
+
+**Objectif** — Implémenter la demande de revue de fin de partie, réécoute privée,
+vidéos utilisées comme sources audio, bibliothèque dynamique/recherche/métadonnées,
+arrêt dans toutes les phases et éléments V0.2 annoncés. Dépôt initialement propre ;
+README, guides, spec/roadmap, ADR et code relus. Pause/reprise, loudnorm/silence,
+snapshots, exports, équipes/spectateurs, presets/QR et styles existants réutilisés.
+La sélection manuelle de piste reste V0.3 ; équilibre par dossier, réponses MC,
+latence locale, récupération par code et verrou d'inscription sont bien V0.2.
+
+**Décisions** — [ADR 0011](adr/0011-global-review-and-private-replay.md),
+[ADR 0012](adr/0012-dynamic-sources-and-metadata.md).
+
+- Fermeture des manches sans points/reveal intermédiaires. Toutes les manches
+  entendues gardent réponses, participants, entrée de catalogue et timing.
+  Revue globale privée, notes signées ±1000 et zéro explicitement vérifié,
+  brouillons persistés, totaux joueurs/équipes et confirmation finale atomique.
+  Manches entendues annulées conservées avec zéro ; arrêt avant départ ne crée
+  pas une manche entendue. Arrêt idempotent, STOP et nettoyage du pipeline.
+- Protocole **3**, snapshot **2**, types TS/schema lock générés. Migration V1 des
+  parties non terminées : anciennes publications reportées en brouillons avec
+  révocations auditables ; archives finales préservées. Les anciennes commandes
+  publish/undo/adjust restent reconnues mais ne sont plus autorisées.
+- Sortie AAC/M4A **128 kb/s** inchangée ; Opus/WebM configurable. Liste blanche
+  partagée scanner/probe/encode, démultiplexeur imposé par extension, file seul,
+  références externes MOV désactivées, première piste audio, pas de vidéo/tags.
+  Absence d'audio distincte, sous-processus/sorties/temps bornés.
+- Réécoute SHA-256 exacte via cache Bridge d'extraits **64 MiB**, sans changer la
+  lecture des joueurs. Écoute intégrale désactivée par défaut, opt-in local,
+  segments réencodés ≤30 s, deux transferts privés serveur ≤2 MiB et un Blob
+  navigateur. Révision de source vérifiée ; jamais d'upload du fichier original.
+- Huit Bridges, tokens/jobs liés au propriétaire, rescans relatifs/NFC sous racine
+  autorisée, aucun lien/junction, identités stables et diagnostics des collisions.
+  Nouvelle racine/montage Docker : intervention locale et seul Bridge recréé.
+  Recherche/filtres/pagination/arbre privés à l'hôte au moment autorisé.
+- Métadonnées facultatives JSON version 1 : UUID + chemin relatif NFC, cinq champs,
+  lignes valides acceptées indépendamment des diagnostics, priorité manuelle puis
+  import puis tags/nom nettoyé. Valeurs importées préservées ; effacer une correction
+  rétablit son repli. Accusé de révision, correction commune aux manches répétées,
+  snapshot/export. Fin de session garde archives et métadonnées.
+- Français/English, correction locale de latence ±500 ms, code de récupération
+  privé/à usage unique sans rôle hôte, inscriptions verrouillables, MC en direct.
+  Guides FR/EN, procédure Docker, UX, architecture, roadmap, ADR et changelog à jour.
+
+**Vérifications réellement exécutées**
+
+- Python : `.venv/Scripts/python.exe .local/run_v02_pytest.py -m 'not integration'
+  -q -p no:cacheprovider` : **673 réussis, 1 ignoré, 8 désélectionnés**, 19,07 s.
+  Le wrapper local configure FFmpeg/ffprobe réels dans l'environnement Python,
+  sans dépendre de l'héritage PATH du terminal sandboxé. Le seul skip est la
+  création de symlink non autorisée sur ce Windows ; le test de junction réel passe.
+- Intégration : même wrapper avec `-m integration -q -p no:cacheprovider` :
+  **8/8**, 244,10 s. Serveur + Bridge démo, dix bots, variantes et fins anticipées.
+- Bridge/FFmpeg réel : inclus dans Python, MP4/MOV/MKV/AVI avec audio seul,
+  piste absente, deux pistes dont la seconde par défaut, vidéo >96 MiB,
+  playlist déguisée, replay identique après suppression source, full opt-in,
+  segments bornés/source modifiée et copie partielle du cache en échec.
+- Ruff `check .` et `format --check .` : **OK**, 178 fichiers. Pyright
+  `--pythonpath .venv/Scripts/python.exe` : **0 erreur/avertissement**.
+  `tools/gen_ts_types.py --check` : **types + lock à jour**. `git diff --check` : OK.
+- Web : `npm run lint` **OK**, 50 fichiers ; `npm test` **32/32**, cinq fichiers ;
+  `npm run build` (TypeScript/Vite) **OK**, 78 modules, JS 379,26 kB / 115,91 kB gzip.
+- Chromium : `playwright test --project=chromium` via wrapper local :
+  **26/26**, 1,3 min. Trois parties réelles, extrait/full privés décodés,
+  aucune lecture collective de réécoute, mobile 320/390, bureau 1280, clavier,
+  anti-spoiler, recherche/erreurs, notation/métadonnées confirmées et récupération.
+  Captures relues, dont revue globale mobile/bureau, erreurs et résultats.
+- WebKit : `playwright test --project=webkit` : **22 réussis, 4 ignorés**, 39,8 s.
+  Ce build Windows n'a pas `AudioContext` ; trois parties audio et le test de
+  téléchargement sont explicitement ignorés. Aucun résultat ne valide Safari/iOS réel.
+- Docker : images `openblindysir-server:v02-check` et `openblindysir-bridge:v02-check`
+  construites depuis un contexte filtré ~946 kB (Python 3.13.16, dépendances locked).
+  Probe Bridge finale : conteneur jetable, réseau désactivé, racine read-only,
+  cap_drop ALL/no-new-privileges, uid 10001, tmpfs 128 MiB ; MP4/MOV/MKV/AVI
+  convertis en AAC audio seul, tags absents et NO_AUDIO vérifiés. App uid 10001,
+  protocole 3 et absence de FFmpeg vérifiés. Compose principal/distant : montage
+  musical read-only et opt-in false/true vérifiés avec valeurs synthétiques.
+  Aucun déploiement Caddy/TLS/LAN/VPS de production effectué.
+- Hygiène : contenu actuel des **262 fichiers** suivis/non ignorés lu avec
+  `check_worktree_file` (l'index inchangé ne contient pas encore les modifications) :
+  **0 constat**. Aucun audio/vidéo réel, secret ou cache ajouté à Git ; médias de
+  test synthétiques et outils temporaires uniquement dans les emplacements ignorés.
+
+**Régressions corrigées pendant les contrôles** — Les options MOV spécifiques
+ne doivent pas être appliquées aux autres démultiplexeurs : les vrais tests FFmpeg
+ont détecté puis confirmé le correctif. Les bots/tests E2E attendaient encore
+notation/reveal par manche : adaptés à la revue globale et aux accusés serveur.
+L'écran d'attente joueur gardait un ancien classement vide : retiré et texte
+actualisé. Corrections de métadonnées vides/repli importé, manches répétées,
+busy à la sortie de revue et cache local plein sont couverts. Le lancement
+Playwright sandboxé bloquait la fermeture de processus Windows ; le contrôle
+local autorisé a permis de terminer les suites. Le callback Windows
+`ConnectionResetError` peut apparaître lors des fermetures volontaires ; tests verts.
+
+**Livraison / limites** — Modifications laissées dans le workspace, sans commit,
+push, PR, release ou déploiement. Guides de recette dans [testing](testing.md).
+G1/G2 : **PENDING USER MEASUREMENT**. Restent Safari/iPhone/Android réels, AAC
+de production sur appareils, acoustique, vraie bibliothèque et Bridge distant.
+Le code/browser headless ne remplace pas ces mesures. Après perte du cache Bridge,
+une régénération Opus au hash différent est refusée ; l'écoute intégrale peut
+attendre entre segments. Ces limites sont documentées, sans substitution silencieuse.
+
+**Complément de clôture** — La réécoute privée plafonne explicitement l'upload à
+**2 MiB**, même si la limite du cache de jeu est configurée plus haut. Le test
+avec cache à 4 MiB vérifie HTTP 413, échec Bridge et libération du transfert.
+Suite privée : **8/8** ; suite Python complète finale : **674 réussis, 1 ignoré,
+8 désélectionnés**, 19,17 s. Ruff/Pyright/schéma restent verts. Images Docker de
+test reconstruites après ce contrôle. Les comptes Chromium/WebKit/Vitest ci-dessus
+restent ceux des dernières suites complètes exécutées.
+
+## 2026-10-03 — Audit V0.2 et autofix
+
+**Périmètre** — Audit des changements V0.2 présents dans le workspace : permissions
+et phases, scores/journal/snapshots, transferts privés, sources et reconnexions,
+concurrence de sauvegarde dans le navigateur. Les correctifs ci-dessous ont été
+reproduits par des tests en échec avant modification, puis vérifiés après correction.
+
+**Défauts confirmés et corrigés**
+
+- Réécoute en attente après déconnexion ou remplacement du Bridge : le transfert
+  propriétaire échoue immédiatement et libère jobs/tokens, sans attendre 75 s.
+- Upload privé rejeté : l'attente est terminée par le serveur, sans dépendre
+  d'un message `JOB_FAILED` ultérieur du Bridge.
+- Corrections finales par boutons −/+ et remise à zéro : publication et contrôles
+  attendent maintenant les valeurs confirmées côté serveur, comme la saisie numérique.
+- Saisie numérique d'une manche pendant l'enregistrement d'un bouton de score :
+  le champ reste désactivé jusqu'à réception de cette note, évitant deux éditions
+  concurrentes sur la même ligne.
+- Échec de recherche dans une réécoute complète : **Réessayer** et **Écouter**
+  reprennent la position demandée. L'ancien Blob est libéré au début du chargement ;
+  les erreurs de lecture restent accessibles et peuvent être retentées.
+- Scan ou upload catalogue lent : le lecteur WebSocket reste disponible pour
+  PONG/CANCEL. Un worker de scan sérialisé avec quatre commandes en attente, un
+  upload catalogue actif et seulement le dernier jeton en attente ; annulation
+  et purge lors d'une perte de connexion. Tests de saturation/erreur/reprise inclus.
+- Deux changements rapides de dossier pouvaient perdre un ajout : les commandes
+  restent bloquées jusqu'à réception du catalogue correspondant. Révision interne
+  persistée, même à hash inchangé ; réponse HTTP 202 et en-tête privé
+  `X-Catalog-Revisions` permettent une confirmation bornée à 75 s, avec backoff
+  1/2/4 s. Une requête HTTP bloquée est annulée à cette échéance pour libérer les
+  commandes ; quitter le composant annule aussi la requête en cours. Les schémas
+  des messages restent ceux du protocole 3.
+- Un upload catalogue déjà en cours pouvait être appliqué après remplacement de
+  sa connexion : nouvelle vérification du propriétaire après réception, HTTP 409
+  pour l'ancien transfert ; le jeton de la connexion actuelle continue de fonctionner.
+
+**Documentation** — Guides FR/EN, protocole, architecture, sécurité Bridge,
+changelog et recette mis à jour. Clarification du plafond privé fixe de 2 Mio,
+des pages de recherche de 100 résultats, de la confirmation des sauvegardes et de
+la conservation des métadonnées/archives en fin de session. Changelog corrigé en
+protocole 3. Aucun changement de protocole ou de version de snapshot pendant cet audit.
+
+**Vérifications réellement exécutées**
+
+- Python : `.venv/Scripts/python.exe .local/run_v02_pytest.py -m 'not integration'
+  -q -p no:cacheprovider` : **684 réussis, 1 ignoré, 8 désélectionnés**, 19,45 s.
+  FFmpeg/ffprobe réels présents. Le skip est la création de symlink interdite sur
+  ce Windows ; la couverture junction fonctionne. Log local ignoré :
+  `.local/pytest-audit-v02.log`.
+- Intégration : même wrapper, `-m integration` : **8/8**, 245,72 s, serveur/Bridge
+  démo et bots réels. `.local/integration-audit-v02.log`.
+- Ruff check + format : **OK**, 179 fichiers. Pyright avec le Python du venv :
+  **0 erreur/avertissement**. `tools/gen_ts_types.py --check` : **types et lock à jour**.
+- Web : `npm run lint` **OK**, 50 fichiers ; Vitest **32/32** ; `npm run build`
+  **OK**, 78 modules, JS 381,70 kB / 116,58 kB gzip.
+- Playwright Chromium complet : **31/31**, 1,3 min, dont cinq nouvelles
+  régressions UI et trois parties réelles. WebKit complet après correction du
+  scénario : **27 réussis, 4 ignorés**, 47,1 s ; les mêmes limites audio du build
+  Windows restent explicitement ignorées.
+  Le test de position utilise un WAV synthétique et contrôle le parcours de
+  réessai ; les parties Chromium contrôlent aussi le décodage des vrais extraits.
+  Un échec WebKit intermittent provenait du test qui modifiait le range sans
+  événement de saisie : le scénario envoie maintenant input/pointerup dans le
+  même geste, et vérifie aussi l'offset avant le réessai. Contrôle répété :
+  **5/5 Chromium et 5/5 WebKit**, 13,5 s, sans retry automatique.
+- Docker : deux images de test reconstruites (`server:v02-check`, `bridge:v02-check`).
+  Conteneurs jetables, sans réseau, racine read-only, cap_drop ALL/no-new-privileges,
+  uid 10001. Extraction MP4/MOV/MKV/AVI audio seul et NO_AUDIO **OK** ; workers
+  de scan/upload, PONG, CANCEL et nettoyage **OK** sous Python 3.13.16 ; imports
+  serveur/protocole 3 **OK**. Contexte temporaire de build supprimé après contrôle.
+- Hygiène du contenu courant : **263 fichiers, 0 constat** ; `git diff --check` **OK**.
+
+**Limites / livraison** — Correctifs laissés dans le workspace. Aucun commit,
+push ou déploiement. Les essais Safari/iOS/Android et acoustiques réels, la vraie
+bibliothèque et les mesures G1/G2 restent à effectuer ; aucun test headless ne
+valide ces mesures. Aucun fichier musical personnel ni secret ajouté au dépôt.
+
+---
+
+## 2026-10-03 — V0.3 : distribution du Bridge, choix MC et autofix
+
+**État de départ et écarts** — La V0.2 et son audit ci-dessus étaient déjà
+implémentés dans le workspace : revue globale, écoute privée, audio des vidéos,
+sources dynamiques, recherche/métadonnées, récupération et protections anti-fuite.
+Aucun AGENTS.md supplémentaire trouvé. Le CLI/config/FFmpeg, le pipeline de
+préparation et les composants de bibliothèque ont été réutilisés. Les principaux
+écarts étaient les sdists dépendant de fichiers hors paquet, l'absence de
+distribution native/release, de diagnostic guidé et de choix manuel numéroté.
+Les noms PyPI/Trusted Publishers et validations des runners restent des dépendances
+de publication ; aucun compte ou secret de publication n'est créé ici.
+
+**Comportements livrés**
+
+- Version unique **0.3.0.dev0**, CPython **3.12–3.14**. Modules de version et licences
+  propres aux trois paquets ; dépendance exacte Bridge/serveur → protocole. Les
+  wheels protocole/Bridge sont reconstruits depuis leurs sdists autonomes.
+- Entrée stable `openblindysir-bridge`, aide/version, init/configure, check-config,
+  check-ffmpeg, doctor/JSON et test de connexion explicite. Codes 0/2/3/4/130.
+  Assistant français au clavier, secret masqué, texte adapté au terminal étroit,
+  confirmation et sauvegarde privée. Configuration atomique, Unix 600/ACL Windows,
+  UUID stable ; aide/version/check-config et doctor sans réseau restent sans écriture.
+- FFmpeg/ffprobe ≥4.4, encodeur AAC/M4A, filtres et démultiplexeurs obligatoires
+  contrôlés ; Opus facultatif. Scan des noms annoncé, contrôles réseau hors partie,
+  catalogue et enregistrement puis fermeture du test. Aucun extrait/global decode.
+  Diagnostics par liste blanche, sans URL/UUID/chemins/secret ou exception brute.
+- Choix **MC uniquement**, par manche numérotée et révision, avant demande d'extrait.
+  Recherche/source/dossier/fichier/tags/format/durée mesurée et disponibilités ;
+  règles de sources/répétitions et réservations appliquées. Le choix contourne
+  explicitement l'alternance aléatoire des dossiers. Confirmation serveur visible
+  avant lancement ; attente bornée à dix secondes, même avec des STATE répétés.
+  Préparation verrouille la cible ; une manche manuelle attend un lancement explicite.
+- Fichier ou Bridge perdu : choix et diagnostic privés conservés, aucun remplacement
+  silencieux ; remplacement, retour au hasard, passage ou arrêt possibles. Les
+  réservations futures restent attachées à leur numéro, y compris après passage.
+  Les joueurs et l'hôte joueur ne reçoivent pas ces champs en jeu.
+- **Protocole 4**, lock/types TS régénérés ; **snapshot 3**, lecture des formats 1/2
+  avec champs neutres. Réservations persistées, nettoyées si les sources/manches ou
+  le rôle changent au lobby. Retour V0.2 avec backup d'avant migration requis.
+- Outils PyInstaller **onedir**, builds natifs seulement, Windows/Linux x64 et
+  macOS 15 Intel/arm64 prévus par la CI. FFmpeg exclu ; instructions FR/EN, licences
+  Python/dépendances/bootloader, VERSION, manifest de fichiers et sommes SHA-256.
+  Modules serveur/dev exclus. Ordre/timestamps ZIP normalisés ; aucune promesse
+  d'identité binaire entre compilateurs, patches Python et runners.
+- CI application/distribution réutilisables séparées de release. Tags/version/
+  changelog/commit propres requis ; artefacts du même run, quatre cibles natives,
+  métadonnées et hashes vérifiés avant OIDC PyPI puis GitHub. Permissions d'écriture
+  limitées aux jobs de publication. Le nightly WebKit informatif existant est conservé.
+- Guides installation, dépannage, opérations/backup/rollback et release, UX,
+  architecture, feuille de route et changelog mis à jour. ADR **0013/0014** étendent
+  les décisions acceptées ; historique V0.2 conservé. La documentation distingue
+  montages accessibles, scan et sélection de partie, et limite honnêtement les
+  preuves de validation. Le contexte Docker allowlist inclut les licences propres
+  et README Bridge nécessaires au packaging autonome.
+
+**Corrections trouvées pendant la validation** — WELCOME devait être validé depuis
+son JSON pour respecter le mode strict Pydantic et les enums. Un refus permanent
+HTTP 401/403 ou WS 1008 termine désormais run avec code 4/action concrète, plutôt
+que de reconnecter sans fin ; les tâches possédées sont annulées et attendues avant
+fermeture/nettoyage. Le diagnostic réseau persiste l'identité qui sera réutilisée
+par run ; une identité existante invalide est refusée. Les premiers essais UI
+utilisaient un build web protocole 3 et des labels anglais obsolètes : rebuild
+protocole 4/scénarios corrigés puis suites complètes vertes. Le premier smoke Linux
+avait son extraction sur un tmpfs noexec : le volume temporaire du **test natif**
+autorise l'exécution, sans modifier les tmpfs de production. Les sélecteurs Python
+des essais uvx hors checkout ont été relancés avec leurs chemins absolus.
+
+**Vérifications réellement exécutées**
+
+- Python Windows : `.venv/Scripts/python.exe .local/run_v02_pytest.py -q
+  -p no:cacheprovider` : **758 réussis, 1 ignoré, 10 désélectionnés**, 19,63 s.
+  Symlink Windows interdit dans cette session ; junctions testées. FFmpeg réel.
+- Intégration complète : même wrapper, `-m integration server/tests/integration` :
+  **10/10**, 289,99 s. Serveur/Bridge/bots réels, choix MC/extraction/publication,
+  doctor enregistré et mauvais secret refusé sans fuite ni traceback.
+- Bridge Linux : image de test Ubuntu 22.04, CPython 3.13.16/FFmpeg 4.4,
+  uid 10001, sans réseau/racine read-only : **98 réussis, 4 ignorés**, 12,87 s.
+  Symlinks réellement testés ; skips des cas junction Windows.
+- Ruff check et format **OK**, 204 fichiers ; Pyright avec le Python du venv :
+  **0 erreur/avertissement** ; `tools/gen_ts_types.py --check` **OK**.
+  Actionlint **1.7.12** : les cinq workflows **OK**.
+- Web : Biome **OK**, 50 fichiers ; Vitest **32/32** ; typecheck/build **OK**,
+  78 modules, JS 387,53 kB / 118,26 kB gzip. Playwright complet :
+  **33/33 Chromium** (1,4 min), **29 WebKit + 4 audio ignorés** (49,4 s).
+  Confirmation/expiration MC, français/anglais, clavier et 320/390/1280 px inclus.
+  Un callback asyncio Proactor Windows a affiché WinError 10054 au démarrage de la
+  pile Chromium ; les 33 scénarios ont terminé sans échec. Les skips WebKit ne
+  valident pas les parties audio ni Safari/iOS.
+- `build --no-isolation` protocole/Bridge : **quatre wheel/sdist construits**,
+  wheels depuis sdist ; `twine check` **4/4**, provenance/collecte **OK**.
+  uvx isolé hors checkout **OK** sur Windows 3.12.4/3.13.16/3.14.8 et Linux
+  Ubuntu 22.04 3.12.15/3.13.16/3.14.8 : aide/version, configuration sans écriture,
+  FFmpeg réel, doctor JSON expurgé et configuration invalide.
+- Archives **Windows 11 x64/Python 3.12.4** et **Ubuntu 22.04 x64/Python 3.13.16**
+  construites avec PyInstaller 6.22.3/hooks 2026.8, extraites et smoke **OK** hors
+  checkout. Windows gelé et uvx 3.14 ont aussi enregistré un vrai serveur et
+  uploadé un catalogue d'un WAV synthétique ; mauvais secret → code 4, sorties privées
+  absentes. Aucun test SmartScreen/antivirus/Gatekeeper revendiqué.
+- Inspection des archives **OK** : hashes, notices Python/PyInstaller/dépendances,
+  aucun serveur/dev/config/FFmpeg ni chemin personnel dans les documents ou noms
+  de code. Windows : 719 modules/20 231 objets code avec filenames relatifs ;
+  Linux : 759/21 095. **SHA256SUMS : 10 fichiers vérifiés**.
+- Docker app/Bridge V0.3 reconstruits : **OK**. Probes jetables uid 10001,
+  sans réseau, cap_drop ALL/no-new-privileges, racine read-only : extractions AAC
+  MP4/MOV/MKV/AVI et NO_AUDIO **OK** ; scan/upload lents, PONG/CANCEL/nettoyage
+  **OK** ; serveur/protocole 4/snapshot 3, sans FFmpeg **OK**. Contextes de build
+  temporaires supprimés après contrôle.
+- Hygiène du contenu courant : **295 fichiers, 0 constat** ; `git diff --check`
+  **OK**. Les alertes de conversion LF/CRLF de Git n'indiquent pas d'erreur de diff.
+
+**Livrables et limites** — `.local/distribution-v03-delivery/` contient les deux
+archives natives, quatre paquets Python, provenance, manifest et SHA256SUMS.
+Ce sont des builds **0.3.0.dev0, dirty=true**, liés au commit de base dans le
+manifest et au contenu testé ; ils ne constituent pas une release publiée.
+Tout reste dans le workspace, sans commit/push/tag/PyPI/GitHub Release/déploiement.
+La CI native macOS Intel/arm64 est configurée mais **non exécutée dans cette session** ;
+les essais utilisateur SmartScreen/antivirus/Gatekeeper, vraie saisie terminal,
+Safari/iOS/Android, musique réelle, LAN/VPS et G1/G2 restent à effectuer avant
+promesse de compatibilité/release. Les procédures et prérequis sont dans
+[testing](testing.md), [installation Bridge](bridge-installation.md) et
+[releasing](releasing.md). Aucun secret, fichier musical personnel ou endpoint
+arbitraire de lecture ajouté.
+
+## 2026-10-03 — Audit et autofix de sécurité après V0.3
+
+**Demande** — Auditer le contenu courant et appliquer les corrections, notamment
+sécuritaires. Le travail V0.2/V0.3 déjà présent est conservé. Version
+**0.3.0.dev0**, protocole **4**, snapshot **3** inchangés par cet audit. Aucune
+publication, migration supplémentaire, modification de secret ni action Git
+d'écriture. Les résultats portent sur le workspace courant, pas seulement HEAD.
+
+**Périmètre** — Sessions et élévation host, HTTP/WebSocket, transferts audio et
+catalogues, tâches et reconnexion Bridge, sandbox/configuration/persistence,
+logs, dépendances verrouillées et chaîne de distribution. Lecture des parcours,
+tests de régression des conditions confirmées, puis validation Windows/Linux,
+navigateurs et artefacts reconstruits. Ce contrôle ne constitue pas un pentest
+externe ni une preuve d'absence de toute vulnérabilité.
+
+**Constats corrigés**
+
+| Condition et risque | Correction appliquée |
+| --- | --- |
+| Session ou droit host révoqué pendant l'attente d'un corps HTTP ou du HELLO WebSocket | Relecture de l'identité et des permissions après l'attente, avant toute mutation/enregistrement ; rejet propre des HELLO binaires. |
+| Plusieurs requêtes d'authentification passent ensemble le contrôle initial, ou rotation répétée des codes de récupération | Recontrôle de quota après le corps ; plafond de rotation de 5 par minute, individuel et global. |
+| Upload audio commencé avant annulation, expiration, déconnexion ou remplacement du Bridge | Grant lié à l'objet exact de connexion ; revalidation de cette connexion, du job et de l'état audio après le flux, avant cache/événement de validation. |
+| Corps lent ou gzip incomplet, suivi de données ou composé de plusieurs membres | Délais totaux 15 s JSON / 60 s upload ; lecture bornée, EOF gzip obligatoire, suffixes et membres supplémentaires refusés, sans flush non borné. |
+| Accumulation de buffers gzip via des uploads concurrents | Un catalogue en réception par UUID et huit globalement, même si le Bridge se déconnecte pendant le flux ; quota avant token/corps/décompression, libération en finally. Le 429 conserve le token ; le client réessaie au plus trois fois à 0,25/0,5/1 s. |
+| Client lent ou Bridge bavard accumulant des messages | Files Bridge des deux côtés et file critique joueur limitées à 64 ; fermeture contrôlée en saturation. Messages entrants Bridge limités par un bucket de 40, recharge 20/s, avant validation. |
+| Writer Bridge arrêté sans terminer la session, messages/jobs d'une ancienne connexion rejoués | Reader, writer et signal de saturation possédés par la session ; propagation des échecs, annulation et attente des tâches, purge du WELCOME et des messages obsolètes. |
+| Très longue panne faisant déborder l'exponentielle de reconnexion | Exposant plafonné avant calcul ; attente maximale 30 s avant jitter, sans exception de débordement. |
+| IP rejetées, compteurs vides ou clés expirées accumulés dans les tables | Aucun enregistrement vide sur refus ; retrait des entrées expirées et des compteurs à zéro. |
+| Accumulation de secrets transitoires ou injection de lignes/ANSI/bidi dans un log via un champ rejeté | Redaction transitoire bornée à 4096 secrets, secrets de déploiement permanents ; échappement JSON des caractères de contrôle Cc/Cf avant émission du log. |
+| Cache navigateur/proxy d'une réponse API privée ou d'erreur | Middleware imposant `Cache-Control: no-store, private` sur les réponses `/api/`. |
+| Ancêtre config/root/snapshot lié alors que seule la feuille était contrôlée | Refus des symlinks/junctions sur tous les ancêtres avant canonicalisation ou accès ; scanner, sandbox, config et diagnostic utilisent ce contrôle. |
+| Snapshot/backup exposé avant durcissement ou temporaire prévisible utilisé pour rediriger une écriture | Temporaires exclusifs aléatoires, permissions Unix 600/ACL Windows avant les octets, fsync/remplacement atomique et backup privé ; restauration bornée à 64 MiB et refus des liens. |
+| Nom de paquet/version/cible ou métadonnées d'archive incohérents | Identités wheel/sdist exactes, métadonnées uniques au chemin attendu, racine native/cible/provenance/hash concordants. |
+| Archive avec traversée, lien, collision portable, périphérique Windows, fichier privé ou volume excessif | Validation avant extraction/publication : chemins portables, absence de liens et doublons NFC/casefold, backups privés refusés, plafond 10 000 entrées/512 MiB total/128 MiB par fichier ; tar parcouru sans liste illimitée. |
+| Staging release contenant un fichier étranger ou sidecar incohérent | Liste fermée de livrables, refus des liens/répertoires inattendus et sidecars orphelins ; vérification du contenu et SHA-256 avant collecte. |
+
+La suite navigateur a également révélé une régression d'affichage : une réponse
+du host participant, bien enregistrée, disparaissait du bandeau si son ACK était
+coalescé avec le passage en REVIEW. Le bandeau conserve désormais **sa propre
+réponse** sauvegardée, avec son statut ; il ne révèle aucune réponse tierce ou
+future. L'attente E2E accepte aussi cette preuve durable de sauvegarde.
+
+**Code et documentation** — Les corrections se trouvent principalement dans
+`server/security.py`, `auth/routes.py`, `library/{routes,management}.py`,
+`audio/routes.py`, `ws/{bridge_link,bridge_endpoint,player_endpoint,hub}.py`,
+`ratelimit.py`, `logging.py`, `private_files.py`, `persistence.py` sous
+`server/src/openblindysir_server/` ; et `client.py`, `config.py`, `scanner.py`,
+`sandbox.py`, `diagnostics.py` sous `bridge/src/openblindysir_bridge/`.
+La chaîne de livraison est durcie dans `tools/release.py` et
+`tools/smoke_bridge_distribution.py`. L'affichage corrigé est dans
+`web/src/player/PlayerApp.tsx`.
+
+Tests ajoutés/étendus dans `server/tests/shell/test_security_audit.py`,
+`server/tests/shell/test_uploads.py`, `server/tests/game/test_snapshot_security.py`,
+`bridge/tests/runtime/test_client_security.py`,
+`bridge/tests/runtime/test_client_sources.py`, `bridge/tests/fs/test_config_paths.py`
+et `protocol/tests/test_release_artifacts.py` ; **64 cas Python supplémentaires**
+par rapport au bilan V0.3 précédent. [SECURITY](../SECURITY.md),
+[sécurité Bridge](bridge-security.md), [opérations](operations.md) et
+[changelog](../CHANGELOG.md) reflètent les protections réellement présentes.
+
+**Vérifications exécutées**
+
+- Python final Windows 11 / CPython 3.12.4, FFmpeg réel : **821 réussis,
+  2 ignorés, 10 désélectionnés**, 22,09 s. Skips : bits Unix et création de
+  symlink Windows interdite ; les junctions Windows sont testées.
+- Python final Linux Ubuntu 22.04 / CPython 3.13.16, uid 10001, racine read-only,
+  sans réseau : **817 réussis, 6 ignorés, 10 désélectionnés**, 27,15 s.
+  Permissions Unix et symlinks réellement testés ; skips PowerShell/junctions.
+- Intégration complète serveur/Bridge/bots/FFmpeg : **10/10**, 319,21 s.
+  Les derniers ajouts de quotas catalogue/logs ont ensuite été couverts par les
+  suites Python finales et les essais d'enregistrement des livrables ci-dessous.
+- Ruff check/format **OK**, 209 fichiers ; Pyright **0 erreur/avertissement** ;
+  génération TS `--check` **OK** ; Actionlint 1.7.12 : cinq workflows **OK**.
+- Web : lint/typecheck/build **OK**, Vitest **32/32** ; Playwright **33/33
+  Chromium** (1,7 min), **29 WebKit + 4 cas audio ignorés** (48,5 s).
+  Parties complètes, host participant et affichages mobile inclus.
+- Dépendances : requête [OSV](https://google.github.io/osv.dev/api/) sur les
+  **70 paquets PyPI verrouillés**, et `npm audit` sur le lock web (**132 dépendances
+  déclarées par l'audit**) : **aucun avis connu signalé**, contrôle du 2026-10-03.
+  Les quatre paquets locaux du workspace ne sont pas des entrées PyPI.
+  Résultat brut conservé dans `.local/dependency-security-2026-10-03.json`.
+  Pas de mise à jour de dépendance arbitraire en l'absence de constat.
+- Protocole/Bridge reconstruits en **quatre wheel/sdist** ; `twine check` **4/4**.
+  uvx final hors checkout : Windows Python **3.14.8** et Linux **3.13.16** **OK**,
+  aide/version, FFmpeg, config sans écriture, doctor expurgé et config invalide.
+  Les matrices Python 3.12/3.13/3.14 déjà contrôlées au bilan V0.3 ne remplacent
+  pas ces essais des paquets reconstruits après audit.
+- Natives finales Windows x64/Python **3.12.4** et Ubuntu 22.04 x64/Python
+  **3.13.16**, PyInstaller **6.22.3** : construction, extraction et smoke **OK**.
+  Windows natif et uvx 3.14 ont enregistré un vrai serveur et envoyé le catalogue
+  d'un WAV synthétique ; mauvais secret : code 4, sans traceback ni sortie privée.
+- Inspection finale : hashes/notices **OK**, aucun serveur/dev/config/FFmpeg ni
+  chemin personnel embarqué. Windows : **719 modules/20 236 objets code** à noms
+  relatifs ; Linux : **759/21 100**. **SHA256SUMS : 10 fichiers vérifiés**.
+- Images Docker finales serveur/Bridge reconstruites et probes **OK**, uid 10001,
+  sans réseau, cap_drop ALL/no-new-privileges, racine read-only : serveur protocole
+  4/snapshot 3 sans FFmpeg ; extraction AAC MP4/MOV/MKV/AVI et NO_AUDIO ;
+  scans/uploads lents, PONG/CANCEL et nettoyage des tâches.
+- Hygiène du contenu courant : **300 fichiers, 0 constat** ; `git diff --check`
+  **OK** après les corrections et leur documentation. Contexte temporaire du
+  dernier build Docker supprimé par le helper qui vérifie son emplacement.
+
+**Livrables** — `.local/distribution-security-v03-final/` remplace pour cet audit
+les précédents dossiers de livraison : deux ZIP natifs, quatre paquets Python,
+provenance, manifest, notes et SHA256SUMS. Builds **0.3.0.dev0, dirty=true**,
+commit de base `a75290b719b2ae00b6dc05bcf44d87066cd184cb` ; le manifest distingue
+les builds de développement d'une release propre. Aucun commit/push/tag,
+déploiement, PyPI ou GitHub Release effectué.
+
+**Limites restantes** — Les contrôles d'ancêtres réduisent les redirections mais
+ne suppriment pas toute course TOCTOU face à un processus local capable de modifier
+simultanément le filesystem. Les bornes par requête/connexion ne remplacent pas
+une protection réseau contre un DDoS distribué. L'audit de dépendances ne couvre
+pas formellement les CVE de FFmpeg, du système ou des bibliothèques natives.
+CI macOS Intel/arm64 non exécutée ; SmartScreen/antivirus/Gatekeeper, Safari/iOS
+réels, Android, LAN/VPS, musique réelle et mesures acoustiques G1/G2 restent
+non validés dans cette session. Les quatre skips audio WebKit ne prouvent pas
+la compatibilité Safari. Aucun secret ni fichier musical personnel utilisé.
+
+
+## 2026-10-03 — V0.5 : Bridges privés, historique durable et revue sécurité/accessibilité
+
+**Périmètre** — Implémentation V0.5 demandée, après vérification des sources V0.2
+et V0.3 et de l'audit précédent. La V0.2 possédait déjà les références
+`(bridge_id, track_id)`, les catalogues multiples et la revue globale ; la V0.3
+ajoutait distribution et choix manuel MC. Ce travail complète ces fonctionnalités,
+sans annoncer V1.0, release, publication ou gel du protocole. Les modifications
+préexistantes sont conservées ; aucun commit/push/tag/déploiement n'est effectué.
+
+**Décisions et comportement livré**
+
+- Identité UUID stable, nom lisible et secret distinct par Bridge. Registre privé
+  `STATE_DIR/bridge-credentials.json`, hashes et révocations durables, au plus
+  64 identités et huit connexions. Bootstrap historique lié au premier UUID ;
+  sa révocation/rotation ne peut être contournée par une ancienne variable.
+  CLI serveur d'émission/rotation vers un nouveau fichier privé, révocation CLI
+  ou hôte, chargement `--credentials` prioritaire pour l'identité côté Bridge.
+  Aucun secret dans le panneau, les diagnostics ou les sorties de ces commandes.
+- Catalogues/capacités/états/erreurs et propriétaires des travaux visibles à
+  l'hôte autorisé. Reconnexion d'un UUID remplace son seul lien. Sélection hors
+  ligne exclue ; un extrait aléatoire non préparé attend 45 s, puis tente une
+  autre source. Un choix manuel garde son erreur et exige remplacement/retour
+  hasard/saut/fin explicite. Audio déjà préparé utilisable, racines contrôlées
+  localement, renouvellement de catalogue sans réécriture des manches jouées.
+- Archives autonomes immuables au moment de la validation finale : dates,
+  noms/équipes, réglages, sources copiées, révélations, réponses capturées ou
+  verrouillées, rang/temps, scores et corrections. Aucun audio/URL/token/cookie.
+  HTTP hôte à la demande, exports, suppression/purge confirmées ; 50 parties,
+  90 jours, 16 Mio. Les deux snapshots gérés sont réécrits lors d'une suppression
+  ou expiration ; un échec disque conserve l'archive en RAM et signale l'erreur.
+  Exports/backups externes et résultats courants demandent un nettoyage distinct.
+  Nouvelle partie libère journal et assets anciens ; le journal reste en ajout
+  seul dans chaque partie et les archives gardent leur projection figée.
+- Logiciel `0.5.0.dev0`, protocole 5, plage 5 à 5, snapshot 4, historique 2.
+  Informations explicites dans WELCOME, erreurs, API et diagnostics. Refus propre
+  des anciens protocoles, plage numérique sans recopier les messages distants,
+  web sans boucle de rechargement. Snapshots 1/2/3 migrés ; archives ancien/1
+  vers 2 ; format futur inconnu bloquant, corruption connue avec backup valide.
+  Rotation Bridge indépendante des cookies en format 4. Migration/rollback et
+  dépréciation future documentés sans promesse de support indéfini.
+- Liens d'évitement, annonces de phase, focus sans interrompre la saisie,
+  dialogues avec Annuler/Échap/retour au déclencheur, noms/états du lecteur,
+  chargement/erreur/réessai des archives et diagnostics, petits écrans, texte
+  agrandi et réduction des animations. Aucun état essentiel transmis seulement
+  par couleur ou son. Les lecteurs d'écran physiques ne sont pas simulés.
+
+**Audit et corrections** — Usurpation d'UUID refusée même avec le secret valide
+d'un autre propriétaire ; identité/connexion/job/expiration revérifiés après
+réception des corps et après HELLO. Révocation pendant catalogue/upload couverte,
+contrôles d'origine/cookie/confirmation et permissions sur chaque API privée.
+Les détails des Bridges, dossiers sélectionnés, bibliothèque HTTP et diagnostics
+de sources sont maintenant masqués à l'hôte joueur pendant IN_GAME. Quota cumulé
+de 200 000 pistes, même hors ligne, sans remplacement du catalogue après un 413.
+Les limites réseau, gzip, files de messages, authentification, sandbox, whitelist
+FFmpeg, timeouts, redaction, idempotence et anti-spoiler de l'audit précédent restent
+couvertes. Cleanup de déconnexion synchrone avant toute attente pour qu'une
+annulation de tâche ne laisse pas un Bridge ONLINE. Décodage fermé des snapshots,
+valeurs finies et refus des formats inconnus ; fichiers privés et écritures atomiques.
+
+Le build local a révélé un cache editable conservant les métadonnées protocole
+0.3.0.dev0 après modification de son `_version.py`. Les trois paquets déclarent
+désormais leurs fichiers de version dans les `cache-keys` uv, conformément à la
+[documentation primaire uv](https://docs.astral.sh/uv/concepts/cache/#dynamic-metadata).
+Le build natif refuse une version installée discordante avant construction ; trois
+régressions couvrent ce contrôle. Synchronisation puis reconstruction vérifient
+les trois métadonnées et les notices des deux archives en 0.5.0.dev0.
+
+**Opérations et documentation** — Nouveau profil Compose d'identité privée,
+montages musique/credentials/CA read-only, utilisateur 10001, système read-only,
+drop ALL/no-new-privileges. Actions d'émission/révocation dans les deux lanceurs ;
+variables ambiantes BRIDGE_SECRETS neutralisées. Guides FR/EN V0.5, installation,
+opérations, utilisateurs, architecture, protocole, modèle de menace, UX, testing,
+README/changelog/roadmap et ADR 0015 actualisés. ADR antérieurs complétés sans
+effacer leurs décisions historiques. Sauvegarder tout STATE_DIR, registre compris ;
+prévoir jusqu'à 256 Mio pour deux snapshots de 64 Mio et deux temporaires, hors
+backups externes. La CI ajoute les scénarios nouveaux et exécute Chromium/WebKit.
+
+**Vérifications réellement exécutées**
+
+| Contrôle | Résultat |
+|---|---|
+| Python Windows 11 / CPython 3.12.4, FFmpeg réel | **873 réussis, 2 ignorés, 11 intégrations désélectionnées**, 25,00 s |
+| Python Ubuntu 22.04 / CPython 3.13.16, uid 10001, root et dépôt read-only, sans réseau | **869 réussis, 6 ignorés, 11 intégrations désélectionnées**, 26,90 s |
+| Intégration réelle serveur/Bridges/FFmpeg/bots | **11/11**, 360,33 s |
+| Vitest | **32/32** |
+| Playwright Chromium / WebKit | **38 Chromium + 34 WebKit**, quatre skips audio WebKit existants, 2,6 min |
+| Ruff lint/format, Pyright, dérive schéma/TS, lock uv | **OK**, 225 fichiers Python, zéro erreur/avertissement Pyright |
+| Biome, TypeScript, build web, Actionlint, hygiène, diff sans erreurs d'espacement | **OK** |
+| Wheels/sdists protocole/Bridge V0.5 | Quatre livrables, **twine 4/4**, métadonnées exactes et collecte privée validées |
+| Wheels hors checkout, uvx isolé Windows | **CPython 3.12/3.13/3.14 OK** : version, FFmpeg, credentials, doctor masqué, config invalide |
+| Archives natives locales Windows x64 / Linux glibc 2.35 x64 | **Deux builds + deux smokes OK**, SHA-256/manifeste/versions ; FFmpeg exclu |
+| Archive Windows contre vrai serveur V0.5 | Enregistrement/catalogue WAV synthétique **OK**, mauvais secret code 4, aucune sortie privée |
+| Images Docker app/Bridge et profils Compose | **Deux builds OK** ; profils privé/public/bootstrap/credential + CA privée validés |
+| Docker jetable V0.5 | API compatibilité, uid 10001, registre haché/fichiers 600, émission, arrêt brutal/reprise, cookie hôte/réglages, révocation/rotation et FFmpeg Bridge **OK** ; conteneurs/volume supprimés |
+
+Les skips Windows sont bits Unix et symlink non autorisé ; les junctions y sont
+testées. Les skips Linux concernent PowerShell et junctions Windows. L'intégration
+nouvelle emploie deux UUID/secrets et les mêmes IDs locaux, prépare une manche de
+chaque source, note/valide/archive, tue le serveur, récupère la même archive/notes
+et reconnecte les Bridges, puis supprime l'archive des copies persistées.
+Le test Hypothesis confirme ajout seul/projection dans la partie active et
+immuabilité des archives retenues, y compris après Nouvelle partie.
+
+Commandes principales : `python .local/run_v02_pytest.py -q` avec basetemp distinct,
+la même suite sous Docker Linux isolé, `pytest -m integration server/tests/integration`,
+`npm --prefix web run lint/typecheck/test/build` (commandes séparées),
+`node .local/run_v02_playwright.cjs test --project=chromium --project=webkit`,
+`ruff check .`, `ruff format --check .`, `python -m pyright --pythonpath .venv/Scripts/python.exe`,
+`python tools/gen_ts_types.py --check`, `uv lock --check --offline`, Actionlint,
+`python tools/check_repo_hygiene.py`, `python tools/release.py verify --version 0.5.0.dev0`,
+build Python `--no-isolation`, `tools/build_bridge.py`, `tools/smoke_bridge_distribution.py`
+et collecte **sans** `--require-clean`. Livrables privés de test dans
+`.local/distribution-v05-final`, marqués checkout dirty ; aucune publication.
+Les 70 dépendances Python et le lock npm n'ont pas changé depuis l'audit OSV/npm
+du même jour (aucun avis connu alors signalé) ; ce contrôle n'est pas une preuve
+d'absence de vulnérabilité et n'est pas annoncé comme une nouvelle requête réseau.
+
+**Limites restantes** — Aucune CI distante ou release déclenchée. Binaires macOS,
+les quatre runners officiels, signature/notarisation, SmartScreen/antivirus,
+NVDA/JAWS/VoiceOver, Safari/iOS/Android physiques, zoom navigateur réel, grande
+bibliothèque privée et synchronisation acoustique restent à vérifier. Les tests
+320/390/1280 px, texte 200 %, contrastes et mouvement réduit ne constituent pas
+une certification WCAG. Les dépendances, stockage et fenêtres TOCTOU locales
+conservent les limites documentées du modèle de menace. **V0.5 reste en développement.**
+
+### 2026-10-03 — Audit et autofix sécurité complémentaire de la V0.5
+
+Demande : réexaminer la V0.5 implémentée, en priorité les frontières de sécurité,
+corriger les problèmes reproduits et vérifier la reprise. Les changements V0.2,
+V0.3 et V0.5 déjà présents restent conservés. Aucun commit, tag, publication,
+déploiement utilisateur ou gel du protocole n'est effectué.
+
+**Constats et corrections**
+
+| Problème reproduit | Impact | Correction |
+|---|---|---|
+| Écriture CLI entre lecture et sauvegarde d'une révocation hôte | Une rotation d'un autre UUID réactivait le secret révoqué | Verrou OS non bloquant, relecture sous verrou et transaction ; l'opération concurrente échoue pour réessai |
+| Rotation/révocation/bootstrap dont la sauvegarde échoue | Autorisation RAM différente de celle retrouvée après redémarrage | Copie de travail, rollback en cas d'échec, cache invalidé ; relire le disque même si l'erreur suit le remplacement |
+| Émission interrompue par un échec du registre, sortie créée simultanément ou nom d'état choisi comme sortie | Secret inutilisable laissé sur disque, écrasement d'une autre sortie, corruption des fichiers gérés | Création privée sans remplacement par lien physique, nettoyage si mutation refusée, refus des noms réservés aux snapshots/registre |
+| Joindre/quitter successivement avec le bon mot de passe | 1 001 identités conservées malgré le plafond de joueurs actifs ; croissance sans borne | 60 inscriptions/IP/minute, 600/serveur/minute, 1 000 identités en état puis `game_full` ; Nouvelle partie retire les identités retirées après archivage |
+| Snapshot primaire avec index de manche 999 et secours valide | `IndexError` au démarrage au lieu de reprendre le secours | Validation des champs/types/index et de la récupération avant application ; score, cookie et fermeture de manche préservés dans le secours |
+| Identité bootstrap non textuelle, noms/Unicode invalides, clés JSON privées dupliquées | Exception non gérée ou interprétation ambiguë d'un état d'authentification | Registre fermé, normalisation cohérente des noms, UUID typés, UTF-8 valide, doublons refusés |
+| En-tête Content-Length non décimal ou très long dans une requête ASGI | `int()` levait au lieu de retourner une erreur bornée | Vérification ASCII et comparaison décimale sans conversion ; conservation des limites de taille/délai effectives |
+
+Le dernier cas renforce la couche applicative : les transports HTTP peuvent déjà
+refuser ces en-têtes avant l'ASGI ; aucun exploit distant au travers d'Uvicorn n'est
+revendiqué. Le registre et les snapshots sont des fichiers privés sous contrôle
+opérateur ; les corrections de validation ne changent pas cette frontière de confiance.
+
+Le verrou `bridge-credentials.lock` garde un inode stable et ne doit jamais être
+supprimé pendant le fonctionnement. Fermeture du descripteur/arrêt brutal libèrent
+le verrou. Les mécanismes natifs sont documentés par Python :
+[fcntl](https://docs.python.org/3/library/fcntl.html) et
+[msvcrt](https://docs.python.org/3/library/msvcrt.html).
+Cette coordination des commandes opérateur ne rend pas l'application compatible
+avec plusieurs processus serveur. L'émission requiert liens physiques et verrous
+sur stockage local ; les essais ci-dessous couvrent NTFS et le stockage Linux.
+
+La restauration lit au plus 64 Mio + un octet pour vérifier la limite ; mêmes
+bornes pour la copie du précédent snapshot. Les types dataclass sont contrôlés
+sans convertir chaînes/booléens en nombres. Les collections deque sont contrôlées
+comme deque puis par leurs éléments, afin de conserver les sauvegardes légitimes.
+Les migrations de métadonnées V1 précèdent cette validation ; formats 1/2/3/4,
+historiques 1/2 et refus des formats futurs restent couverts.
+
+**54 cas de régression ajoutés** : 25 credentials/processus/CLI, 20 snapshots,
+8 HTTP et un scénario noyau de saturation/libération des identités. Un test
+d'émission valide explicitement que l'écriture échouée a été appelée, afin de ne
+pas confondre une configuration synthétique invalide avec un échec disque.
+SECURITY.md, architecture/modèle de menace, ADR 0015, changelog, guides V0.5 et
+guides utilisateur FR/EN sont actualisés. La mention restante « Protocol 4 » du
+README est corrigée en 5. Logiciel 0.5.0.dev0, protocole 5 et snapshot 4 inchangés.
+
+**Vérifications réellement exécutées après corrections**
+
+| Contrôle | Résultat |
+|---|---|
+| Python Windows 11 / CPython 3.12.4, FFmpeg réel | **927 réussis, 2 ignorés, 11 intégrations désélectionnées**, 33,67 s |
+| Python Linux / Ubuntu 22.04, CPython 3.13.16, uid 10001, root/dépôt read-only, sans réseau | **923 réussis, 6 ignorés, 11 intégrations désélectionnées**, 28,75 s |
+| Intégration réelle serveur/Bridges/FFmpeg/bots | **11/11**, 363,44 s ; deux propriétaires, scores/historique, kill/reprise, reconnexion et suppression |
+| Vitest | **32/32** |
+| Playwright Chromium/WebKit | **72 réussis**, quatre skips audio WebKit existants, 2,7 min |
+| Ruff lint/format, Pyright, schéma/types générés, lock uv, hygiène, diff | **OK** ; 227 fichiers Python formatés, zéro erreur/avertissement Pyright, hygiène 242 fichiers |
+| Docker app et Bridge | **Deux images de test reconstruites**, déploiement utilisateur inchangé |
+| Profils Compose et conteneurs jetables | **OK** : modes privé/public/bootstrap/credential + CA, uid 10001, fichiers privés, émission CLI, cookie/état après kill, révocation/rotation, FFmpeg ; conteneurs/volume nettoyés |
+| Dépendances verrouillées, requêtes OSV/npm actualisées | **70 paquets Python et 132 dépendances npm**, aucun avis connu signalé, 2026-10-03 à 09:13 UTC |
+
+Commandes : `python .local/run_v02_pytest.py -q --tb=short -p no:cacheprovider`
+avec basetemp distinct ; la même suite dans Docker Linux isolé ;
+`python .local/run_v02_pytest.py -m integration server/tests/integration` ;
+`npm test` dans web ;
+`node .local/run_v02_playwright.cjs test --project=chromium --project=webkit` ;
+`ruff check .`, `ruff format --check .`,
+`python -m pyright --pythonpath .venv/Scripts/python.exe`,
+`python tools/gen_ts_types.py --check`, `uv lock --check --offline`,
+`python tools/check_repo_hygiene.py` et `git diff --check`.
+Les constructions utilisent exclusivement les tags privés `security-v05-check`.
+Les données réseau d'audit, sans secrets, sont conservées localement dans
+`.local/dependency-security-v05-audit-2026-10-03.json` (hors Git).
+
+Limites : macOS n'est pas exécuté dans cette passe ; pas de lecteurs d'écran,
+appareils/audio physiques, grande bibliothèque privée ou CI distante. Les
+contrôles de dépendances décrivent les avis connus à cette date. Les limites
+TOCTOU et l'administration locale de confiance restent celles du modèle de menace.
+Les archives natives privées construites avant cet audit ne sont pas présentées
+comme reconstruites ici ; aucune distribution n'est publiée. **V0.5 en développement.**
+
+## 2026-10-03 — Préparation de l'intégration Git et mise à jour des guides
+
+À la demande de l'utilisateur, les travaux V0.2/V0.3/V0.5 et l'audit de sécurité
+sont préparés pour commit, fusion dans `main` et push. La branche distante `main`
+est vérifiée avant intégration ; les données privées et artefacts de `.local`
+restent hors Git. Aucun tag de release n'est créé.
+
+Les guides d'installation Bridge FR/EN proposent désormais le fichier d'identité
+distinct dès le premier parcours : `init`, `run`, diagnostics et archives natives.
+Ils expliquent la conservation du secret et du nom par Entrée dans l'assistant,
+la priorité de `--credentials`/`OPENBLINDYSIR_BRIDGE_CREDENTIALS_FILE`, la rotation
+vers un nouveau fichier, les verrous et le bootstrap limité à un UUID. L'exemple
+figé sur 0.3.0 est remplacé par la version publiée correspondant au serveur ;
+V0.5 reste en développement. Les guides utilisateur FR/EN précisent que chaque
+propriétaire garde son fichier d'identité privé et ne le partage pas aux joueurs.
+
+Le contrôle de tous les nouveaux fichiers repère aussi deux mots de passe
+synthétiques dans un test CLI dont le préfixe ne satisfait pas la politique
+d'hygiène ; ils sont renommés en `example-…`, sans changement du code applicatif.
+Le test CLI concerné est relancé. Les résultats complets de
+l'audit ci-dessus restent applicables au code. Vérification des options CLI,
+des liens locaux des quatre guides, de l'hygiène du contenu destiné au commit
+et de l'absence d'erreurs de whitespace avant intégration.

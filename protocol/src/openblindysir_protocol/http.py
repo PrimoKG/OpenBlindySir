@@ -4,11 +4,16 @@ from typing import Annotated, Literal
 
 from pydantic import Field, StringConstraints
 
-from openblindysir_protocol.base import BridgeId, InboundModel, OutboundModel, PlayerId
+from openblindysir_protocol.base import BridgeId, InboundModel, OutboundModel, PlayerId, TrackId
 from openblindysir_protocol.enums import BridgeState, HostMode, Role
 from openblindysir_protocol.errors import ErrorCode
+from openblindysir_protocol.metadata import MusicalMetadata
 
 _Secret = Annotated[str, StringConstraints(min_length=1, max_length=256)]
+
+
+class ConfirmRequest(InboundModel):
+    confirm: Annotated[bool, Field(strict=True)]
 
 
 class JoinRequest(InboundModel):
@@ -30,6 +35,15 @@ class SessionResponse(OutboundModel):
     protocol: int
     server_version: str
     epoch: str
+
+
+class RecoveryRequest(InboundModel):
+    password: _Secret
+    code: Annotated[str, StringConstraints(pattern=r"^[A-Z2-9]{6}$")]
+
+
+class RecoveryCode(OutboundModel):
+    code: str
 
 
 class HostElevateRequest(InboundModel):
@@ -73,6 +87,43 @@ class LibraryBridge(OutboundModel):
     online: bool
     track_count: int
     root: FolderNode
+    scanned_folders: list[str] = Field(default_factory=lambda: [""])
+    source_error: str | None = None
+
+
+class LibraryTrack(OutboundModel):
+    bridge_name: str = ""
+    duration_ms: int | None = None
+    played: bool = False
+    reserved: bool = False
+    in_pool: bool = True
+    bridge_id: BridgeId
+    track_id: TrackId
+    filename: str
+    folder: str
+    ext: str
+    available: bool
+    title: str | None = None
+    artist: str | None = None
+    featuring: str | None = None
+    album: str | None = None
+    year: int | None = None
+
+
+class LibrarySearch(OutboundModel):
+    total: int
+    tracks: list[LibraryTrack]
+
+
+class SourceUpdate(InboundModel):
+    bridge_id: BridgeId
+    folders: Annotated[list[str], Field(max_length=64)] | None = None
+
+
+class MetadataEdit(InboundModel):
+    bridge_id: BridgeId
+    track_id: TrackId
+    metadata: MusicalMetadata
 
 
 class LibraryResponse(OutboundModel):

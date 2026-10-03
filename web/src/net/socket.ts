@@ -22,12 +22,13 @@ export type SocketStatus =
   | "superseded"
   | "kicked"
   | "session_ended"
+  | "incompatible"
   | "rejoin";
 
 const PING_INTERVAL_MS = 5_000;
 const BURST_PINGS = 8;
 const BURST_SPACING_MS = 50;
-export const CLIENT_VERSION = "0.1.0";
+export const CLIENT_VERSION = "0.5.0.dev0";
 
 interface Options {
   readonly store: ViewStore;
@@ -113,6 +114,7 @@ export class GameSocket {
     const first = this.firstState;
     this.firstState = false;
     this.opts.store.apply(msg, first);
+    if (first) writeSession("protocolReload", "0");
     if (first && this.pending) {
       const round = msg.view.round;
       const pending = this.pending;
@@ -143,6 +145,7 @@ export class GameSocket {
         this.setStatus("session_ended");
         return;
       case "reload":
+        this.setStatus("incompatible");
         if (readSession("protocolReload") !== "1") {
           writeSession("protocolReload", "1");
           location.reload();

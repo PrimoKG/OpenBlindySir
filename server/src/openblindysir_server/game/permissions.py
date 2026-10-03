@@ -87,7 +87,7 @@ def _start_game(s: SessionState, issuer: Player) -> bool:
 
 def _end_game(s: SessionState, issuer: Player) -> bool:
     del issuer
-    return current_round(s.game) is not None
+    return s.game.phase is not GamePhase.FINAL_RESULTS
 
 
 def _next(s: SessionState, issuer: Player) -> bool:
@@ -95,8 +95,7 @@ def _next(s: SessionState, issuer: Player) -> bool:
     r = current_round(s.game)
     return (
         r is not None
-        and r.state is RoundState.REVEALED
-        and r.number < s.game.settings.rounds
+        and r.state in {RoundState.REVIEW, RoundState.REVEALED}
         and s.game.ending is None
     )
 
@@ -159,12 +158,15 @@ def _to_final_review(s: SessionState, issuer: Player) -> bool:
     r = current_round(s.game)
     return (
         r is not None
-        and r.state is RoundState.REVEALED
+        and r.state in {RoundState.REVIEW, RoundState.REVEALED}
         and (r.number >= s.game.settings.rounds or s.game.ending is EndGameMode.SCORE)
     )
 
 
 HOST_RULES: dict[str, Predicate] = {
+    "select_track": lambda s, issuer: (
+        issuer.host_mode is HostMode.MC and s.game.phase in {GamePhase.LOBBY, GamePhase.IN_GAME}
+    ),
     "configure": _phase(GamePhase.LOBBY, GamePhase.IN_GAME, GamePhase.FINAL_RESULTS),
     "set_mode": _set_mode,
     "start_game": _start_game,
@@ -180,11 +182,11 @@ HOST_RULES: dict[str, Predicate] = {
     "skip": _round(*SKIPPABLE),
     "add_time": _unpaused_open,
     "close": _round(RoundState.OPEN),
-    "score_draft": _round(RoundState.REVIEW),
-    "publish": _round(RoundState.REVIEW),
-    "track_metadata": _round(RoundState.REVIEW),
-    "undo_publish": _undo,
-    "adjust": _phase(GamePhase.IN_GAME),
+    "score_draft": _phase(GamePhase.FINAL_SCORE_REVIEW),
+    "publish": lambda s, issuer: False,
+    "track_metadata": _phase(GamePhase.FINAL_SCORE_REVIEW),
+    "undo_publish": lambda s, issuer: False,
+    "adjust": lambda s, issuer: False,
     "to_final_review": _to_final_review,
     "final_set": _phase(GamePhase.FINAL_SCORE_REVIEW),
     "final_reset": _phase(GamePhase.FINAL_SCORE_REVIEW),
@@ -192,6 +194,7 @@ HOST_RULES: dict[str, Predicate] = {
     "kick": _always,
     "rename": _always,
     "participation": _phase(GamePhase.LOBBY),
+    "join_lock": _always,
 }
 assert set(HOST_RULES) == set(HOST_COMMAND_NAMES)
 

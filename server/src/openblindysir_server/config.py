@@ -5,7 +5,10 @@ from the environment (development convenience; never committed).
 """
 
 import ipaddress
+import json
 import os
+import unicodedata
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,6 +39,7 @@ class Settings:
     blind_password: str = field(repr=False)
     host_password: str = field(repr=False)
     bridge_secret: str = field(repr=False)
+    bridge_secrets: tuple[tuple[str, str], ...] = field(default=(), repr=False)
     domain: str | None = None
     trusted_proxies: tuple[str, ...] = ("172.16.0.0/12",)
     log_level: LogLevel = "INFO"
@@ -61,7 +65,12 @@ class Settings:
 
     @property
     def secrets(self) -> tuple[str, ...]:
-        return (self.blind_password, self.host_password, self.bridge_secret)
+        return (
+            self.blind_password,
+            self.host_password,
+            self.bridge_secret,
+            *(raw for _, raw in self.bridge_secrets),
+        )
 
 
 def read_dotenv(path: Path) -> dict[str, str]:
@@ -131,6 +140,8 @@ def _check_secret(r: _Reader, name: str, value: str | None, minimum: int, *, dev
     if value is None:
         r.problems.append((name, "missing"))
         return ""
+    if len(value) > 4096 or any(unicodedata.category(c) in {"Cc", "Cf", "Cs"} for c in value):
+        r.problems.append((name, "invalid_secret"))
     weak = value.strip().lower() in WEAK_VALUES
     short = len(value) < minimum
     if weak or short:
@@ -168,7 +179,36 @@ def load_settings(
     dev = r.boolean("DEV_MODE", default=False)
     blind = _check_secret(r, "BLIND_PASSWORD", r.text("BLIND_PASSWORD"), MIN_PASSWORD, dev=dev)
     host_pw = _check_secret(r, "HOST_PASSWORD", r.text("HOST_PASSWORD"), MIN_PASSWORD, dev=dev)
-    bridge = _check_secret(r, "BRIDGE_SECRET", r.text("BRIDGE_SECRET"), MIN_BRIDGE_SECRET, dev=dev)
+    bridge_rows: tuple[tuple[str, str], ...] = ()
+    if r.text("BRIDGE_SECRETS"):
+        try:
+            rows = json.loads(r.text("BRIDGE_SECRETS") or "")
+            if not isinstance(rows, dict) or not 1 <= len(rows) <= 64:
+                raise ValueError
+            if any(
+                str(uuid.UUID(key)) != key
+                or not isinstance(value, str)
+                or not 32 <= len(value) <= 4096
+                or any(unicodedata.category(c) in {"Cc", "Cf"} for c in value)
+                for key, value in rows.items()
+            ):
+                raise ValueError
+            if len(set(rows.values())) != len(rows):
+                raise ValueError
+            bridge_rows = tuple(rows.items())
+        except (ValueError, TypeError, AttributeError):
+            r.problems.append(("BRIDGE_SECRETS", "invalid_identity_or_distinct_secret"))
+    bridge = (
+        _check_secret(r, "BRIDGE_SECRET", r.text("BRIDGE_SECRET"), MIN_BRIDGE_SECRET, dev=dev)
+        if not bridge_rows or r.text("BRIDGE_SECRET")
+        else ""
+    )
+    if bridge and any(value == bridge for _, value in bridge_rows):
+        r.problems.append(("BRIDGE_SECRETS", "equals_bootstrap_secret"))
+    if bridge and bridge in {blind, host_pw}:
+        r.problems.append(("BRIDGE_SECRET", "equals_player_or_host_password"))
+    if any(value in {blind, host_pw} for _, value in bridge_rows):
+        r.problems.append(("BRIDGE_SECRETS", "equals_player_or_host_password"))
     if blind and host_pw and blind == host_pw:
         r.problems.append(("HOST_PASSWORD", "equals_blind_password"))
     domain = r.text("DOMAIN")
@@ -189,6 +229,7 @@ def load_settings(
         blind_password=blind,
         host_password=host_pw,
         bridge_secret=bridge,
+        bridge_secrets=bridge_rows,
         domain=domain,
         trusted_proxies=_proxies(r),
         log_level=r.choice(  # type: ignore[arg-type]

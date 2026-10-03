@@ -11,6 +11,7 @@ from openblindysir_protocol.host_commands import HOST_COMMAND_EXAMPLES, HOST_COM
 CLIENT = TypeAdapter(ClientMessage)
 
 SPEC_COMMANDS = {
+    "select_track",
     "configure",
     "set_mode",
     "start_game",
@@ -38,6 +39,7 @@ SPEC_COMMANDS = {
     "resume",
     "track_metadata",
     "participation",
+    "join_lock",
 }
 
 
@@ -45,8 +47,8 @@ def host(cmd: str, **fields: object) -> object:
     return CLIENT.validate_json(json.dumps({"t": "HOST", "cmd": cmd, **fields}))
 
 
-def test_union_has_exactly_the_27_spec_commands() -> None:
-    assert len(HOST_COMMAND_NAMES) == 27
+def test_union_has_exactly_the_29_spec_commands() -> None:
+    assert len(HOST_COMMAND_NAMES) == 29
     assert set(HOST_COMMAND_NAMES) == SPEC_COMMANDS
 
 

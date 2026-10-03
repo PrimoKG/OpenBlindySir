@@ -1,0 +1,41 @@
+OpenBlindySir Bridge - first launch / premier lancement
+
+Extract the WHOLE archive, including _internal, into a private local folder.
+FFmpeg AND ffprobe must be installed separately. No Python installation needed.
+See docs/bridge-installation.en.md and docs/troubleshooting.md in this folder.
+Technical cross-references not bundled here are available in the repository
+documentation at the matching tag: https://github.com/PrimoKG/OpenBlindySir
+
+Windows: open PowerShell in this folder, then:
+  .\openblindysir-bridge.exe --version
+  .\openblindysir-bridge.exe init
+  .\openblindysir-bridge.exe run
+
+Linux/macOS: open a terminal in this folder, then:
+  chmod u+x ./openblindysir-bridge
+  ./openblindysir-bridge --version
+  ./openblindysir-bridge init
+  ./openblindysir-bridge run
+
+init/configure: guided setup with masked secret, confirmation and private backup.
+doctor: local checks; doctor --connect scans names and registers, then disconnects.
+doctor --json: copyable report without paths, server address or secrets.
+Ctrl+C stops. Keep the terminal open during a game.
+
+Decompressez TOUT le dossier, y compris _internal. Installez FFmpeg et ffprobe.
+init demande l'adresse du serveur, le dossier musical, le secret du Bridge
+(saisie masquee) et son nom. Confirmez l'enregistrement puis les controles.
+run reste connecte. Le fichier complet reste sur cet appareil.
+Configurez en dehors d'une partie. Le diagnostic de connexion remplace la
+connexion du meme Bridge ; il se ferme apres le test. Aucun extrait n'est cree.
+
+Exit codes / codes de sortie: 0 OK; 2 configuration; 3 FFmpeg;
+4 connection / connexion; 130 cancelled / annulation.
+
+Archives are unsigned and not notarized. Verify SHA256SUMS from the release
+and its commit before launching. Do not disable antivirus or bypass an alert
+without verifying the origin. A checksum alone does not authenticate a file.
+Use the Python/uvx installation when a binary remains blocked.
+
+LICENSE: project MIT. THIRD_PARTY_NOTICES.txt and notices/: bundled dependencies.
+VERSION and release.json: version, protocol, commit and file checksums.

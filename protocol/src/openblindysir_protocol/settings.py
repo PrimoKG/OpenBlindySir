@@ -24,7 +24,7 @@ def check_relative_path(value: str, *, allow_empty: bool) -> str:
         if allow_empty:
             return value
         raise ValueError("path must not be empty")
-    if "\\" in value or "\x00" in value:
+    if "\\" in value or ":" in value or any(ord(c) < 32 or ord(c) == 127 for c in value):
         raise ValueError("path must use '/' and contain no NUL")
     if value.startswith("/") or value.endswith("/"):
         raise ValueError("path must be relative without trailing '/'")
@@ -65,6 +65,7 @@ class GameSettings(OutboundModel):
     captured_policy: str = "manual"
     normalize_audio: bool = True
     avoid_silence: bool = True
+    balance_folders: bool = False
 
 
 class SettingsPatch(InboundModel):
@@ -85,6 +86,7 @@ class SettingsPatch(InboundModel):
     captured_policy: Literal["manual", "zero"] | None = None
     normalize_audio: bool | None = None
     avoid_silence: bool | None = None
+    balance_folders: bool | None = None
 
 
 class ServerLimits(OutboundModel):

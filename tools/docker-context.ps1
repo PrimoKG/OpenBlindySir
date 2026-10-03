@@ -6,6 +6,7 @@ function New-DockerBuildContext([string]$Root, [string]$Parent) {
     try {
         $files = @('Dockerfile', '.dockerignore', 'pyproject.toml', 'uv.lock', 'VERSION', 'LICENSE',
             'protocol/pyproject.toml', 'server/pyproject.toml', 'bridge/pyproject.toml',
+            'protocol/LICENSE', 'server/LICENSE', 'bridge/LICENSE', 'bridge/README.md',
             'tools/host_pc.py', 'tools/docker_config.py', 'tools/docker_bridge.py',
             'web/package.json', 'web/package-lock.json', 'web/index.html', 'web/vite.config.ts')
         $files += @(Get-ChildItem -LiteralPath (Join-Path $Root 'web') -Filter 'tsconfig*.json' -File |

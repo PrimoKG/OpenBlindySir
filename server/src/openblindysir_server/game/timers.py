@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 
 from openblindysir_protocol.enums import CloseReason, RoundState
-from openblindysir_server.game import assets, rounds
+from openblindysir_server.game import assets, rounds, selection
 from openblindysir_server.game.clock import Instant
 from openblindysir_server.game.effects import EffectSink
 from openblindysir_server.game.state import (
@@ -26,6 +26,7 @@ class DueKind(IntEnum):
     JOB_TIMEOUT = 4
     RESUME_END = 5
     PAUSE_START = 6
+    BRIDGE_WAIT = 7
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -55,6 +56,11 @@ def pending(s: SessionState) -> list[Due]:
     for asset in s.assets.values():
         if asset.state in IN_FLIGHT_ASSET_STATES:
             dues.append(Due(asset.job_deadline, DueKind.JOB_TIMEOUT, asset.asset_id))
+    for slot in selection.live_slots(s):
+        if slot.waiting_bridge and slot.bridge_wait_since is not None:
+            dues.append(
+                Due(slot.bridge_wait_since + assets.BRIDGE_WAIT_MS, DueKind.BRIDGE_WAIT, "")
+            )
     return dues
 
 
@@ -87,6 +93,8 @@ def apply(s: SessionState, due: Due, at: Instant, fx: EffectSink) -> None:
         asset = s.assets.get(due.ref)
         if asset is not None:
             assets.expire_job(s, asset, fx)
+    elif due.kind is DueKind.BRIDGE_WAIT:
+        assets.settle_slots(s, at, fx)
 
 
 def advance_to(

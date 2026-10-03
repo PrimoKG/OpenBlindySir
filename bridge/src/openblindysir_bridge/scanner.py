@@ -12,9 +12,9 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_EXTENSIONS = frozenset(
-    {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", ".oga", ".opus", ".aiff", ".wma"}
-)
+from openblindysir_protocol.media import INPUT_EXTENSIONS
+
+DEFAULT_EXTENSIONS = INPUT_EXTENSIONS
 FILE_ATTRIBUTE_HIDDEN = 0x2
 FILE_ATTRIBUTE_SYSTEM = 0x4
 
@@ -39,6 +39,15 @@ class ScanResult:
 
 def is_link_or_junction(path: str) -> bool:
     return os.path.islink(path) or os.path.isjunction(path)
+
+
+def require_unlinked_path(
+    path: Path, *, message: str = "path must not contain a link or junction"
+) -> None:
+    """Inspect the spelling before realpath can hide a linked ancestor."""
+    absolute = path.absolute()
+    if any(is_link_or_junction(str(part)) for part in (absolute, *absolute.parents)):
+        raise ValueError(message)
 
 
 def _hidden(entry: os.DirEntry[str]) -> bool:
@@ -68,6 +77,9 @@ def scan(
 ) -> ScanResult:
     """Iterative scan of ``root``; entries sorted by relpath."""
     started = time.perf_counter()
+    if not extensions <= INPUT_EXTENSIONS:
+        raise ValueError("unsupported extensions")
+    require_unlinked_path(root, message="root must not be a link or junction")
     root_real = os.path.realpath(root, strict=True)
     entries: list[LocalEntry] = []
     links = hidden = errors = 0
@@ -105,6 +117,8 @@ def scan(
                     fs_parts = (*parts, entry.name)
                     relpath = unicodedata.normalize("NFC", "/".join(fs_parts))
                     entries.append(LocalEntry(relpath, fs_parts, info.st_size, info.st_mtime_ns))
+                    if len(entries) >= max_files:
+                        break
                 except OSError:
                     errors += 1
     entries.sort(key=lambda e: e.relpath)

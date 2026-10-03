@@ -83,8 +83,9 @@ def test_late_start_from_ready_received_after_start() -> None:
     sc.submit(slow, "x")
     sc.on_round("close")
     assert r.answers[slow].late_start_ms == 2_300
+    sc.on_phase("end_game", {"current_round": "score"})
     host = sc.host_view()
-    row = next(x for x in host.round.answers if x.player_id == slow)  # type: ignore[union-attr]
+    row = next(x for x in host.host.review_rounds[0].answers if x.player_id == slow)  # type: ignore[union-attr]
     assert row.late_start_ms == 2_300
 
 

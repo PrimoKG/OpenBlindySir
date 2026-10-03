@@ -25,12 +25,14 @@ def folder_tree(catalog: Catalog, s: SessionState | None = None) -> FolderNode:
     children: dict[str, set[str]] = {"": set()}
     fresh: dict[str, int] = {}
     available: dict[str, int] = {}
+    info = s.bridges.get(catalog.bridge_id) if s is not None else None
+    online = s is None or (info is not None and info.state is BridgeState.ONLINE)
     for track_id, entry in catalog.entries.items():
         folder = entry.folder
         segments = folder.split("/") if folder else []
         counts[""] += 1
         ref = TrackRef(catalog.bridge_id, track_id)
-        usable = s is None or ref not in s.game.unavailable
+        usable = online and (s is None or ref not in s.game.unavailable)
         new = usable and (s is None or ref not in s.played)
         available[""] = available.get("", 0) + int(usable)
         fresh[""] = fresh.get("", 0) + int(new)
@@ -70,9 +72,21 @@ def library_response(s: SessionState) -> LibraryResponse:
                 online=info is not None and info.state is BridgeState.ONLINE,
                 track_count=len(catalog.entries),
                 root=folder_tree(catalog, s),
+                scanned_folders=catalog.scanned_folders,
+                source_error=catalog.source_error,
             )
         )
     issues: list[LibraryIssue] = []
+    for catalog in s.catalogs.values():
+        issues.extend(
+            LibraryIssue(
+                bridge_id=catalog.bridge_id,
+                filename=posixpath.basename(path),
+                folder=posixpath.dirname(path),
+                code="ambiguous_path",
+            )
+            for path in catalog.ambiguous_paths
+        )
     for ref in sorted(s.game.unavailable):
         catalog = s.catalogs.get(ref.bridge_id)
         entry = catalog.entries.get(ref.track_id) if catalog else None

@@ -25,7 +25,6 @@ def test_prefetch_depth_two_keeps_the_prepared_n_plus_2() -> None:
     sc.configure(prefetch_depth=2)
     sc.to_open()
     sc.on_round("close")
-    sc.publish()
     assert len(sc.s.game.pipeline) == 2
     n2 = sc.s.game.pipeline[1].asset_id
     assert n2 is not None
@@ -52,7 +51,6 @@ def test_turning_repeats_off_removes_played_tracks() -> None:
     for _ in range(3):
         sc.to_open()
         sc.on_round("close")
-        sc.publish()
     sc.on_phase("configure", {"allow_repeats": True})
     assert len(sc.s.game.queue) + len(sc.s.game.pipeline) == 3
     sc.on_phase("configure", {"allow_repeats": False})

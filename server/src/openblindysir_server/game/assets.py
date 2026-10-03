@@ -30,6 +30,7 @@ from openblindysir_server.game.state import (
 TRACK_FAILURES = frozenset(
     {
         AssetFailureCode.NOT_FOUND,
+        AssetFailureCode.NO_AUDIO,
         AssetFailureCode.DECODE_ERROR,
         AssetFailureCode.TOO_SHORT,
         AssetFailureCode.SILENT_AUDIO,
@@ -37,6 +38,7 @@ TRACK_FAILURES = frozenset(
     }
 )
 TAG_MAX = 200
+BRIDGE_WAIT_MS = 45_000
 
 
 def map_job_failure(code: JobFailureCode) -> AssetFailureCode:
@@ -74,6 +76,7 @@ def request_asset(s: SessionState, slot: Slot, at: Instant, fx: EffectSink) -> N
         state=AssetState.REQUESTED,
         requested_at=at.mono_ms,
         job_deadline=at.mono_ms + s.config.job_timeout_ms,
+        normalize_audio=s.game.settings.normalize_audio,
     )
     s.jobs[job_id] = asset_id
     slot.asset_id = asset_id
@@ -165,6 +168,10 @@ def handle_job_done(s: SessionState, cmd: c.JobDoneIn, at: Instant, fx: EffectSi
         return
     asset.state = AssetState.STORED
     asset.actual_start_s = msg.actual_start
+    asset.source_revision = msg.source_revision
+    asset.input_duration_s = msg.input_duration or min(
+        s.game.settings.clip_seconds, msg.track_duration
+    )
     asset.clip_duration_ms = round(msg.clip_duration * 1000)
     asset.track_duration_ms = round(msg.track_duration * 1000)
     if msg.tags is not None:
@@ -245,6 +252,8 @@ def _replace_track(s: SessionState, slot: Slot) -> bool:
 
 def _settle_slot(s: SessionState, slot: Slot, at: Instant, fx: EffectSink) -> bool | None:
     """Advance one slot. Returns True if it changed, False if not, None if exhausted."""
+    if slot.manual_error is not None:
+        return False
     if slot.track_ref is None:
         ref = selection.take(s)
         if ref is None:
@@ -255,9 +264,16 @@ def _settle_slot(s: SessionState, slot: Slot, at: Instant, fx: EffectSink) -> bo
     asset = s.assets.get(slot.asset_id) if slot.asset_id else None
     if asset is not None and asset.state is AssetState.FAILED:
         code = asset.error or AssetFailureCode.DECODE_ERROR
+        if slot.manual:
+            slot.asset_id = None
+            slot.manual_error = code
+            if code in TRACK_FAILURES:
+                s.game.unavailable.add(slot.track_ref)
+            return True
         if code is AssetFailureCode.BRIDGE_OFFLINE:
             slot.asset_id = None
             slot.waiting_bridge = True
+            slot.bridge_wait_since = at.mono_ms
             return True
         if code is AssetFailureCode.CANCELLED:
             slot.asset_id = None
@@ -279,9 +295,22 @@ def _settle_slot(s: SessionState, slot: Slot, at: Instant, fx: EffectSink) -> bo
         return True
     if slot.asset_id is None:
         if slot.waiting_bridge:
-            return False  # woken up by wake_waiting_slots when the Bridge can take a job
+            # Keep the exact choice briefly for a reconnect; then free the round.
+            if slot.bridge_wait_since is None:
+                slot.bridge_wait_since = at.mono_ms
+                return True
+            if at.mono_ms - slot.bridge_wait_since < BRIDGE_WAIT_MS:
+                return False
+            slot.waiting_bridge = False
+            slot.bridge_wait_since = None
+            slot.track_ref = None
+            return True
         if not bridge_online(s, slot.track_ref.bridge_id):
+            if slot.manual:
+                slot.manual_error = AssetFailureCode.BRIDGE_OFFLINE
+                return True
             slot.waiting_bridge = True
+            slot.bridge_wait_since = at.mono_ms
             return True
         request_asset(s, slot, at, fx)
         return True
@@ -301,6 +330,7 @@ def wake_waiting_slots(s: SessionState, bridge_id: str) -> None:
             and slot.track_ref.bridge_id == bridge_id
         ):
             slot.waiting_bridge = False
+            slot.bridge_wait_since = None
             s.touched = True
 
 
@@ -350,10 +380,12 @@ def ensure_pipeline(s: SessionState, at: Instant, fx: EffectSink) -> bool:
     target = pipeline_target(s)
     changed = False
     while len(pipeline) < target:
-        ref = selection.take(s)
-        if ref is None:
+        r = current_round(s.game)
+        assert r is not None
+        slot = selection.new_slot(s, r.number + len(pipeline) + 1)
+        if slot.track_ref is None:
             break
-        pipeline.append(Slot(track_ref=ref, attempts=1))
+        pipeline.append(slot)
         changed = True
     while len(pipeline) > target:
         slot = pipeline.pop()
@@ -374,7 +406,7 @@ def previous_round(s: SessionState) -> Round | None:
     if g.current_index is None or g.phase is not GamePhase.IN_GAME:
         return None
     for r in reversed(g.rounds[: g.current_index]):
-        if r.state is RoundState.REVEALED:
+        if r.state in {RoundState.REVIEW, RoundState.REVEALED}:
             return r
     return None
 

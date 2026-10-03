@@ -18,9 +18,7 @@ from openblindysir_server.persistence import SnapshotStore
 def test_exhausted_new_game_is_blocked_and_repeats_recover() -> None:
     sc = Scenario(rounds=1, tracks=1)
     sc.to_review()
-    sc.publish()
-    sc.on_round("to_final_review")
-    sc.on_phase("final_validate")
+    sc.finalize()
     sc.on_phase("new_game")
     assert sc.on_phase("start_game").error is ErrorCode.POOL_EXHAUSTED
     assert "start_game" not in sc.host_view().host.commands
@@ -28,8 +26,7 @@ def test_exhausted_new_game_is_blocked_and_repeats_recover() -> None:
     for _ in range(3):
         sc.to_open()
         sc.on_round("close")
-        sc.publish()
-    assert len({r.slot.track_ref for r in sc.s.game.rounds}) == 1
+        assert len({r.slot.track_ref for r in sc.s.game.rounds}) == 1
 
 
 def test_atomic_configuration_starts_with_new_sources_and_rolls_back_on_failure() -> None:
@@ -50,19 +47,20 @@ def test_atomic_configuration_starts_with_new_sources_and_rolls_back_on_failure(
     assert sc.s.game.settings.rounds == 2
 
 
-def test_current_title_is_private_at_review_and_zero_is_a_review_decision() -> None:
-    sc = Scenario()
+def test_current_title_is_private_until_global_review_and_zero_is_explicit() -> None:
+    sc = Scenario(rounds=1)
     sc.to_open()
     assert CANARY_TITLE not in sc.host_view().model_dump_json()
     sc.on_round("close")
-    assert sc.host_view().round.track.title == CANARY_TITLE
+    reviewed = sc.host_view().host.review_rounds[0]
+    assert reviewed.track.title == CANARY_TITLE
     assert CANARY_TITLE not in sc.view(sc.player_ids[0]).model_dump_json()
-    assert not any(row.reviewed for row in sc.host_view().round.answers)
-    assert sc.on_round("publish").error is ErrorCode.UNREVIEWED_SCORES
-    for row in sc.host_view().round.answers:
+    assert not any(row.reviewed for row in reviewed.answers)
+    assert sc.on_phase("final_validate").error is ErrorCode.UNREVIEWED_SCORES
+    for row in reviewed.answers:
         assert sc.on_round("score_draft", {"player_id": row.player_id, "points": 0}).error is None
-    assert all(row.reviewed for row in sc.host_view().round.answers)
-    assert sc.on_round("publish").error is None
+    assert all(row.reviewed for row in sc.host_view().host.review_rounds[0].answers)
+    assert sc.on_phase("final_validate").error is None
     assert not sc.s.journal.events()
 
 
@@ -108,11 +106,13 @@ def test_captured_zero_policy_and_spectators_do_not_affect_ready_or_scores() -> 
     sc.draft(sc.player_ids[0], "captured")
     sc.submit(sc.player_ids[1], "locked")
     sc.on_round("close")
+    sc.on_phase("end_game", {"current_round": "score"})
     assert (
         sc.on_round("score_draft", {"player_id": sc.player_ids[0], "points": 1}).error
         is ErrorCode.INVALID_ARGS
     )
-    sc.publish({sc.player_ids[0]: 0, sc.player_ids[1]: 3})
+    sc.score({sc.player_ids[0]: 0, sc.player_ids[1]: 3})
+    sc.finalize()
     teams = sc.host_view().team_standings
     assert teams[0].score == 3
     assert spectator not in [row.player_id for row in sc.host_view().standings]
@@ -131,15 +131,12 @@ def test_role_permission_matches_handler_and_metadata_edits_survive_reveal() -> 
         ).error
         is None
     )
-    sc.publish()
-    assert sc.view(sc.player_ids[0]).round.track.title == "Example correction"
-    sc.on_round("to_final_review")
-    sc.on_phase("final_validate")
+    sc.finalize()
     results = sc.host_view().final_results
     assert results.recap[0].history[0].track.title == "Example correction"
     sc.on_phase("new_game")
     assert (
-        sc.host_view().host.history[0].results.recap[0].history[0].track.title
+        sc.s.archives[0]["results"]["recap"][0]["history"][0]["track"]["title"]
         == "Example correction"
     )
 
@@ -160,7 +157,6 @@ def test_snapshot_restores_auth_answers_and_journal_without_audio_or_plaintext_t
 ) -> None:
     sc = Scenario(rounds=2)
     sc.to_review()
-    sc.publish({sc.player_ids[0]: 2})
     sc.to_open()
     sc.submit(sc.player_ids[0], "Example locked answer")
     sc.draft(sc.player_ids[1], "Example draft")
@@ -181,7 +177,12 @@ def test_snapshot_restores_auth_answers_and_journal_without_audio_or_plaintext_t
     assert r.recovery_interrupted
     assert r.answers[sc.player_ids[0]].text == "Example locked answer"
     assert r.answers[sc.player_ids[1]].status.value == "CAPTURED"
-    assert restored.state.journal.score(restored.state.game.game_id, sc.player_ids[0]) == 2
+    assert restored.state.journal.events() == ()
+    assert len(restored.state.game.rounds) == 2
+    restored.dispatch(
+        __import__("openblindysir_server.game.commands", fromlist=["Tick"]).Tick(), now
+    )
+    assert len(restored.view_for(sc.host_id).host.review_rounds) == 2
     assert restored.view_for(sc.player_ids[0]).audio.current is None
 
 

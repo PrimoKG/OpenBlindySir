@@ -5,13 +5,14 @@ import { ClockEstimator } from "../audio/clock";
 import { AudioEngine } from "../audio/engine";
 import { GameSocket, type SocketStatus } from "../net/socket";
 import { createViewStore, type ViewStore } from "../net/viewStore";
-import type { ClientMessage, ErrorCode, ServerMessage } from "../protocol";
+import type { ClientMessage, Compatibility, ErrorCode, ServerMessage } from "../protocol";
 
 export interface UiState {
   readonly socket: SocketStatus;
   readonly pendingSubmit: boolean;
   readonly acceptedRound: string | null;
   readonly toast: { readonly code: ErrorCode; readonly at: number } | null;
+  readonly compatibility: Compatibility | null;
 }
 
 export class GameController {
@@ -24,6 +25,7 @@ export class GameController {
     pendingSubmit: false,
     acceptedRound: null,
     toast: null,
+    compatibility: null,
   };
   private uiListeners = new Set<() => void>();
 
@@ -84,6 +86,7 @@ export class GameController {
         }
         return;
       case "ERROR":
+        if (msg.compatibility) this.patchUi({ compatibility: msg.compatibility });
         if (msg.code !== "stale_command") {
           this.patchUi({ toast: { code: msg.code, at: Date.now() } });
         }

@@ -3,6 +3,7 @@ import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "rea
 import { useEngine, useGame, useServerNow, useUi } from "../app/hooks";
 import { t, tCode } from "../i18n";
 import { formatDelta, formatRank, formatSeconds } from "../i18n/format";
+import { api } from "../net/api";
 import type { AnyView, RoundOpen, StandingRow } from "../protocol";
 import {
   AudioBadge,
@@ -13,19 +14,46 @@ import {
   StageMessage,
   Toast,
 } from "../ui/components";
+import { LanguageChoice } from "../ui/LanguageChoice";
 import { clipPresentation } from "./presentation";
 import { ExportResults, Recap } from "./Recap";
 
 export function PlayerApp(props: { readonly view: AnyView; readonly children?: ReactNode }) {
   const { view } = props;
+  const stage = useRef<HTMLDivElement>(null);
+  const phaseKey = `${view.phase}:${view.round?.round_id ?? ""}:${view.round?.state ?? ""}`;
+  const focusedPhase = useRef("");
+  useEffect(() => {
+    if (focusedPhase.current === phaseKey) return;
+    focusedPhase.current = phaseKey;
+    const active = document.activeElement;
+    if (!active || active === document.body || !active.isConnected) {
+      const heading = stage.current?.querySelector<HTMLElement>("h1");
+      if (heading) {
+        heading.tabIndex = -1;
+        heading.focus({ preventScroll: true });
+      }
+    }
+  }, [phaseKey]);
   const fullReview =
     view.kind !== "player" &&
     (view.round?.state === "REVIEW" || view.phase === "FINAL_SCORE_REVIEW");
   return (
     <div className={`app ${view.kind === "player" ? "" : "with-host"}`}>
+      <a className="skip-link" href="#stage-content">
+        {t("a11y.skip")}
+      </a>
+      {view.kind !== "player" && (
+        <a className="skip-link" href="#host-controls">
+          {t("a11y.skipHost")}
+        </a>
+      )}
       <Header view={view} />
       <div id="game" className={`game-layout ${fullReview ? "full-review" : ""}`}>
-        <div className="player-stage">
+        <div className="player-stage" id="stage-content" ref={stage} tabIndex={-1}>
+          <p className="sr-only" role="status" aria-atomic="true">
+            {t(`a11y.phase.${view.phase}`)}
+          </p>
           <AudioGate view={view} />
           <PhaseScreen view={view} />
         </div>
@@ -48,6 +76,7 @@ function Header(props: { readonly view: AnyView }) {
       <header className="header">
         <Brand />
         <div className="header-meta">
+          <LanguageChoice />
           {view.game?.round_number != null && (
             <span className="round-number">
               {t("round.header", { n: view.game.round_number, total: view.game.rounds_total })}
@@ -59,6 +88,7 @@ function Header(props: { readonly view: AnyView }) {
               <summary>{t("audio.settings")}</summary>
               <div className="sound-popover">
                 <Volume />
+                <Latency />
               </div>
             </details>
           )}
@@ -172,7 +202,6 @@ function PhaseScreen(props: { readonly view: AnyView }) {
             title={view.kind === "player" ? t("final.waiting") : t("hostui.toFinal")}
             description={view.kind === "player" ? t("final.waitingHint") : t("final.hostHint")}
           />
-          {view.kind === "player" && <Standings rows={view.standings} view={view} />}
         </main>
       );
     case "FINAL_RESULTS":
@@ -216,6 +245,8 @@ function Lobby(props: { readonly view: AnyView }) {
           )}
         </div>
         <Volume />
+        <Latency />
+        <RecoveryCode />
       </section>
       <section className="participants" aria-labelledby="players-title">
         <h2 id="players-title">{t("lobby.players", { count: view.players.length })}</h2>
@@ -268,6 +299,59 @@ function Volume() {
         onChange={(e) => game.engine.setVolume(Number(e.target.value))}
       />
     </label>
+  );
+}
+
+function Latency() {
+  const game = useGame();
+  const engine = useEngine();
+  return (
+    <details className="disclosure">
+      <summary>{t("audio.latency")}</summary>
+      <label>
+        {t("audio.latency")} · {engine.manualLatencyMs}
+        <input
+          type="range"
+          min={-500}
+          max={500}
+          step={10}
+          value={engine.manualLatencyMs}
+          onChange={(e) => game.engine.setManualLatency(Number(e.target.value))}
+        />
+      </label>
+      <p className="muted">{t("audio.latencyHint")}</p>
+      <Button onClick={() => game.engine.setManualLatency(0)}>0 ms</Button>
+    </details>
+  );
+}
+
+function RecoveryCode() {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  return (
+    <details className="disclosure">
+      <summary>{t("session.recoveryCode")}</summary>
+      <p>{t("session.codeHint")}</p>
+      <Button
+        onClick={async () => {
+          const r = await api.recoveryCode();
+          if (r.ok) setCode(r.data.code);
+          else setError(tCode("error", r.error));
+        }}
+      >
+        {t("session.createCode")}
+      </Button>
+      {code && (
+        <p role="status">
+          <strong>{code}</strong>
+        </p>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </details>
   );
 }
 
@@ -325,6 +409,14 @@ function RoundScreen(props: { readonly view: AnyView }) {
           <div className="phase-band">
             <strong>{t("round.reviewEyebrow")}</strong>
             <span>{t(view.me.participant ? "hostui.reviewHint" : "hostui.reviewHintMc")}</span>
+            {view.me.participant && "my_answer" in round && round.my_answer.text && (
+              <p className="own-answer">
+                {t("round.yourAnswer", { text: round.my_answer.text })}
+                {round.my_answer.status === "CAPTURED" && (
+                  <span className="muted"> {t("round.notValidated")}</span>
+                )}
+              </p>
+            )}
           </div>
         );
       return (
@@ -363,6 +455,11 @@ function McOpenNotice(props: { readonly view: AnyView }) {
             <span className="muted">
               {p.validated ? t("round.mcValidated") : t("round.mcWaiting")}
             </span>
+            {p.text && (
+              <span className="answer-text">
+                {p.text} {p.status === "DRAFT" && <small>{t("ux.captured")}</small>}
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -655,6 +752,10 @@ function Results(props: { readonly view: AnyView }) {
       {view.game && (
         <ExportResults
           record={{
+            version: 2,
+            started_at: null,
+            settings: null,
+            sources: [],
             game_id: view.game.game_id,
             finished_at: results.finished_at ?? Date.now(),
             players: view.players,

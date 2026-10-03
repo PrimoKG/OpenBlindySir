@@ -1,6 +1,6 @@
 // Host interface (spec §5.1): the current game stays beside a collapsible command pane.
 // Buttons shown = view.host.commands: the client never recomputes game rules.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import * as cmd from "../app/commands";
 import { useGame, useUi } from "../app/hooks";
 import { t, tCode } from "../i18n";
@@ -12,6 +12,8 @@ import type { HostView } from "../protocol";
 import { readLocal, writeLocal } from "../storage";
 import { AudioBadge, Button, ConfirmDialog } from "../ui/components";
 import { NumericDraft } from "../ui/NumericDraft";
+import { BridgeConnections } from "./BridgeConnections";
+import { LibraryManager } from "./LibraryManager";
 import { Invite, LibraryIssues, Participation, PartyHistory } from "./PartyTools";
 import { ReviewRound } from "./ReviewRound";
 import { SetupPanel } from "./SetupPanel";
@@ -32,7 +34,7 @@ function Drawer(props: { readonly view: HostView }) {
     setOpen(!open);
   };
   return (
-    <aside className="drawer" id="host-controls" aria-label={t("hostui.drawer")}>
+    <aside className="drawer" id="host-controls" tabIndex={-1} aria-label={t("hostui.drawer")}>
       <button
         type="button"
         className="drawer-toggle"
@@ -58,11 +60,12 @@ function useSend() {
 }
 
 function HostControls(props: { readonly view: HostView }) {
+  const [selecting, setSelecting] = useState(false);
   const { view } = props;
   const ui = useUi();
   const can = (name: string) => view.host.commands.includes(name);
   return (
-    <fieldset className="stack host" disabled={ui.socket !== "open"}>
+    <fieldset className="stack host" disabled={ui.socket !== "open" || selecting}>
       <legend className="sr-only">{t("hostui.drawer")}</legend>
       {view.session.persistence_status === "failed" && (
         <p className="error" role="alert">
@@ -71,11 +74,12 @@ function HostControls(props: { readonly view: HostView }) {
       )}
       {view.session.recovered && <p className="notice">{t("ux.sessionRecovered")}</p>}
       <ModeSwitch key={`${view.kind}:${view.phase}`} view={view} />
+      <SessionControls view={view} />
       {view.phase !== "LOBBY" && <Warnings view={view} />}
       {view.kind === "host_mc" && view.round?.state !== "REVIEW" && <McPanel view={view} />}
       {view.phase === "LOBBY" && <SetupPanel view={view} />}
-      {view.round?.state === "REVIEW" && "answers" in view.round && (
-        <ReviewRound key={view.round.round_id} view={view} />
+      {(view.phase !== "IN_GAME" || view.kind === "host_mc") && (
+        <LibraryManager view={view} onSelectionPending={setSelecting} />
       )}
       {view.phase === "IN_GAME" && <RoundControls view={view} />}
       {view.phase === "FINAL_SCORE_REVIEW" && <FinalReview view={view} />}
@@ -93,6 +97,7 @@ function HostControls(props: { readonly view: HostView }) {
         </>
       )}
       <PartyHistory view={view} />
+      {(view.phase !== "IN_GAME" || view.kind === "host_mc") && <BridgeConnections view={view} />}
       {view.phase !== "LOBBY" && <LibraryIssues view={view} />}
       <PlayerOps view={view} />
       <Diagnostics />
@@ -159,7 +164,7 @@ function RoundControls(props: { readonly view: HostView }) {
           <Button kind="primary" onClick={() => send(cmd.configure(view, { allow_repeats: true }))}>
             {t("ux.enableRepeats")}
           </Button>
-          <Button onClick={() => send(cmd.endGame(view, "abandon"))}>{t("hostui.toFinal")}</Button>
+          <Button onClick={() => setConfirmEnd("score")}>{t("hostui.toFinal")}</Button>
         </div>
       )}
       {(check || ["replay", "stop", "add_time", "close", "next", "to_final_review"].some(can)) && (
@@ -216,21 +221,16 @@ function RoundControls(props: { readonly view: HostView }) {
               <Button onClick={() => send(cmd.undoPublish(view))}>{t("hostui.undo")}</Button>
             )}
             {can("end_game") && (
-              <>
-                <Button kind="danger" onClick={() => setConfirmEnd("score")}>
-                  {t("hostui.endScore")}
-                </Button>
-                <Button kind="danger" onClick={() => setConfirmEnd("abandon")}>
-                  {t("hostui.endAbandon")}
-                </Button>
-              </>
+              <Button kind="danger" onClick={() => setConfirmEnd("abandon")}>
+                {t("hostui.endAbandon")}
+              </Button>
             )}
           </div>
         </details>
       )}
       <ConfirmDialog
         open={confirmEnd !== null}
-        message={confirmEnd === "abandon" ? t("hostui.endAbandon") : t("hostui.endScore")}
+        message={confirmEnd === "abandon" ? t("session.abandonHint") : t("session.stopHint")}
         onConfirm={() => {
           if (confirmEnd) {
             send(cmd.endGame(view, confirmEnd));
@@ -250,7 +250,61 @@ function FinalReview(props: { readonly view: HostView }) {
   const [confirm, setConfirm] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+  const [pending, setPending] = useState<Map<string, number>>(new Map());
+  const [saveError, setSaveError] = useState(false);
+  const [roundBusy, setRoundBusy] = useState(false);
+  useEffect(() => {
+    setPending((old) => {
+      const next = new Map(old);
+      for (const row of rows)
+        if (next.get(row.player_id) === row.draft_delta) next.delete(row.player_id);
+      return next.size === old.size ? old : next;
+    });
+  }, [rows]);
+  useEffect(() => {
+    if (!pending.size) return;
+    const timer = window.setTimeout(() => {
+      setPending(new Map());
+      setSaveError(true);
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [pending]);
+  const setCorrection = (pid: string, value: number) => {
+    if (rows.find((row) => row.player_id === pid)?.draft_delta === value) return true;
+    const sent = send(cmd.finalSet(pid, value));
+    setSaveError(!sent);
+    if (sent) setPending((old) => new Map(old).set(pid, value));
+    return sent;
+  };
+  const resetCorrections = () => {
+    const sent = send(cmd.finalReset());
+    setSaveError(!sent);
+    if (sent)
+      setPending(
+        new Map(rows.filter((row) => row.draft_delta !== 0).map((row) => [row.player_id, 0])),
+      );
+  };
+  const saving = busy.size > 0 || pending.size > 0 || roundBusy;
+  const rounds = view.host.review_rounds ?? [];
+  const [selected, setSelected] = useState(
+    () => readLocal(`review:${view.game?.game_id}`) ?? rounds[0]?.round_id ?? "",
+  );
+  const [query, setQuery] = useState("");
+  const active = rounds.find((r) => r.round_id === selected) ?? rounds[0];
+  const index = active ? rounds.indexOf(active) : 0;
+  const unchecked = rounds
+    .filter((r) => r.included)
+    .reduce((sum, r) => sum + r.answers.filter((a) => !a.reviewed).length, 0);
+  const choose = (id: string) => {
+    setSelected(id);
+    writeLocal(`review:${view.game?.game_id}`, id);
+  };
   const corrections = rows.filter((r) => r.draft_delta !== 0);
+  const teams = new Map<string, number>();
+  for (const row of rows) {
+    const team = view.players.find((p) => p.id === row.player_id)?.team;
+    if (team) teams.set(team, (teams.get(team) ?? 0) + row.score_after);
+  }
   const summary = rows
     .map(
       (r) =>
@@ -260,6 +314,62 @@ function FinalReview(props: { readonly view: HostView }) {
   return (
     <section className="stack final-review">
       <h2>{t("final.title")}</h2>
+      <p className="muted">{t("review.privateHint")}</p>
+      <p role="status">{t("review.remaining", { count: unchecked })}</p>
+      <div className="global-review-layout">
+        <nav className="review-navigation" aria-label={t("review.rounds")}>
+          <label>
+            {t("library.search")}
+            <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </label>
+          <ol className="list">
+            {rounds
+              .filter((r) =>
+                `${r.number} ${r.track?.display_name ?? ""}`
+                  .toLocaleLowerCase()
+                  .includes(query.toLocaleLowerCase()),
+              )
+              .map((r) => (
+                <li key={r.round_id}>
+                  <Button
+                    disabled={roundBusy}
+                    aria-current={r.round_id === active?.round_id ? "step" : undefined}
+                    onClick={() => choose(r.round_id)}
+                  >
+                    {r.number}. {r.track?.title ?? r.track?.display_name ?? "—"} ·{" "}
+                    {r.included
+                      ? `${r.answers.filter((a) => a.reviewed).length}/${r.answers.length}`
+                      : t("review.cancelledShort")}
+                  </Button>
+                </li>
+              ))}
+          </ol>
+        </nav>
+        <div className="stack">
+          <div className="row wrap">
+            <Button
+              disabled={roundBusy || index === 0}
+              onClick={() => choose(rounds[index - 1]?.round_id ?? "")}
+            >
+              {t("review.previous")}
+            </Button>
+            <strong>
+              {active
+                ? t("round.header", { n: active.number, total: rounds.length })
+                : t("review.empty")}
+            </strong>
+            <Button
+              disabled={roundBusy || index >= rounds.length - 1}
+              onClick={() => choose(rounds[index + 1]?.round_id ?? "")}
+            >
+              {t("hostui.next")}
+            </Button>
+          </div>
+          {active && (
+            <ReviewRound key={active.round_id} round={active} view={view} onBusy={setRoundBusy} />
+          )}
+        </div>
+      </div>
       <table className="table final-table">
         <caption className="sr-only">{t("final.title")}</caption>
         <thead>
@@ -279,16 +389,21 @@ function FinalReview(props: { readonly view: HostView }) {
               <td className="final-correction">
                 <div className="score-controls">
                   <Button
-                    disabled={busy.has(row.player_id) || row.draft_delta <= -1000}
+                    disabled={
+                      busy.has(row.player_id) ||
+                      pending.has(row.player_id) ||
+                      row.draft_delta <= -1000
+                    }
                     aria-label={t("final.decrease", { name: nameOf(view, row.player_id) })}
-                    onClick={() => send(cmd.finalSet(row.player_id, row.draft_delta - 1))}
+                    onClick={() => setCorrection(row.player_id, row.draft_delta - 1)}
                   >
                     −
                   </Button>
                   <NumericDraft
                     label={t("final.correctionFor", { name: nameOf(view, row.player_id) })}
                     value={row.draft_delta}
-                    onCommit={(value) => send(cmd.finalSet(row.player_id, value))}
+                    disabled={pending.has(row.player_id)}
+                    onCommit={(value) => setCorrection(row.player_id, value)}
                     onBusy={(value) =>
                       setBusy((old) => {
                         const next = new Set(old);
@@ -299,9 +414,13 @@ function FinalReview(props: { readonly view: HostView }) {
                     }
                   />
                   <Button
-                    disabled={busy.has(row.player_id) || row.draft_delta >= 1000}
+                    disabled={
+                      busy.has(row.player_id) ||
+                      pending.has(row.player_id) ||
+                      row.draft_delta >= 1000
+                    }
                     aria-label={t("final.increase", { name: nameOf(view, row.player_id) })}
-                    onClick={() => send(cmd.finalSet(row.player_id, row.draft_delta + 1))}
+                    onClick={() => setCorrection(row.player_id, row.draft_delta + 1)}
                   >
                     +
                   </Button>
@@ -326,22 +445,79 @@ function FinalReview(props: { readonly view: HostView }) {
           ))}
         </tbody>
       </table>
+      {teams.size > 0 && (
+        <table className="table provisional-teams">
+          <caption>{t("review.teamTotals")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("ux.team")}</th>
+              <th scope="col">{t("final.after")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...teams]
+              .sort((a, b) => b[1] - a[1])
+              .map(([team, total]) => (
+                <tr key={team}>
+                  <td>{team}</td>
+                  <td>{total}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      )}
+      {saveError && (
+        <p role="alert" className="error">
+          {t("ux.saveTimeout")}
+        </p>
+      )}
+      {pending.size > 0 && (
+        <p role="status" className="muted">
+          {t("ux.waitingScores")}
+        </p>
+      )}
       <div className="row">
-        <Button disabled={busy.size > 0} onClick={() => send(cmd.finalReset())}>
+        <Button disabled={saving} onClick={resetCorrections}>
           {t("final.reset")}
         </Button>
-        <Button kind="primary" disabled={busy.size > 0} onClick={() => setConfirm(true)}>
+        <Button kind="primary" disabled={saving} onClick={() => setConfirm(true)}>
           {t("final.validate")}
         </Button>
       </div>
       <ConfirmDialog
         open={confirm}
-        message={t("ux.confirmFinal", { list: summary, count: corrections.length })}
+        message={`${t("ux.confirmFinal", { list: summary, count: corrections.length })} ${unchecked ? t("ux.confirmUnchecked", { count: unchecked }) : ""}`}
         onConfirm={() => {
-          send(cmd.finalValidate());
+          send(cmd.finalValidate(unchecked > 0));
           setConfirm(false);
         }}
         onCancel={() => setConfirm(false)}
+      />
+    </section>
+  );
+}
+
+function SessionControls({ view }: { readonly view: HostView }) {
+  const send = useSend();
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <section className="row wrap session-controls">
+      <Button onClick={() => send(cmd.joinLock(view, !view.host.joins_locked))}>
+        {t(view.host.joins_locked ? "session.unlock" : "session.lock")}
+      </Button>
+      {view.host.commands.includes("end_game") && (
+        <Button kind="danger" onClick={() => setConfirm(true)}>
+          {t("session.stop")}
+        </Button>
+      )}
+      <ConfirmDialog
+        open={confirm}
+        message={t("session.stopHint")}
+        onCancel={() => setConfirm(false)}
+        onConfirm={() => {
+          send(cmd.endGame(view, "score"));
+          setConfirm(false);
+        }}
       />
     </section>
   );
@@ -513,6 +689,7 @@ function Diagnostics() {
   return (
     <details className="disclosure" onToggle={(e) => (e.currentTarget.open ? load() : undefined)}>
       <summary>{t("hostui.diagnostics")}</summary>
+      <p className="muted">{t("hostui.diagnosticsPrivacy")}</p>
       {busy && <p role="status">{t("app.loading")}</p>}
       {error && (
         <div>

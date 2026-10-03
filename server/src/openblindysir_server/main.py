@@ -11,8 +11,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+from openblindysir_protocol.compatibility import Compatibility
 from openblindysir_protocol.errors import ErrorCode
 from openblindysir_protocol.http import HealthResponse
+from openblindysir_server import __version__, bridge_admin, history
+from openblindysir_server.audio import review as review_routes
 from openblindysir_server.audio import routes as audio_routes
 from openblindysir_server.audio.cache import AudioCache
 from openblindysir_server.auth import routes as auth_routes
@@ -22,6 +25,7 @@ from openblindysir_server.diagnostics import LoopLagMonitor
 from openblindysir_server.diagnostics import router as diagnostics_router
 from openblindysir_server.game import Clock, GameEngine, IdFactory, MonotonicClock, SecretIds
 from openblindysir_server.game import commands as c
+from openblindysir_server.library import management as library_management
 from openblindysir_server.library import routes as library_routes
 from openblindysir_server.logging import get, log_event
 from openblindysir_server.ratelimit import ConnectionCounter, SlidingWindowLimiter
@@ -120,11 +124,20 @@ def create_app(
         player_endpoint.router,
         bridge_endpoint.router,
         library_routes.router,
+        library_management.router,
         audio_routes.router,
+        review_routes.router,
         diagnostics_router,
+        history.router,
+        bridge_admin.router,
     ):
         app.include_router(router)
     _mount_spa(app, settings.static_dir)
+
+    @app.get("/api/compatibility")
+    async def compatibility() -> Response:
+        return JSONResponse(Compatibility(server_version=__version__).model_dump(mode="json"))
+
     app.add_middleware(SecurityHeadersMiddleware, hsts=not settings.dev_mode)
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=list(settings.trusted_proxies))
     return app
@@ -157,6 +170,7 @@ def sweep_once(runtime: Runtime) -> list[str]:
     The connection is removed from the hub here, so the endpoint will not report the
     disconnection itself: the sweeper dispatches it. Idle sessions expire too.
     """
+    runtime.refresh_bridge_credentials()
     now = runtime.clock.now().mono_ms
     swept: list[str] = []
     for conn in runtime.hub.connections():

@@ -48,6 +48,7 @@ def handle_draft(s: SessionState, cmd: c.DraftIn, at: Instant, fx: EffectSink) -
         answer = r.answers[p.id] = Answer(player_id=p.id)
     answer.draft_text = text
     answer.draft_last_changed_at = at.mono_ms
+    answer.draft_last_changed_wall_ms = at.wall_ms
     answer.status = AnswerStatus.DRAFT if text else AnswerStatus.NONE
 
 
@@ -131,6 +132,7 @@ def capture_drafts(r: Round) -> tuple[int, int]:
         elif answer.status is AnswerStatus.DRAFT and answer.draft_text:
             answer.status = AnswerStatus.CAPTURED
             answer.text = answer.draft_text
+            answer.received_at_wall_ms = answer.draft_last_changed_wall_ms
             captured += 1
         elif answer.status is AnswerStatus.DRAFT:
             answer.status = AnswerStatus.NONE

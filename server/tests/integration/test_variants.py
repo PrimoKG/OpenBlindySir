@@ -65,17 +65,21 @@ async def _reconnect_scenario(stack: Stack) -> None:
         await host.submit(rid, "réponse hôte")
         await other.submit(rid, "réponse 2")
         review = await table.wait_round(1, "REVIEW")
-        row = next(r for r in review["round"]["answers"] if r["player_id"] == target.player_id)
-        assert row["status"] == "LOCKED"
-        assert row["late_start_ms"] is not None
-        assert row["late_start_ms"] > 0  # the outage during playback is measured by the server
+        assert "answers" not in review["round"]
 
-        await table.score_and_publish({target.player_id: 2})
+        await table.defer_scores({target.player_id: 2})
         for bot in table.everyone:
             bot.auto_answer = True
         await host.on_round("next")
-        await table.wait_round(2, "REVIEW", timeout_s=90)
-        await table.score_and_publish({})
+        review = await table.wait_round(2, "REVIEW", timeout_s=90)
+        row = next(
+            r
+            for r in review["host"]["review_rounds"][0]["answers"]
+            if r["player_id"] == target.player_id
+        )
+        assert row["status"] == "LOCKED"
+        assert row["late_start_ms"] > 0
+        await table.defer_scores({})
         final = await table.finish()
         assert table.scores(final)[target.player_id] == 2
 
@@ -102,11 +106,11 @@ async def _bridge_scenario(stack: Stack) -> None:
 
         review = await table.wait_round(1, "REVIEW")
         assert review["audio"]["next"] is not None  # N+1 was prepared before the loss
-        await table.score_and_publish({})
+        await table.defer_scores({})
         await table.host.on_round("next")
         await table.wait_round(2, "OPEN", "REVIEW", timeout_s=60)  # round 2 uses the stored clip
         await table.wait_round(2, "REVIEW")
-        await table.score_and_publish({})
+        await table.defer_scores({})
         await table.host.on_round("next")
         waiting = await table.wait_round(3, "QUEUED", "PREPARING")
         assert "bridge_offline" in waiting["host"]["warnings"]
@@ -116,7 +120,7 @@ async def _bridge_scenario(stack: Stack) -> None:
         stack.start_bridge()
         await table.wait_round(3, "LOADING", "COUNTDOWN", "OPEN", "REVIEW", timeout_s=90)
         await table.wait_round(3, "REVIEW", timeout_s=60)
-        await table.score_and_publish({})
+        await table.defer_scores({})
         final = await table.finish()
         assert final["final_results"]["rounds_played"] == 3
     log = stack.server_log()
@@ -194,10 +198,14 @@ async def _early_end(stack: Stack, mode: str) -> None:
         await table.host.on_round("end_game", {"current_round": mode})
         if mode == "score":
             review = await table.wait_round(1, "REVIEW")
-            assert review["round"]["ending"] is True
+            assert review["phase"] == "FINAL_SCORE_REVIEW"
             assert review["audio"]["next"] is None  # prefetch stopped
-            locked = [r["player_id"] for r in review["round"]["answers"] if r["status"] == "LOCKED"]
-            await table.score_and_publish({pid: 1 for pid in locked})
+            locked = [
+                row["player_id"]
+                for row in review["host"]["review_rounds"][0]["answers"]
+                if row["status"] == "LOCKED"
+            ]
+            await table.defer_scores({pid: 1 for pid in locked})
             final = await table.finish()
             assert final["final_results"]["rounds_played"] == 1
             assert sum(table.scores(final["final_results"]).values()) == len(locked)

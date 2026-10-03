@@ -1,7 +1,7 @@
 """Rate limiting primitives (spec §12): login limits per IP, per-connection message budget,
 open connections per IP."""
 
-from collections import defaultdict, deque
+from collections import deque
 
 
 class SlidingWindowLimiter:
@@ -11,7 +11,7 @@ class SlidingWindowLimiter:
         self.limit = limit
         self.global_limit = global_limit
         self.window_ms = window_ms
-        self._per_key: dict[str, deque[int]] = defaultdict(deque)
+        self._per_key: dict[str, deque[int]] = {}
         self._global: deque[int] = deque()
 
     def _trim(self, events: deque[int], now_ms: int) -> None:
@@ -20,13 +20,17 @@ class SlidingWindowLimiter:
 
     def blocked(self, key: str, now_ms: int) -> bool:
         """True once ``limit`` events of this key (or the global cap) fall in the window."""
-        events = self._per_key[key]
-        self._trim(events, now_ms)
         self._trim(self._global, now_ms)
-        return len(events) >= self.limit or len(self._global) >= self.global_limit
+        for address, events in list(self._per_key.items()):
+            self._trim(events, now_ms)
+            if not events:
+                del self._per_key[address]
+        return (
+            len(self._per_key.get(key, ())) >= self.limit or len(self._global) >= self.global_limit
+        )
 
     def record(self, key: str, now_ms: int) -> None:
-        self._per_key[key].append(now_ms)
+        self._per_key.setdefault(key, deque()).append(now_ms)
         self._global.append(now_ms)
 
     def allow(self, key: str, now_ms: int) -> bool:
@@ -61,14 +65,18 @@ class ConnectionCounter:
 
     def __init__(self, limit: int) -> None:
         self.limit = limit
-        self._open: dict[str, int] = defaultdict(int)
+        self._open: dict[str, int] = {}
 
     def acquire(self, ip: str) -> bool:
-        if self._open[ip] >= self.limit:
+        count = self._open.get(ip, 0)
+        if count >= self.limit:
             return False
-        self._open[ip] += 1
+        self._open[ip] = count + 1
         return True
 
     def release(self, ip: str) -> None:
-        if self._open[ip] > 0:
-            self._open[ip] -= 1
+        count = self._open.get(ip, 0)
+        if count > 1:
+            self._open[ip] = count - 1
+        else:
+            self._open.pop(ip, None)

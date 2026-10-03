@@ -33,6 +33,9 @@ class ErrorCode(StrEnum):
     NOT_FOUND = "not_found"
     PAYLOAD_TOO_LARGE = "payload_too_large"
     UPLOAD_REJECTED = "upload_rejected"
+    JOIN_LOCKED = "join_locked"
+    RECOVERY_INVALID = "recovery_invalid"
+    REVIEW_UNAVAILABLE = "review_unavailable"
 
 
 class CloseCode(IntEnum):

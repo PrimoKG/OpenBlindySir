@@ -23,7 +23,7 @@ def test_restart_preserves_host_cookie_and_configuration(tmp_path: Path) -> None
         harness.elevate(token)
         epoch = harness.runtime.engine.state.epoch
         with harness.player_ws(token) as ws:
-            ws.send_json({"t": "HELLO", "protocol": 2, "client_version": "example"})
+            ws.send_json({"t": "HELLO", "protocol": 5, "client_version": "example"})
             ws.receive_json()
             ws.send_json(
                 {
@@ -58,7 +58,7 @@ def test_unwritable_snapshot_does_not_abort_game_and_warns_host(
         player_id, token = harness.join("ExampleHost")
         harness.elevate(token)
 
-        def fail(*_: object) -> None:
+        def fail(*_: object, **__: object) -> None:
             raise OSError("example disk full")
 
         monkeypatch.setattr(harness.runtime.snapshots, "save", fail)

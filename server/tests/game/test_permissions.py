@@ -20,15 +20,14 @@ def snapshot(sc: Scenario) -> str:
 @pytest.mark.parametrize("cmd", HOST_COMMAND_NAMES)
 @pytest.mark.parametrize("phase", ["LOBBY", "OPEN", "REVIEW", "FINAL_SCORE_REVIEW"])
 def test_every_host_command_refused_to_a_player(cmd: str, phase: str) -> None:
-    sc = Scenario(rounds=1)
+    sc = Scenario(rounds=2)
     if phase == "OPEN":
         sc.to_open()
     elif phase == "REVIEW":
         sc.to_review()
     elif phase == "FINAL_SCORE_REVIEW":
         sc.to_review()
-        sc.publish()
-        sc.on_round("to_final_review")
+        sc.on_phase("end_game", {"current_round": "score"})
     fields = copy.deepcopy(HOST_COMMAND_EXAMPLES[cmd])
     if "round_id" in fields and phase in ("OPEN", "REVIEW"):
         fields["round_id"] = sc.current().id
@@ -69,10 +68,11 @@ def test_allowed_commands_follow_the_state() -> None:
     assert {"replay", "stop", "add_time", "close", "skip", "end_game"} <= allowed
     assert "publish" not in allowed
     sc.on_round("close")
-    assert {"score_draft", "publish"} <= set(permissions.allowed(sc.s, host))
-    sc.publish()
+    assert "score_draft" not in permissions.allowed(sc.s, host)
+    assert "publish" not in permissions.allowed(sc.s, host)
     allowed = set(permissions.allowed(sc.s, host))
-    assert {"next", "undo_publish"} <= allowed
+    assert "next" in allowed
+    assert "undo_publish" not in allowed
     assert "to_final_review" not in allowed
     assert r.number == 1
 

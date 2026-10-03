@@ -11,6 +11,8 @@ View = dict[str, Any]
 class Table:
     def __init__(self, base_url: str, players: int, password: str, host_password: str) -> None:
         self.host_password = host_password
+        self.pending_scores: dict[int, dict[str, int]] = {}
+        self.last_round = 1
         self.host = HostBot(base_url, "Hote", password)
         self.bots = [Bot(base_url, f"Bot{i}", password) for i in range(1, players + 1)]
         self.everyone: list[Bot] = [self.host, *self.bots]
@@ -55,36 +57,50 @@ class Table:
         return await self.host.wait_for(predicate, timeout_s=timeout_s)
 
     async def wait_round(self, number: int, *states: str, timeout_s: float = 60) -> View:
+        self.last_round = number
         return await self.wait_host(
             lambda v: (
-                v.get("phase") == "IN_GAME"
-                and (v.get("round") or {}).get("number") == number
-                and round_state(v) in states
+                (
+                    v.get("phase") == "IN_GAME"
+                    and (v.get("round") or {}).get("number") == number
+                    and round_state(v) in states
+                )
+                or (
+                    "REVIEW" in states
+                    and v.get("phase") == "FINAL_SCORE_REVIEW"
+                    and any(r["number"] == number for r in v["host"]["review_rounds"])
+                )
             ),
             timeout_s,
         )
 
-    async def score_and_publish(self, points: dict[str, int]) -> None:
-        for pid, pts in points.items():
-            await self.host.on_round("score_draft", {"player_id": pid, "points": pts})
-        if points:
-            await self.wait_host(
-                lambda v: all(
-                    any(
-                        r["player_id"] == pid and r["points_draft"] == pts
-                        for r in v["round"]["answers"]
-                    )
-                    for pid, pts in points.items()
-                )
-            )
-        await self.host.on_round("publish", {"confirm_unreviewed": True})
-        await self.wait_host(lambda v: round_state(v) == "REVEALED")
+    async def defer_scores(self, points: dict[str, int]) -> None:
+        """Record the human's test decision locally; submit it only in global review."""
+        self.pending_scores[self.last_round] = points
 
     async def finish(self, final: dict[str, int] | None = None) -> View:
         """From a REVEALED last round (or after an early end): final review then results."""
         if self.host.view["phase"] == "IN_GAME":
-            await self.host.on_round("to_final_review")
+            await self.host.on_phase("end_game", {"current_round": "score"})
         await self.wait_host(lambda v: v["phase"] == "FINAL_SCORE_REVIEW")
+        for r in self.host.view["host"]["review_rounds"]:
+            for pid, points in self.pending_scores.get(r["number"], {}).items():
+                await self.host.host(
+                    "score_draft", {"player_id": pid, "points": points}, round_id=r["round_id"]
+                )
+        if self.pending_scores:
+            await self.wait_host(
+                lambda v: all(
+                    any(
+                        row["player_id"] == pid
+                        and row["points_draft"] == points
+                        and row["reviewed"]
+                        for row in r["answers"]
+                    )
+                    for r in v["host"]["review_rounds"]
+                    for pid, points in self.pending_scores.get(r["number"], {}).items()
+                )
+            )
         for pid, delta in (final or {}).items():
             await self.host.on_phase("final_set", {"player_id": pid, "delta": delta})
         if final:
@@ -97,7 +113,7 @@ class Table:
                     for pid, d in final.items()
                 )
             )
-        await self.host.on_phase("final_validate")
+        await self.host.on_phase("final_validate", {"confirm_unreviewed": True})
         return await self.bots[0].wait_for(lambda v: v["phase"] == "FINAL_RESULTS")
 
     async def diagnostics(self) -> dict[str, Any]:

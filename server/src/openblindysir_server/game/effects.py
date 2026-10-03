@@ -55,6 +55,10 @@ class RequestPrepare:
     duration_s: float
     normalize_audio: bool = True
     avoid_silence: bool = True
+    exact_start: float | None = None
+    review_mode: Literal["excerpt", "full"] | None = None
+    replay_sha256: str | None = None
+    expected_source_revision: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

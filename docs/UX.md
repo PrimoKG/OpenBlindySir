@@ -1,97 +1,119 @@
-# Parcours UX/UI — retour vidéo du 2026-10-03
+# Parcours UX/UI — V0.5, 2026-10-03
 
-Cette passe applique le GO d'implémentation après l'analyse des deux parties
-enregistrées. Elle modifie le web, le serveur, le Bridge et le protocole, qui passe
-à la version 2. Les décisions sont consignées dans
-[ADR 0010](adr/0010-game-night-ux.md) et la restauration dans
-[ADR 0009](adr/0009-session-snapshots.md).
+Protocole 4. Décisions : [ADR 0011](adr/0011-global-review-and-private-replay.md),
+[ADR 0012](adr/0012-dynamic-sources-and-metadata.md),
+[ADR 0013](adr/0013-bridge-distribution.md) et
+[ADR 0014](adr/0014-manual-mc-selection.md). Les règles et permissions
+viennent du serveur ; le navigateur affiche les actions permises.
 
-## Préparer une partie
+## Préparer et gérer les sources
 
-L'hôte voit les dossiers, les morceaux disponibles et ceux encore inédits pendant
-la soirée. Sélectionner un dossier parent et son enfant ne compte pas deux fois
-les mêmes morceaux. Une sélection insuffisante propose de réduire les manches
-ou d'autoriser les répétitions. « Enregistrer et lancer » applique les réglages
-et lance la partie dans une seule commande serveur ; un échec conserve la
-configuration précédente.
+La sélection de dossiers affiche total/disponible/neuf et élimine le double
+comptage parent/enfant. Recherche d'arbre au clavier, presets locaux, barème/consigne,
+équipes/spectateurs, QR privé sans mot de passe, réglages et lancement atomique.
+La bibliothèque repliable distingue montage accessible, dossiers scannés et
+sélection de partie. Ajout/retrait/rescan par Bridge, retours de demande puis
+comptes reçus, filtre Bridge/dossier/type/disponibilité, recherche, pagination,
+états vide/chargement/erreur et diagnostics d'import par ligne.
 
-La consigne, la réponse attendue (titre, artiste, les deux ou personnalisée), les
-points associés et le traitement des brouillons sont visibles par tous. Les
-points restent attribués manuellement. Les sélections favorites sont enregistrées
-dans le navigateur de l'hôte. Le QR code contient seulement l'URL ; le mot de
-passe de la partie se partage séparément. En lobby, l'hôte peut affecter une
-équipe ou le rôle spectateur. Le score d'équipe additionne les scores individuels.
+Le scan ne peut pas étendre la racine autorisée ; le message d'un dossier
+inaccessible explique le montage et la recréation du seul Bridge. L'hôte joueur
+perd l'accès aux noms de morceaux à venir pendant IN_GAME. Le MC voit les réponses
+en direct et ne participe pas au score.
 
-## Répondre et animer
+## Choisir une manche en animateur
 
-Le bandeau de phase est compact. Le temps de réponse est affiché séparément de la
-lecture : la fin de l'extrait ne ferme pas nécessairement les réponses. À cinq
-secondes de l'échéance, le repère devient plus visible. Le focus arrive sur la
-réponse sur ordinateur ; le clavier du téléphone ne s'ouvre pas automatiquement.
-La pause suspend le son et le délai, bloque la saisie à la frontière synchronisée
-et exclut sa durée du temps de réponse. La reprise poursuit le même extrait.
+Dans la bibliothèque, choisir un numéro de manche puis rechercher/filtrer les
+pistes. Chaque résultat montre sa source, son dossier, ses métadonnées disponibles,
+son format et sa durée mesurée, ainsi que les états joué/réservé/indisponible.
+Un choix manuel contourne explicitement l'alternance aléatoire des dossiers ;
+les règles de répétition et de sources restent appliquées.
 
-Le rôle suit les permissions du serveur : passage d'hôte joueur à animateur
-pendant la partie lorsque les réponses sont fermées ; retour joueur à la
-prochaine partie. Un spectateur écoute et consulte les résultats, sans réponse,
-score ni effet sur les joueurs attendus au chargement.
+Le choix attend l'accusé serveur avec une échéance fixe de dix secondes.
+Pendant cette attente, les commandes de lancement restent désactivées. La liste
+numérotée affiche ensuite « Choix enregistré » ; une manche manuelle prête attend
+« Lancer maintenant ». L'extrait demandé verrouille le choix, y compris en
+préchargement. Un échec conserve le choix et propose remplacement, retour au
+hasard, passage ou arrêt. Aucun remplacement n'est automatique.
 
-## Noter et publier
+La liste et la recherche réutilisent composants, labels et focus visibles sur
+mobile. Les contrôles sont testés au clavier à 320 px, avec confirmation,
+verrouillage, expiration de l'accusé et traduction anglaise. Ces informations
+restent dans la vue MC ; joueurs et hôte joueur ne les reçoivent pas en jeu.
 
-En REVIEW, l'hôte dispose du titre et de l'artiste du morceau courant, ainsi que
-d'un éditeur pour corriger les métadonnées. Cette information reste privée avant
-la publication. Le joueur voit seulement sa propre réponse ; l'animateur peut
-voir les métadonnées selon son rôle, sans réponses en direct pendant OPEN.
+## Configurer et diagnostiquer le Bridge
 
-Les points en cours de saisie restent locaux. Entrée ou sortie du champ envoie
-la modification ; la publication attend l'accusé serveur. Une valeur nulle
-explicitement vérifiée se distingue d'une ligne encore à vérifier. Le compteur
-des réponses vérifiées, le score publié et le total provisoire rendent la revue
-lisible. Publier avec des lignes non vérifiées demande une confirmation. Les
-brouillons capturés suivent la règle annoncée ; aucune notation automatique ni
-bonus de vitesse n'est ajouté.
+Une seule entrée CLI pour uvx et les archives. L'assistant français demande serveur,
+racine musicale, secret masqué et nom, puis résume les champs sans révéler le secret.
+Il demande confirmation pour sauvegarder, puis annonce et demande les contrôles
+FFmpeg, le scan des noms et l'enregistrement hors partie. Aucun extrait n'est créé.
+Une configuration existante reçoit une sauvegarde privée avant remplacement.
 
-## Terminer et retrouver la soirée
+Aide/version/check-config ne créent rien ; doctor local ne scanne pas. Le test de
+connexion explicite se ferme ensuite et indique de lancer run. Les erreurs donnent
+un code stable, une action et le guide. Les sorties guidées s'adaptent aux terminaux
+étroits ; un terminal sans saisie masquée refuse l'assistant. Les diagnostics JSON
+copiables excluent adresse, UUID, chemins, noms de fichiers et secrets.
 
-Les résultats détaillent chaque manche : titre, artiste, réponse, statut, temps,
-ordre, points et corrections. Les exports JSON et CSV utilisent ces résultats
-publiés. Le CSV protège les cellules interprétables comme formules. L'hôte
-retrouve les 50 dernières parties terminées en lobby ou après les résultats.
+## Jouer et terminer
 
-Une nouvelle partie remet les scores à zéro en gardant les morceaux entendus
-pendant la soirée. Une réserve épuisée affiche des choix de récupération.
-Les snapshots privés conservent joueurs, réponses, réglages et scores après
-redémarrage. Une manche OPEN interrompue passe en revue avec un avertissement,
-les brouillons étant capturés. L'audio est régénéré ; une erreur d'écriture de
-snapshot avertit l'hôte sans bloquer le jeu.
+Pause/reprise synchronisées, distinction fin de son/deadline, validation définitive
+et propre réponse restaurée. Chaque fermeture garde les réponses sans notation ni
+reveal. L'arrêt confirmé reste visible dans toutes les phases, préserve les manches
+entendues et mène à la revue globale ; aucun point n'est publié automatiquement.
+Les commandes obsolètes de publication par manche sont refusées.
 
-## Affichage et audio
+## Revue globale
 
-La palette papier, encre sombre et terre cuite reste commune à tous les écrans.
-Les tableaux deviennent des lignes adaptées au mobile et les commandes utilisent
-des cibles d'au moins 44 × 44 px. Le panneau hôte suit le défilement de la page.
-Les options avancées et diagnostics sont repliables. Les erreurs de connexion,
-bibliothèque et audio indiquent une action de récupération. Les dictionnaires
-français et anglais couvrent les nouveaux parcours.
+Navigation par manche avec titre, numéro et progression de vérification, recherche,
+précédent/suivant ; colonne dédiée sur ordinateur et liste compacte sur mobile.
+Le morceau garde son contexte, les réponses leurs statuts, réception serveur,
+temps/rang validés et retard audio. Les absences restent explicites. Une manche
+entendue annulée est conservée avec points désactivés.
 
-Le Bridge peut normaliser les extraits et chercher une fenêtre sans silence.
-Ces opérations utilisent des filtres fixes et des limites de temps. Les fichiers
-écartés au cours de la préparation apparaissent dans le diagnostic privé de
-la bibliothèque. Le scan initial n'analyse pas l'audio de tous les fichiers.
+Boutons rapides et entier signé ±1000, zéro explicite, sauvegarde après Entrée ou
+sortie du champ. La navigation/publication attend le serveur ; timeout et échec
+affichés avec possibilité de nouvelle saisie. Les totaux provisoires par joueur
+et équipe et corrections finales se mettent à jour avec les vues autoritaires.
+La confirmation finale récapitule totaux et lignes non vérifiées. Les résultats
+figent les notes et alimentent récapitulatif, historique et CSV/JSON.
 
-## Validation et limites
+Le lecteur privé charge seulement à la demande ; pause, progression, durée,
+navigation, volume et erreurs accessibles. Extrait exact vérifié par hash,
+mode complet explicite avec retour à l'extrait, segments ≤30 s. Aucun message
+de lecture aux joueurs ; changer de manche annule le transfert et libère le Blob.
 
-Les tests couvrent 320, 390 et 1280 px, les textes longs, le focus, les cibles
-tactiles, les confirmations, les permissions et l'absence de débordement.
-Les couleurs textuelles principales satisfont le contrôle numérique 4,5:1 ;
-ce contrôle ne constitue pas un audit WCAG complet. Les captures de test sont
-ignorées par Git et utilisent seulement des données synthétiques.
+## Préférences et récupération
 
-Chromium exécute aussi trois parcours avec serveur et Bridge réels. Les tests
-WebKit d'interface passent ; ce build Windows ne fournit pas `AudioContext`,
-donc quatre scénarios nécessitant Web Audio sont explicitement ignorés.
-Cela ne valide pas Safari sur iPhone, l'AAC de production, les sorties physiques
-ni la synchronisation acoustique. Voir les résultats exacts dans
-[DEVLOG](DEVLOG.md) et les essais manuels dans [testing](testing.md).
+Français/English et latence manuelle ±500 ms persistées localement. Latence positive
+avance la prochaine lecture, n'affecte pas celle en cours ni le timing officiel.
+Code de récupération privé à six caractères, avec mot de passe, usage unique,
+sans élévation hôte. Verrou d'inscription distinct de la reconnexion.
+Snapshots : notes et bibliothèque retrouvées ; interruption signalée, audio régénéré.
 
-G1 et G2 restent `PENDING USER MEASUREMENT`.
+## Accessibilité et limites
+
+Boutons natifs, labels, focus visible, dialogues de confirmation, statuts textuels
+et régions de notification ; styles communs papier/encre/terre cuite. Les tableaux
+s'adaptent au mobile, cibles 44 px minimum, navigation utilisable au clavier.
+Tests sur 320, 390 et 1280 px, textes longs, confirmations, anti-spoiler et erreurs.
+Voir [DEVLOG](DEVLOG.md) pour les checks réellement exécutés. Les navigateurs
+headless ne valident ni une sortie sonore physique ni la synchro acoustique ;
+WebKit Windows ne remplace pas un iPhone. Aucun audit WCAG complet revendiqué.
+
+## Parcours et accessibilité V0.5
+
+Historique privé chargé à la demande : liste datée, archive, export, suppression et
+purge confirmées, états chargement/vide/erreur/sauvegarde indisponible. Bridges :
+connexion/capacités/erreurs par UUID, consignes hors ligne et révocation ciblée.
+Les noms de sources et archives restent masqués à l'hôte joueur pendant IN_GAME.
+Le diagnostic contient des informations privées : avertir avant toute copie publique.
+
+Liens d'évitement vers la scène et commandes hôte, annonces discrètes de phase,
+focus après transition seulement si le contrôle actif disparaît, libellés explicites
+du volume et de la position audio. Confirmations : focus initial sur Annuler,
+Échap annule, retour au déclencheur connecté. Focus visible, retours à la ligne,
+contrastes existants conservés, mouvements réduits et boutons adaptés au tactile.
+Tests navigateur : clavier/Échap, focus, rôle/nom/état, 320 px et texte à 200 %.
+Recette manuelle NVDA/VoiceOver, zoom navigateur et appareils physiques à terminer ;
+ne pas présenter les contrôles automatisés comme une certification WCAG.

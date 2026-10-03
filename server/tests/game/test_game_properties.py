@@ -6,6 +6,7 @@ next clip only in REVIEW/REVEALED (I14), anti-leak canaries (I15), public player
 (I16), progress bounds (I17), unchanged state on rejection (I18), reveal iff REVEALED (I21).
 """
 
+import copy
 import json
 from typing import Any
 
@@ -22,6 +23,7 @@ from openblindysir_server.game.state import TERMINAL_ROUND_STATES, current_round
 
 ALLOWED_PHASE_STEPS = {
     (GamePhase.LOBBY, GamePhase.IN_GAME),
+    (GamePhase.LOBBY, GamePhase.FINAL_SCORE_REVIEW),
     (GamePhase.IN_GAME, GamePhase.FINAL_SCORE_REVIEW),
     (GamePhase.FINAL_SCORE_REVIEW, GamePhase.FINAL_RESULTS),
     (GamePhase.FINAL_RESULTS, GamePhase.LOBBY),
@@ -33,6 +35,8 @@ class GameMachine(RuleBasedStateMachine):
         super().__init__()
         self.sc = Scenario(rounds=3, tracks=6)
         self.events_before: tuple[Any, ...] = ()
+        self.events_game_id = self.sc.s.game.game_id
+        self.archives_before: dict[str, dict[str, Any]] = {}
         self.starts: dict[str, int] = {}
 
     # --- helpers --------------------------------------------------------------------------
@@ -173,7 +177,7 @@ class GameMachine(RuleBasedStateMachine):
             if phase is GamePhase.LOBBY:
                 sc.on_phase("start_game")
             elif phase is GamePhase.FINAL_SCORE_REVIEW:
-                sc.on_phase("final_validate")
+                sc.on_phase("final_validate", {"confirm_unreviewed": True})
             elif phase is GamePhase.FINAL_RESULTS:
                 sc.on_phase("new_game")
             elif r is None:
@@ -186,11 +190,7 @@ class GameMachine(RuleBasedStateMachine):
             elif r.state is RoundState.OPEN:
                 sc.on_round("close")
             elif r.state is RoundState.REVIEW:
-                pid = data.draw(st.sampled_from(self.pids()))
-                sc.on_round(
-                    "score_draft", {"player_id": pid, "points": data.draw(st.integers(-2, 3))}
-                )
-                sc.on_round("publish", {"confirm_unreviewed": True})
+                sc.on_round("next")
             elif r.state is RoundState.REVEALED:
                 if data.draw(st.booleans()) and sc.on_round("next").error is None:
                     return
@@ -201,7 +201,7 @@ class GameMachine(RuleBasedStateMachine):
     @rule()
     def join_late(self) -> None:
         if len(self.pids()) < 8:
-            self.sc.join(f"Late{len(self.sc.s.players)}")
+            self.sc.d(c.Join(f"Late{len(self.sc.s.players)}"))
 
     # --- invariants -----------------------------------------------------------------------
 
@@ -212,11 +212,17 @@ class GameMachine(RuleBasedStateMachine):
     def journal_projection(self) -> None:
         journal = self.sc.s.journal
         events = journal.events()
+        game_id = self.sc.s.game.game_id
+        if game_id != self.events_game_id:
+            # NewGame releases the previous journal after freezing its archive.
+            assert any(row["game_id"] == self.events_game_id for row in self.sc.s.archives)
+            self.events_before = ()
+            self.events_game_id = game_id
         assert events[: len(self.events_before)] == self.events_before
         assert [ev.id for ev in events] == list(range(1, len(events) + 1))
+        assert all(ev.game_id == game_id for ev in events)
         self.events_before = events
         revoked = journal.revoked_ids()
-        game_id = self.sc.s.game.game_id
         for pid in self.sc.s.players:
             naive = sum(
                 ev.delta
@@ -227,6 +233,12 @@ class GameMachine(RuleBasedStateMachine):
         for ev in events:
             assert abs(ev.delta) <= 1000
             assert (ev.delta == 0) == (ev.kind.value == "revoke")
+
+    @invariant()
+    def retained_archives_are_immutable(self) -> None:
+        for record in self.sc.s.archives:
+            game_id = record["game_id"]
+            assert record == self.archives_before.setdefault(game_id, copy.deepcopy(record))
 
     @invariant()
     def single_live_round_and_orders(self) -> None:
@@ -249,7 +261,8 @@ class GameMachine(RuleBasedStateMachine):
             if r.official_start_at is not None:
                 assert self.starts.setdefault(r.id, r.official_start_at) == r.official_start_at
                 assert r.plays[0].start_at == r.official_start_at
-            assert (r.reveal is not None) == (r.state is RoundState.REVEALED)
+            if r.state in {RoundState.REVIEW, RoundState.REVEALED}:
+                assert r.reveal is not None
 
     @invariant()
     def views_never_leak(self) -> None:
@@ -257,8 +270,12 @@ class GameMachine(RuleBasedStateMachine):
         r = current_round(s.game)
         for pid in self.pids():
             view = self.sc.view(pid)
-            text = view.model_dump_json()
-            data = json.loads(text)
+            data = view.model_dump(mode="json")
+            if "host" in data:
+                data["host"]["history"] = []  # already published previous games
+            if view.kind == "host_mc":
+                data["mc"].pop("manual_choices", None)  # the sole MC-only track reference scope
+            text = json.dumps(data)
             assert '"relpath"' not in text
             assert '"track_id"' not in text
             assert "draft_last_changed_at" not in text
@@ -281,7 +298,7 @@ class GameMachine(RuleBasedStateMachine):
             if (
                 view.phase is not GamePhase.FINAL_RESULTS
                 and not revealed
-                and not (view.kind == "host_player" and (r is None or r.state is RoundState.REVIEW))
+                and not (view.kind == "host_player" and view.phase is GamePhase.FINAL_SCORE_REVIEW)
             ):
                 for canary in (CANARY_TITLE, CANARY_ARTIST, CANARY_FOLDER):
                     assert canary not in text, (view.kind, r.state if r else None)

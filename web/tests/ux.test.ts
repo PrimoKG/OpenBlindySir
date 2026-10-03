@@ -11,6 +11,8 @@ describe("library preflight", () => {
         bridge_id: "example",
         name: "Example",
         online: true,
+        scanned_folders: [""],
+        source_error: null,
         track_count: 10,
         root: {
           name: "Example",
@@ -64,6 +66,7 @@ describe("library preflight", () => {
       captured_policy: "manual",
       normalize_audio: true,
       avoid_silence: true,
+      balance_folders: false,
     };
     expect(settingsKey(settings)).toBe(
       settingsKey({ ...settings, sources: [...settings.sources].reverse() }),
@@ -74,6 +77,10 @@ describe("library preflight", () => {
 describe("recap export", () => {
   it("retains manual corrections and escapes spreadsheet formulas and quoted answers", () => {
     const record: GameRecord = {
+      version: 2,
+      started_at: null,
+      settings: null,
+      sources: [],
       game_id: "g_example",
       finished_at: 42,
       teams: [],
@@ -111,9 +118,14 @@ describe("recap export", () => {
                 order: 1,
                 near_tie: false,
                 points: 1,
+                received_at_wall_ms: 42,
+                included: true,
                 track: {
                   title: "Example title",
                   artist: "Example artist",
+                  featuring: "Guest",
+                  album: "Album",
+                  year: 2026,
                   display_name: "Example",
                   folder: "Example",
                 },

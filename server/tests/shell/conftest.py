@@ -107,7 +107,7 @@ def bridge_hello(catalog_hash: str, track_count: int) -> str:
             "bridge_id": BRIDGE_ID,
             "name": "PC",
             "version": "0.1.0",
-            "protocol": 2,
+            "protocol": 5,
             "catalog_hash": catalog_hash,
             "track_count": track_count,
             "formats": ["aac"],

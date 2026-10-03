@@ -1,0 +1,135 @@
+name: Validate application
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv sync --locked
+      - name: Initialize with Docker only (PowerShell launcher)
+        shell: pwsh
+        run: ./tools/docker-host.ps1 init -Address 127.0.0.1:8443 -Demo
+      - name: Start all services without host FFmpeg or Node
+        shell: pwsh
+        run: ./tools/docker-host.ps1 start -NoBrowser
+      - run: uv run python tools/docker_smoke.py
+      - name: Inspect isolation and codecs
+        run: |
+          docker compose --env-file .local/docker/hosting.env exec -T app python -c "import os, shutil; assert os.getuid() == 10001; assert shutil.which('ffmpeg') is None"
+          docker compose --env-file .local/docker/hosting.env exec -T bridge python /opt/tools/docker_bridge.py check-ffmpeg
+          docker inspect "$(docker compose --env-file .local/docker/hosting.env ps -q bridge)" | python3 -c "import json,sys; assert next(m for m in json.load(sys.stdin)[0]['Mounts'] if m['Destination']=='/music')['RW'] is False"
+          docker compose --env-file .local/docker/hosting.env exec -T caddy sh -c 'cat > /tmp/Caddyfile.public' < deploy/Caddyfile.docker.public
+          docker compose --env-file .local/docker/hosting.env exec -T -e TLS_HOST=blind.example.com caddy caddy validate --config /tmp/Caddyfile.public --adapter caddyfile
+      - name: Container diagnostics on failure
+        if: failure()
+        run: docker compose --env-file .local/docker/hosting.env logs --tail 80
+      - name: Stop using Unix launcher
+        if: always()
+        run: sh tools/docker-host.sh stop
+
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: python3 tools/check_repo_hygiene.py
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - run: uv run pytest
+        env:
+          HYPOTHESIS_PROFILE: ci
+
+  protocol-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv sync --locked
+      - run: uv run python tools/gen_ts_types.py --check
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm --prefix web ci
+      - run: npm --prefix web run lint
+      - run: npm --prefix web run typecheck
+      - run: npm --prefix web run test
+      - run: npm --prefix web run build
+
+  bridge-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: uv sync --locked
+      - run: uv run pytest bridge/tests
+
+  bridge-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: choco install ffmpeg -y --no-progress
+      - run: uv sync --locked
+      - run: uv run pytest bridge/tests
+      - run: uv run pytest server/tests/shell/test_docker_context.py
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: uv sync --locked
+      - run: uv run pytest server/tests/integration -m integration
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: uv sync --locked
+      - run: npm --prefix web ci
+      - run: npm --prefix web run build
+      - run: npx playwright install --with-deps chromium webkit
+        working-directory: web
+      - name: Browser, keyboard, history and compatibility regression checks
+        run: npx playwright test --project=chromium --project=webkit
+        working-directory: web
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-browsers
+          path: |
+            web/playwright-report
+            web/test-results
+          retention-days: 7

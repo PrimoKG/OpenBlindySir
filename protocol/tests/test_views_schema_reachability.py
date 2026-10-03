@@ -47,7 +47,7 @@ def view_defs() -> set[str]:
 
 
 def test_mc_types_reachable_only_from_host_mc_view() -> None:
-    mc_types = {"McTrackInfo", "McPanel", "RoundMcOpen", "McOpenRow"}
+    mc_types = {"McTrackInfo", "McPanel", "RoundMcOpen", "McOpenRow", "ManualTrackChoice"}
     assert mc_types <= reachable("HostMcView")
     assert not mc_types & reachable("PlayerView")
     assert not mc_types & reachable("HostPlayerModeView")
@@ -57,7 +57,7 @@ def test_mc_types_reachable_only_from_host_mc_view() -> None:
 def test_track_metadata_only_under_reveal_private_review_or_recap(root: str) -> None:
     assert "RevealTrack" in reachable(root)
     without_reveal = reachable(
-        root, avoid=frozenset({"RoundRevealed", "RoundHostReview", "HistoryEntry"})
+        root, avoid=frozenset({"RoundRevealed", "ReviewRound", "HistoryEntry"})
     )
     assert "RevealTrack" not in without_reveal
     assert "RevealRow" not in without_reveal
@@ -87,6 +87,8 @@ def test_history_entry_only_through_host_panel_or_final_results() -> None:
 )
 def test_forbidden_property_names_absent(name: str) -> None:
     for def_name in view_defs():
+        if name == "track_id" and def_name == "ManualTrackChoice":
+            continue  # MC-only reference, unreachable from either player schema.
         assert name not in DEFS[def_name].get("properties", {}), def_name
 
 

@@ -4,6 +4,7 @@ from openblindysir_protocol.enums import (
     AudioErrorCode,
     AudioState,
     ConnectionState,
+    GamePhase,
     HostMode,
     Role,
     RoundState,
@@ -35,6 +36,8 @@ from openblindysir_server.game.state import (
 )
 
 LISTENING_STATES = frozenset({RoundState.COUNTDOWN, RoundState.OPEN})
+# Removed identities remain necessary for current scores/answers until the next game.
+MAX_SESSION_IDENTITIES = 1000
 
 
 def get_active(s: SessionState, player_id: str) -> Player:
@@ -56,8 +59,10 @@ def _check_nickname(s: SessionState, raw: str, *, exclude: str | None = None) ->
 
 
 def handle_join(s: SessionState, cmd: c.Join, at: Instant, fx: EffectSink) -> str:
+    require(not s.joins_locked, ErrorCode.JOIN_LOCKED)
     nickname = _check_nickname(s, cmd.nickname)
     require(len(active_players(s)) < s.config.max_players, ErrorCode.GAME_FULL)
+    require(len(s.players) < MAX_SESSION_IDENTITIES, ErrorCode.GAME_FULL)
     s.join_seq += 1
     p = Player(
         id=s.ids.player_id(),
@@ -230,6 +235,9 @@ def h_set_mode(
         return
     require(rule_ok("set_mode", s, issuer), ErrorCode.INVALID_STATE)
     issuer.host_mode = mode
+    if mode is HostMode.PLAYER and s.game.phase is GamePhase.LOBBY and s.game.manual_tracks:
+        s.game.manual_tracks.clear()
+        s.game.selection_revision += 1
     s.touched = True
     fx.log("host_mode_changed", player_id=issuer.id, mode=mode.value)
 

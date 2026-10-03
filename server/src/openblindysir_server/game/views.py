@@ -22,8 +22,10 @@ from openblindysir_protocol.settings import GameSettings, ServerLimits, SourceVi
 from openblindysir_protocol.version import PROTOCOL_VERSION
 from openblindysir_protocol.views import (
     AdjustmentEntry,
+    ArchiveSource,
     AudioRef,
     AudioSlots,
+    BridgeDetail,
     BridgeStatus,
     FinalAdjustmentShown,
     FinalResults,
@@ -48,6 +50,7 @@ from openblindysir_protocol.views import (
     ReadyCheck,
     RevealRow,
     RevealTrack,
+    ReviewRound,
     ReviewRow,
     RoundCountdown,
     RoundHostReview,
@@ -62,9 +65,9 @@ from openblindysir_protocol.views import (
     ViewPlayer,
 )
 from openblindysir_server import __version__
-from openblindysir_server.game import assets, permissions, rounds, selection
+from openblindysir_server.game import assets, manual, permissions, rounds, selection
 from openblindysir_server.game.readiness import expected_ready, ready_ids
-from openblindysir_server.game.standings import standings
+from openblindysir_server.game.standings import standings, standings_player_ids
 from openblindysir_server.game.state import (
     IN_FLIGHT_ASSET_STATES,
     Answer,
@@ -105,7 +108,7 @@ def view_for(s: SessionState, player_id: str) -> AnyView:
     me = _me(p)
     phase = s.game.phase
     players = _players(s, player_id)
-    ranking = standings(s)
+    ranking = standings(s) if phase is GamePhase.FINAL_RESULTS else []
     game = _game_info(s)
     audio = audio_slots(s)
     play = _play(s)
@@ -239,6 +242,10 @@ def _me(p: Player) -> Me:
 
 
 def _players(s: SessionState, viewer_id: str) -> list[ViewPlayer]:
+    present = {p.id for p in active_players(s)}
+    historical = s.game.phase is GamePhase.FINAL_RESULTS or (
+        s.game.phase is GamePhase.FINAL_SCORE_REVIEW and s.players[viewer_id].role is Role.HOST
+    )
     return [
         ViewPlayer(
             id=p.id,
@@ -249,7 +256,12 @@ def _players(s: SessionState, viewer_id: str) -> list[ViewPlayer]:
             spectator=p.spectator,
             team=p.team,
         )
-        for p in active_players(s)
+        for p in s.players.values()
+        if p.id in present
+        or (
+            historical
+            and any(p.id in r.participant_ids or p.id in r.answers for r in s.game.rounds)
+        )
     ]
 
 
@@ -402,7 +414,8 @@ def _round_open_player(s: SessionState, r: Round, p: Player) -> RoundOpen:
 
 def _row_order(s: SessionState, r: Round) -> list[str]:
     """LOCKED by order, then CAPTURED by arrival, then the others by arrival."""
-    present = [p for p in active_players(s) if is_participant(p) or p.id in r.answers]
+    ids = rounds.review_player_ids(s, r)
+    present = [s.players[pid] for pid in ids]
     locked = sorted(
         (p for p in present if _status(r, p.id) is AnswerStatus.LOCKED),
         key=lambda p: r.answers[p.id].order or 0,
@@ -439,7 +452,10 @@ def _review_rows(s: SessionState, r: Round) -> list[ReviewRow]:
                 late_start_ms=late_start_ms(r, pid),
                 points_draft=r.score_draft.get(pid, 0),
                 reviewed=pid in r.score_reviewed,
-                score_before=s.journal.score(s.game.game_id, pid),
+                score_before=_draft_score(s, pid)
+                - (r.score_draft.get(pid, 0) if r.included else 0)
+                + s.game.final_draft.get(pid, 0),
+                received_at_wall_ms=answer.received_at_wall_ms,
             )
         )
     return rows
@@ -462,14 +478,18 @@ def _host_review(s: SessionState, r: Round) -> RoundHostReview:
 def _reveal_track(r: Round) -> RevealTrack:
     info = r.reveal
     assert info is not None
-    return RevealTrack(
-        display_name=info.display_name, folder=info.folder, title=info.title, artist=info.artist
-    )
+    return _track_info(info)
 
 
 def _track_info(info: RevealInfo) -> RevealTrack:
     return RevealTrack(
-        display_name=info.display_name, folder=info.folder, title=info.title, artist=info.artist
+        display_name=info.display_name,
+        folder=info.folder,
+        title=info.title,
+        artist=info.artist,
+        featuring=info.featuring,
+        album=info.album,
+        year=info.year,
     )
 
 
@@ -480,9 +500,33 @@ def game_record(s: SessionState, finished_at: int) -> GameRecord:
     return GameRecord(
         game_id=s.game.game_id,
         finished_at=finished_at,
-        players=_players(s, ""),
+        players=[
+            ViewPlayer(
+                id=p.id,
+                nickname=p.nickname,
+                online=False,
+                is_host=p.role is Role.HOST,
+                is_me=False,
+                spectator=p.spectator,
+                team=p.team,
+            )
+            for p in s.players.values()
+            if p.id in standings_player_ids(s)
+        ],
         results=results,
         teams=team_standings(s, ranking),
+        started_at=s.game.started_wall_ms,
+        settings=_settings(s),
+        sources=[
+            ArchiveSource(bridge_id=identity, name=name)
+            for identity, name in sorted(
+                {
+                    (r.slot.track_ref.bridge_id, r.bridge_name)
+                    for r in s.game.rounds
+                    if r.official_start_at is not None and r.slot.track_ref is not None
+                }
+            )
+        ],
     )
 
 
@@ -539,7 +583,7 @@ def _round_player(
 
 def _round_host_pm(
     s: SessionState, p: Player
-) -> RoundPending | RoundCountdown | RoundOpen | RoundHostReview | RoundRevealed | None:
+) -> RoundPending | RoundCountdown | RoundOpen | RoundPlayerReview | RoundRevealed | None:
     r = current_round(s.game)
     if r is None:
         return None
@@ -550,7 +594,9 @@ def _round_host_pm(
     if r.state is RoundState.OPEN:
         return _round_open_player(s, r, p)
     if r.state is RoundState.REVIEW:
-        return _host_review(s, r)
+        return RoundPlayerReview(
+            state="REVIEW", round_id=r.id, number=r.number, my_answer=_my_answer(r, p.id)
+        )
     if r.state is RoundState.REVEALED:
         return _revealed(s, r)
     return None
@@ -558,7 +604,7 @@ def _round_host_pm(
 
 def _round_mc(
     s: SessionState,
-) -> RoundPending | RoundCountdown | RoundMcOpen | RoundHostReview | RoundRevealed | None:
+) -> RoundPending | RoundCountdown | RoundMcOpen | RoundPlayerReview | RoundRevealed | None:
     r = current_round(s.game)
     if r is None:
         return None
@@ -571,7 +617,12 @@ def _round_mc(
         assert r.deadline is not None
         validated, expected = _progress_counts(s, r)
         per_player = [
-            McOpenRow(player_id=p.id, validated=_status(r, p.id) is AnswerStatus.LOCKED)
+            McOpenRow(
+                player_id=p.id,
+                validated=_status(r, p.id) is AnswerStatus.LOCKED,
+                status=_status(r, p.id),
+                text=(_shown_answer(r, p.id).text or _shown_answer(r, p.id).draft_text or None),
+            )
             for p in active_players(s)
             if is_participant(p)
         ]
@@ -586,7 +637,12 @@ def _round_mc(
             per_player=per_player,
         )
     if r.state is RoundState.REVIEW:
-        return _host_review(s, r)
+        return RoundPlayerReview(
+            state="REVIEW",
+            round_id=r.id,
+            number=r.number,
+            my_answer=MyAnswer(status=AnswerStatus.NONE, text=None, draft_text=None),
+        )
     if r.state is RoundState.REVEALED:
         return _revealed(s, r)
     return None
@@ -612,6 +668,7 @@ def _settings(s: SessionState) -> GameSettings:
         captured_policy=settings.captured_policy,
         normalize_audio=settings.normalize_audio,
         avoid_silence=settings.avoid_silence,
+        balance_folders=settings.balance_folders,
     )
 
 
@@ -641,6 +698,27 @@ def bridge_status(s: SessionState) -> BridgeStatus:
     return BridgeStatus(
         state=info.state, name=info.name, track_count=info.track_count, jobs_in_flight=in_flight
     )
+
+
+def bridge_details(s: SessionState) -> list[BridgeDetail]:
+    return [
+        BridgeDetail(
+            bridge_id=info.bridge_id,
+            name=info.name,
+            version=info.version,
+            protocol=info.protocol,
+            state=info.state,
+            track_count=info.track_count,
+            jobs_in_flight=sum(
+                a.track_ref.bridge_id == info.bridge_id and a.state in IN_FLIGHT_ASSET_STATES
+                for a in s.assets.values()
+            ),
+            formats=list(info.formats),
+            allow_full_review=info.allow_full_review,
+            source_error=info.source_error,
+        )
+        for info in sorted(s.bridges.values(), key=lambda b: (b.name.casefold(), b.bridge_id))
+    ]
 
 
 def _late_ms(s: SessionState, p: Player) -> int | None:
@@ -686,7 +764,7 @@ def _history(s: SessionState, player_id: str) -> list[HistoryEntry]:
     game_id = s.game.game_id
     entries: list[HistoryEntry] = []
     for r in s.game.rounds:
-        if r.state is not RoundState.REVEALED:
+        if r.official_start_at is None:
             continue
         answer = _shown_answer(r, player_id)
         status = answer.status if answer.status is not AnswerStatus.DRAFT else AnswerStatus.NONE
@@ -699,8 +777,16 @@ def _history(s: SessionState, player_id: str) -> list[HistoryEntry]:
                 elapsed_ms=answer.elapsed_ms,
                 order=answer.order,
                 near_tie=answer.near_tie,
-                points=s.journal.round_points(game_id, r.id, player_id),
+                points=(
+                    s.journal.round_points(game_id, r.id, player_id)
+                    if s.game.phase is GamePhase.FINAL_RESULTS
+                    else r.score_draft.get(player_id, 0)
+                )
+                if r.included
+                else 0,
                 track=_reveal_track(r),
+                received_at_wall_ms=answer.received_at_wall_ms,
+                included=r.included,
             )
         )
     return entries
@@ -724,14 +810,52 @@ def _final_rows(s: SessionState, ranking: list[StandingRow]) -> list[FinalReview
     return [
         FinalReviewRow(
             player_id=row.player_id,
-            score_before=row.score,
+            score_before=_draft_score(s, row.player_id)
+            if s.game.phase is GamePhase.FINAL_SCORE_REVIEW
+            else row.score,
             draft_delta=draft.get(row.player_id, 0),
-            score_after=row.score + draft.get(row.player_id, 0),
+            score_after=(
+                _draft_score(s, row.player_id)
+                if s.game.phase is GamePhase.FINAL_SCORE_REVIEW
+                else row.score
+            )
+            + draft.get(row.player_id, 0),
             history=_history(s, row.player_id),
             adjustments=_adjustments(s, row.player_id),
         )
         for row in ranking
     ]
+
+
+def _draft_score(s: SessionState, pid: str) -> int:
+    return s.journal.score(s.game.game_id, pid) + sum(
+        r.score_draft.get(pid, 0) for r in s.game.rounds if r.included
+    )
+
+
+def _review_rounds(s: SessionState) -> list[ReviewRound]:
+    result = []
+    for r in s.game.rounds:
+        if r.official_start_at is None:
+            continue
+        asset = s.assets.get(r.slot.asset_id or "")
+        reason = r.cancel_reason or r.close_reason
+        result.append(
+            ReviewRound(
+                round_id=r.id,
+                number=r.number,
+                track=_track_info(rounds.build_reveal(s, r)) if r.slot.track_ref else None,
+                answers=_review_rows(s, r),
+                included=r.included,
+                state=r.state.value,
+                close_reason=reason.value if reason else None,
+                recovery_interrupted=r.recovery_interrupted,
+                excerpt_duration_ms=asset.clip_duration_ms if asset else None,
+                track_duration_ms=asset.track_duration_ms if asset else None,
+                metadata_revision=r.metadata_revision,
+            )
+        )
+    return result
 
 
 def _warnings(s: SessionState) -> list[HostWarning]:
@@ -758,22 +882,31 @@ def _host_panel(s: SessionState, p: Player, ranking: list[StandingRow]) -> HostP
     g = s.game
     r = current_round(g)
     target = undo_target(g)
+    private_sources = g.phase is not GamePhase.IN_GAME or p.host_mode is HostMode.MC
     return HostPanel(
-        settings=_settings(s),
+        settings=_settings(s)
+        if private_sources
+        else _settings(s).model_copy(update={"sources": []}),
         limits=_limits(s),
         commands=permissions.allowed(s, p),
         start_blockers=permissions.start_blockers(s) if g.phase is GamePhase.LOBBY else [],
-        bridge=bridge_status(s),
+        bridge=bridge_status(s)
+        if private_sources
+        else bridge_status(s).model_copy(update={"name": None}),
         pool=selection.pool_status(s) if g.phase in (GamePhase.LOBBY, GamePhase.IN_GAME) else None,
         players_ops=_players_ops(s),
         ready_check=_ready_check(s),
         undo_round_id=target.id if target is not None else None,
         last_play_id=r.plays[-1].play_id if r is not None and r.plays else None,
-        final_review=_final_rows(s, ranking) if g.phase is GamePhase.FINAL_SCORE_REVIEW else None,
+        final_review=_final_rows(s, standings(s))
+        if g.phase is GamePhase.FINAL_SCORE_REVIEW
+        else None,
         warnings=_warnings(s),
-        history=[GameRecord.model_validate(entry) for entry in reversed(s.archives)]
-        if g.phase in {GamePhase.LOBBY, GamePhase.FINAL_RESULTS}
-        else [],
+        history=[],
+        history_count=len(s.archives),
+        bridges=bridge_details(s) if private_sources else [],
+        review_rounds=_review_rounds(s) if g.phase is GamePhase.FINAL_SCORE_REVIEW else [],
+        joins_locked=s.joins_locked,
     )
 
 
@@ -810,4 +943,9 @@ def _mc_panel(s: SessionState) -> McPanel:
     upcoming.extend(
         info for ref in heads if (info := _mc_track_info(s, Slot(track_ref=ref))) is not None
     )
-    return McPanel(current_track=current, upcoming=upcoming)
+    return McPanel(
+        current_track=current,
+        upcoming=upcoming,
+        manual_choices=manual.choices(s) if g.phase in {GamePhase.LOBBY, GamePhase.IN_GAME} else [],
+        selection_revision=g.selection_revision,
+    )

@@ -31,7 +31,9 @@ from openblindysir_server.game.effects import Play
 from openblindysir_server.game.ids import IdFactory
 from openblindysir_server.game.scoring import ScoreJournal
 
-TERMINAL_ROUND_STATES = frozenset({RoundState.REVEALED, RoundState.FAILED, RoundState.CANCELLED})
+TERMINAL_ROUND_STATES = frozenset(
+    {RoundState.REVIEW, RoundState.REVEALED, RoundState.FAILED, RoundState.CANCELLED}
+)
 LIVE_ROUND_STATES = frozenset(
     {
         RoundState.QUEUED,
@@ -69,6 +71,10 @@ class Catalog:
     bridge_name: str
     catalog_hash: str
     entries: dict[str, CatalogEntryData]  # track_id -> entry
+    scanned_folders: list[str] = field(default_factory=lambda: [""])
+    source_error: str | None = None
+    ambiguous_paths: tuple[str, ...] = ()
+    scan_revision: int = 0
 
 
 @dataclass(slots=True)
@@ -79,6 +85,10 @@ class BridgeInfo:
     state: BridgeState
     catalog_hash: str
     track_count: int
+    protocol: int = 5
+    formats: tuple[str, ...] = ("aac",)
+    allow_full_review: bool = False
+    source_error: str | None = None
 
 
 @dataclass(slots=True)
@@ -120,6 +130,7 @@ class Answer:
     text: str | None = None  # LOCKED or CAPTURED text
     draft_text: str = ""
     draft_last_changed_at: int | None = None  # diagnostics only, never ranks anything
+    draft_last_changed_wall_ms: int | None = None
     received_at: int | None = None
     received_at_wall_ms: int | None = None
     elapsed_ms: int | None = None
@@ -146,6 +157,10 @@ class Slot:
     attempts: int = 0  # tracks tried for this slot
     same_track_retries: int = 0
     waiting_bridge: bool = False
+    round_number: int = 0
+    manual: bool = False
+    manual_error: AssetFailureCode | None = None
+    bridge_wait_since: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +171,18 @@ class RevealInfo:
     folder: str
     title: str | None
     artist: str | None
+    featuring: str | None = None
+    album: str | None = None
+    year: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Metadata:
+    title: str | None = None
+    artist: str | None = None
+    featuring: str | None = None
+    album: str | None = None
+    year: int | None = None
 
 
 @dataclass(slots=True)
@@ -191,6 +218,11 @@ class Round:
     recovery_interrupted: bool = False
     pause_ready: bool = False
     previously_played: bool = False
+    participant_ids: set[str] = field(default_factory=set)
+    included: bool = True
+    track_entry: CatalogEntryData | None = None
+    bridge_name: str = ""
+    metadata_revision: int = 0
 
 
 @dataclass(slots=True)
@@ -216,6 +248,9 @@ class AssetRecord:
     title: str | None = None
     artist: str | None = None
     error: AssetFailureCode | None = None
+    input_duration_s: float | None = None
+    source_revision: str | None = None
+    normalize_audio: bool = True
 
 
 @dataclass(slots=True)
@@ -234,6 +269,7 @@ class Settings:
     captured_policy: str = "manual"
     normalize_audio: bool = True
     avoid_silence: bool = True
+    balance_folders: bool = False
 
     def copy(self) -> "Settings":
         return Settings(
@@ -251,12 +287,15 @@ class Settings:
             captured_policy=self.captured_policy,
             normalize_audio=self.normalize_audio,
             avoid_silence=self.avoid_silence,
+            balance_folders=self.balance_folders,
         )
 
 
 @dataclass(slots=True)
 class GameState:
     game_id: str
+    manual_tracks: dict[int, TrackRef] = field(default_factory=dict)
+    selection_revision: int = 0
     phase: GamePhase = GamePhase.LOBBY
     settings: Settings = field(default_factory=Settings)
     queue: deque[TrackRef] = field(default_factory=deque)
@@ -268,6 +307,7 @@ class GameState:
     final_draft: dict[str, int] = field(default_factory=dict)
     finalized_at: int | None = None
     finalized_wall_ms: int | None = None
+    started_wall_ms: int | None = None
     applied_op_ids: set[str] = field(default_factory=set)
     cache_full_round: str | None = None
 
@@ -294,7 +334,10 @@ class SessionState:
     touched: bool = False
     recovered: bool = False
     archives: list[dict[str, Any]] = field(default_factory=list)
-    metadata: dict[TrackRef, tuple[str, str]] = field(default_factory=dict)
+    metadata: dict[TrackRef, Metadata] = field(default_factory=dict)
+    imported_metadata: dict[TrackRef, Metadata] = field(default_factory=dict)
+    metadata_issues: list[dict[str, Any]] = field(default_factory=list)
+    joins_locked: bool = False
     persistence_status: str = "disabled"
 
 
@@ -355,7 +398,9 @@ def active_play(r: Round) -> Play | None:
 
 
 def revealed_count(g: GameState) -> int:
-    return sum(1 for r in g.rounds if r.state is RoundState.REVEALED)
+    return sum(
+        1 for r in g.rounds if r.included and r.state in {RoundState.REVIEW, RoundState.REVEALED}
+    )
 
 
 def clip_ms(s: SessionState, r: Round) -> int:

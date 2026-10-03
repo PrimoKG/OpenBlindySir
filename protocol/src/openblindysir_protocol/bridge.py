@@ -2,7 +2,7 @@
 
 Server → Bridge messages also inherit ``InboundModel``: the Bridge receives them from a peer
 it does not trust (spec §2 principle 6). The Bridge parses ONLY ``ServerToBridge``, the
-exhaustive list WELCOME / PREPARE / CANCEL / PING (spec §11).
+exhaustive list WELCOME / PREPARE / CANCEL / PING / SCAN_SOURCES (spec §11).
 """
 
 import posixpath
@@ -18,11 +18,15 @@ from openblindysir_protocol.base import (
     TrackId,
     UploadToken,
 )
+from openblindysir_protocol.compatibility import Compatibility
 from openblindysir_protocol.enums import ClipFormat, JobFailureCode, JobStage
+from openblindysir_protocol.media import INPUT_EXTENSIONS
 from openblindysir_protocol.settings import check_relative_path
+from openblindysir_protocol.text import normalize_nickname
 
 UPLOAD_SHA256_HEADER: Final = "X-Content-SHA256"
 CATALOG_TOKEN_HEADER: Final = "X-Catalog-Token"  # noqa: S105 - header name, not a token
+BRIDGE_ID_HEADER: Final = "X-Bridge-Id"
 CATALOG_MAX_GZIP_BYTES: Final = 8 * 1024 * 1024
 CATALOG_MAX_RAW_BYTES: Final = 32 * 1024 * 1024
 CATALOG_MAX_TRACKS: Final = 200_000
@@ -38,12 +42,18 @@ _Echo = Annotated[float, Field(ge=0, le=1e13)]
 class BridgeHello(InboundModel):
     t: Literal["HELLO"]
     bridge_id: BridgeId
-    name: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+    name: Annotated[str, StringConstraints(min_length=1, max_length=24)]
     version: _Version
     protocol: Annotated[int, Field(ge=0, le=10_000)]
     catalog_hash: Sha256Hex
     track_count: _Count
     formats: Annotated[list[ClipFormat], Field(min_length=1, max_length=4)]
+    allow_full_review: bool = False
+
+    @field_validator("name")
+    @classmethod
+    def _readable_name(cls, value: str) -> str:
+        return normalize_nickname(value)
 
 
 class BridgeLimits(InboundModel):
@@ -61,6 +71,7 @@ class Welcome(InboundModel):
     limits: BridgeLimits
     catalog_needed: bool
     catalog_upload_token: UploadToken | None = None
+    compatibility: Compatibility | None = None
 
     @model_validator(mode="after")
     def _token_iff_needed(self) -> "Welcome":
@@ -75,7 +86,7 @@ class CatalogChanged(InboundModel):
 
 
 class Prepare(InboundModel):
-    """The only business command: no path, no FFmpeg argument (spec §8.3)."""
+    """Encode a catalogue track: no path, no FFmpeg argument (spec §8.3)."""
 
     t: Literal["PREPARE"]
     job_id: JobId
@@ -89,6 +100,25 @@ class Prepare(InboundModel):
     upload_token: UploadToken
     normalize_audio: bool = True
     avoid_silence: bool = True
+    exact_start: Annotated[float, Field(ge=0, le=86400)] | None = None
+    review_mode: Literal["excerpt", "full"] | None = None
+    replay_sha256: Sha256Hex | None = None
+    expected_source_revision: Sha256Hex | None = None
+
+
+class ScanSources(InboundModel):
+    t: Literal["SCAN_SOURCES"]
+    folders: Annotated[list[str], Field(max_length=64)] | None = None
+
+    @field_validator("folders")
+    @classmethod
+    def _folders(cls, values: list[str] | None) -> list[str] | None:
+        if values is not None:
+            for value in values:
+                check_relative_path(value, allow_empty=True)
+                if len(value) > 1024 or ":" in value:
+                    raise ValueError("invalid folder")
+        return values
 
 
 class Cancel(InboundModel):
@@ -116,6 +146,8 @@ class JobDone(InboundModel):
     bytes: Annotated[int, Field(gt=0, le=64 * 1024 * 1024)]
     sha256: Sha256Hex
     tags: Tags | None = None  # used for the reveal only
+    input_duration: Annotated[float, Field(gt=0, le=600)] | None = None
+    source_revision: Sha256Hex | None = None
 
 
 class JobFailed(InboundModel):
@@ -138,7 +170,9 @@ BridgeToServer = Annotated[
     BridgeHello | CatalogChanged | JobProgress | JobDone | JobFailed | BridgePong,
     Field(discriminator="t"),
 ]
-ServerToBridge = Annotated[Welcome | Prepare | Cancel | BridgePing, Field(discriminator="t")]
+ServerToBridge = Annotated[
+    Welcome | Prepare | Cancel | BridgePing | ScanSources, Field(discriminator="t")
+]
 
 
 class CatalogEntry(InboundModel):
@@ -157,6 +191,11 @@ class CatalogEntry(InboundModel):
     def _folder_is_parent(self) -> "CatalogEntry":
         if self.folder != posixpath.dirname(self.relpath):
             raise ValueError("folder must be the parent of relpath")
+        if (
+            self.ext not in INPUT_EXTENSIONS
+            or self.ext != posixpath.splitext(self.relpath)[1].lower()
+        ):
+            raise ValueError("unsupported file extension")
         return self
 
 
@@ -166,3 +205,24 @@ class CatalogUpload(InboundModel):
     bridge_id: BridgeId
     catalog_hash: Sha256Hex
     entries: Annotated[list[CatalogEntry], Field(max_length=CATALOG_MAX_TRACKS)]
+    scanned_folders: Annotated[list[str], Field(max_length=64)] = Field(
+        default_factory=lambda: [""]
+    )
+    source_error: Literal["inaccessible", "invalid_folder"] | None = None
+    ambiguous_paths: Annotated[
+        list[Annotated[str, StringConstraints(max_length=1024)]],
+        Field(max_length=CATALOG_MAX_TRACKS),
+    ] = Field(default_factory=list)
+
+    @field_validator("scanned_folders")
+    @classmethod
+    def _scanned(cls, values: list[str]) -> list[str]:
+        ScanSources(t="SCAN_SOURCES", folders=values)
+        return values
+
+    @field_validator("ambiguous_paths")
+    @classmethod
+    def _ambiguous(cls, values: list[str]) -> list[str]:
+        for value in values:
+            check_relative_path(value, allow_empty=False)
+        return values

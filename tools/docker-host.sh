@@ -6,8 +6,8 @@ task_data="$task_root/.local/docker"
 task_env="$task_data/hosting.env"
 task_action=${1:-start}
 [ "$#" -eq 0 ] || shift
-unset DOMAIN TLS_HOST HTTPS_PORT BIND_IP CADDY_PROFILE MUSIC_DIR BRIDGE_DEMO \
-    BLIND_PASSWORD HOST_PASSWORD BRIDGE_SECRET COMPOSE_FILE COMPOSE_PROFILES COMPOSE_PROJECT_NAME
+unset DOMAIN TLS_HOST HTTPS_PORT BIND_IP CADDY_PROFILE MUSIC_DIR BRIDGE_DEMO BRIDGE_ALLOW_FULL_REVIEW \
+    BLIND_PASSWORD HOST_PASSWORD BRIDGE_SECRET BRIDGE_SECRETS COMPOSE_FILE COMPOSE_PROFILES COMPOSE_PROJECT_NAME
 command -v docker >/dev/null 2>&1 || { echo 'Installez Docker avec Compose.' >&2; exit 2; }
 cd "$task_root"
 task_address=''
@@ -21,6 +21,9 @@ while [ "$#" -gt 0 ]; do
         --address) task_address=$2; shift 2 ;;
         --mode) task_mode=$2; shift 2 ;;
         --music-dir) task_music=$2; shift 2 ;;
+        --bridge-id) task_bridge_id=$2; shift 2 ;;
+        --name) task_bridge_name=$2; shift 2 ;;
+        --output) task_credential_output=$2; shift 2 ;;
         --demo) task_demo=true; shift ;;
         --no-browser) task_browser=false; shift ;;
         --no-build) task_build=false; shift ;;
@@ -82,7 +85,19 @@ case "$task_action" in
         ;;
     stop) compose down ;;
     status) compose ps ;;
+    bridge-credential)
+        [ -n "${task_bridge_id:-}" ] && [ -n "${task_credential_output:-}" ] || {
+            echo 'Indiquez --bridge-id UUID et --output /data/state/issued-NOM.toml.' >&2; exit 2;
+        }
+        compose exec -T app python -m openblindysir_server bridge-credential \
+            --bridge-id "$task_bridge_id" --name "${task_bridge_name:-Bridge}" --output "$task_credential_output"
+        echo 'Transférez le fichier privé au propriétaire de ce Bridge. Voir docs/v0.5.en.md.'
+        ;;
+    bridge-revoke)
+        [ -n "${task_bridge_id:-}" ] || { echo 'Indiquez --bridge-id UUID.' >&2; exit 2; }
+        compose exec -T app python -m openblindysir_server bridge-revoke --bridge-id "$task_bridge_id"
+        ;;
     open) open_browser ;;
     certificate) certificate ;;
-    *) echo 'Actions : init, start, stop, status, open, certificate.' >&2; exit 2 ;;
+    *) echo 'Actions : init, start, stop, status, open, certificate, bridge-credential, bridge-revoke.' >&2; exit 2 ;;
 esac

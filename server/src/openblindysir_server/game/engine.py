@@ -18,6 +18,7 @@ from openblindysir_server.game import (
     assets,
     game_flow,
     library,
+    manual,
     players,
     rounds,
     timers,
@@ -43,6 +44,7 @@ def _tick(s: SessionState, cmd: c.Tick, at: Instant, fx: EffectSink) -> None:
 
 
 HOST_HANDLERS: dict[str, HostHandler] = {
+    "select_track": manual.h_select_track,
     "configure": game_flow.h_configure,
     "set_mode": players.h_set_mode,
     "start_game": game_flow.h_start_game,
@@ -70,6 +72,7 @@ HOST_HANDLERS: dict[str, HostHandler] = {
     "kick": players.h_kick,
     "rename": players.h_rename,
     "participation": players.h_participation,
+    "join_lock": game_flow.h_join_lock,
 }
 
 
@@ -114,6 +117,7 @@ SETTLE_STEPS = (
     rounds.promote,
     rounds.ready_check,
     rounds.auto_close,
+    rounds.finish_last_round,
     assets.ensure_pipeline,
     assets.retire_unretained,
 )

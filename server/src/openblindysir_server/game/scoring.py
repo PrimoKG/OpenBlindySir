@@ -13,7 +13,7 @@ from openblindysir_protocol.enums import ScoreKind
 
 @dataclass(frozen=True, slots=True)
 class ScoreEvent:
-    id: int  # global, strictly increasing
+    id: int  # strictly increasing within the active game's journal
     game_id: str
     player_id: str
     round_id: str | None

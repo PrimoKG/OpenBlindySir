@@ -80,7 +80,13 @@ export function SetupPanel({ view }: { readonly view: HostView }) {
   const [pending, setPending] = useState(false);
   const [presets, setPresets] = useState<Preset[]>(loadPresets);
   const [presetName, setPresetName] = useState("");
+  const [folderQuery, setFolderQuery] = useState("");
   const key = `${view.host.bridge.state}:${view.host.bridge.track_count}:${retry}`;
+  useEffect(() => {
+    const refresh = () => setRetry((n) => n + 1);
+    window.addEventListener("openblindysir:library", refresh);
+    return () => window.removeEventListener("openblindysir:library", refresh);
+  }, []);
   useEffect(() => {
     let active = true;
     if (key)
@@ -147,13 +153,13 @@ export function SetupPanel({ view }: { readonly view: HostView }) {
     );
   };
   const checkbox = (
-    field: "auto_start" | "allow_repeats" | "normalize_audio" | "avoid_silence",
+    field: "auto_start" | "allow_repeats" | "normalize_audio" | "avoid_silence" | "balance_folders",
     label: string,
   ) => (
     <label className="folder-option">
       <input
         type="checkbox"
-        checked={draft[field] ?? true}
+        checked={draft[field] ?? field !== "balance_folders"}
         onChange={(e) => set(field, e.target.checked)}
       />
       {label}
@@ -258,12 +264,19 @@ export function SetupPanel({ view }: { readonly view: HostView }) {
         {view.host.bridge.state === "ONLINE" ? t("hostui.bridgeOnline") : t("hostui.bridgeOffline")}
       </p>
       <p className="muted">{t("hostui.libraryHint")}</p>
+      <Button type="button" onClick={() => setRetry((n) => n + 1)}>
+        {t("library.refresh")}
+      </Button>
       {error && (
         <p className="error" role="alert">
           {error} <Button onClick={() => setRetry((n) => n + 1)}>{t("app.retry")}</Button>
         </p>
       )}
       {!library && !error && <p role="status">{t("hostui.libraryLoading")}</p>}
+      <label>
+        {t("library.searchFolders")}
+        <input type="search" value={folderQuery} onChange={(e) => setFolderQuery(e.target.value)} />
+      </label>
       {library?.bridges.map((bridge) => (
         <ul className="tree" key={bridge.bridge_id}>
           <Folder
@@ -271,6 +284,7 @@ export function SetupPanel({ view }: { readonly view: HostView }) {
             bridgeId={bridge.bridge_id}
             selected={selected}
             toggle={toggle}
+            query={folderQuery}
           />
         </ul>
       ))}
@@ -294,6 +308,7 @@ export function SetupPanel({ view }: { readonly view: HostView }) {
           {checkbox("auto_start", t("hostui.autoStart"))}
           {checkbox("normalize_audio", t("ux.normalize"))}
           {checkbox("avoid_silence", t("ux.avoidSilence"))}
+          {checkbox("balance_folders", t("library.balance"))}
         </div>
       </details>
       {(library?.issues?.length ?? 0) > 0 && (
@@ -396,7 +411,12 @@ function Folder(props: {
   readonly bridgeId: string;
   readonly selected: ReadonlySet<string>;
   readonly toggle: (bridge: string, prefix: string) => void;
+  readonly query: string;
 }) {
+  const contains = (node: FolderNode): boolean =>
+    `${node.name} ${node.prefix}`.toLocaleLowerCase().includes(props.query.toLocaleLowerCase()) ||
+    node.children.some(contains);
+  if (props.query && !contains(props.node)) return null;
   return (
     <li>
       <label className="folder-option">
