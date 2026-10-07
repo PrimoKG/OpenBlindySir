@@ -94,7 +94,11 @@ jobs:
       - run: choco install ffmpeg -y --no-progress
       - run: uv sync --locked
       - run: uv run pytest bridge/tests
-      - run: uv run pytest server/tests/shell/test_docker_context.py
+      - name: Windows Docker contexts, private configuration and pack recovery
+        run: >-
+          uv run pytest server/tests/shell/test_docker_context.py
+          server/tests/shell/test_pack_maintenance.py
+          server/tests/shell/test_pack_restore.py
 
   integration:
     runs-on: ubuntu-latest

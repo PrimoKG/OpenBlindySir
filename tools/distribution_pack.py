@@ -97,6 +97,8 @@ def main() -> None:
         "docs/offline-pack.en.md",
         "docs/audits/2026-10-07-implementation.md",
         "docs/audits/2026-10-07-implementation.en.md",
+        "docs/audits/2026-10-08-autofix.md",
+        "docs/audits/2026-10-08-autofix.en.md",
         "LICENSE",
     ]:
         destination = target / relative
@@ -122,8 +124,8 @@ def main() -> None:
         "# OpenBlindySir — local candidate / candidat local\n\n"
         "Unsigned Linux/amd64 pack. Open security findings remain; read the audit first.\n\n"
         "Pack Linux/amd64 non signé. Alertes de sécurité restantes : lire le rapport.\n\n"
-        "- [Audit FR](docs/audits/2026-10-07-implementation.md) / "
-        "[Audit EN](docs/audits/2026-10-07-implementation.en.md)\n"
+        "- [Audit FR](docs/audits/2026-10-08-autofix.md) / "
+        "[Audit EN](docs/audits/2026-10-08-autofix.en.md)\n"
         "- [Installation FR](docs/offline-pack.md) / [Installation EN](docs/offline-pack.en.md)\n\n"
         "Windows: `powershell -File .\\tools\\load-pack.ps1`, then / puis "
         "`powershell -File .\\tools\\party-assistant.ps1`.\n\n"

@@ -14,11 +14,15 @@ Linux/macOS: `sh tools/load-pack.sh`, then `sh tools/docker-host.sh init --addre
 
 ## Updates and rollback
 
-**Backup**, **Update** and **Rollback** run `tools/pack-maintenance.ps1`. Private backups include state, configuration, mounts and image identities with checksums. Update selects a separate verified pack directory. Rollback requires explicit confirmation, checks hashes and the target volume, and backs up current state before replacing data. Previous images must still exist in Docker. These backups do not replace an external backup of volumes and the HTTPS authority.
+**Backup**, **Update** and **Rollback** run `tools/pack-maintenance.ps1`. Allow a short interruption: the script stops services gracefully to copy a consistent state, then restarts those previously running, even if copying fails. Run Backup before Stop, which removes containers. Private format-2 backups include session state, launcher configuration, custom mounts, Bridge identity/configuration, target volumes and image identities with checksums. Windows configuration and backups are restricted to their creating account.
+
+Update selects a separate verified pack directory. Rollback requires explicit confirmation, checks required files, hashes and both target volumes, then backs up current state before replacing data. It replaces the complete state directory and restores the Bridge, without retaining files added after the backup. If update startup or restoration fails, the script attempts to recover the previous state and images. If Docker prevents recovery, the error identifies the backup to keep; use Status to diagnose. Previous images must still exist in Docker. Older backups without format 2 need a verified manual restoration. Use maintenance paths without commas.
+
+These backups do not replace an external backup of volumes, music and the HTTPS authority. Audio caches and the Caddy authority are excluded from the state copy.
 
 The pack’s compose file uses pack-specific image tags. Keep the previous pack, private `.local/docker/hosting.env` and `sources.override.yaml` when present.
 
-Before updating, stop with the launcher and back up the Docker volumes, especially `app_data`, the private configuration files and Caddy’s authority. Never use `down -v`. A local state copy before shutdown can be made with `docker cp openblindysir-app-1:/data/state ./private-state-backup`; do not publish this backup.
+Before a manual update, make a consistent Backup, then keep an external copy of Docker volumes, especially `app_data`, `bridge_data` and Caddy’s authority. Never use `down -v` or publish private backups. Copying with `docker cp` while services are active does not provide the consistency of a graceful stop.
 
 Verify and load the new pack, copy the private configuration into its `.local/docker/`, then Start. Existing volumes are reused with the same Compose project name, `openblindysir`, declared in compose.
 

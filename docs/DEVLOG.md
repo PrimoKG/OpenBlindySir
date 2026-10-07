@@ -2114,3 +2114,34 @@ Après installation effective de DejaVu/FreeFont, une consigne personnalisée lo
 révèle encore 12 px de débordement WebKit. Sous 380 px, les espacements entre
 blocs sont légèrement réduits ; les cibles tactiles et la consigne sont conservées.
 Les 42 mêmes parcours passent ensuite avec les polices du runner réellement présentes.
+
+## 2026-10-08 — Audit, conflits de bibliothèque et maintenance privée
+
+Import ZIP Deflate corrompu : erreur serveur reproduite, puis refus HTTP 400 sans
+mutation de métadonnées. Activation et lots envoient leur révision attendue ; un
+conflit arrête le lot et laisse visibles sa progression et son explication.
+La bibliothèque se rafraîchit à l’ouverture pour éviter les données anciennes.
+
+La sauvegarde arrête proprement les services et les redémarre même après une
+erreur de copie. Format 2 : état, configuration du Bridge, volumes et images.
+Restauration exacte et préparation atomique, sans fusion de fichiers ultérieurs ;
+tentative de récupération après échec d’update/rollback. Configuration et backups
+Windows privés avant écriture. Les essais réels ont trouvé un droit manquant
+pour changer le propriétaire puis un ancien fichier détenu par un autre compte :
+conserver le propriétaire du dossier et remplacer ce fichier atomiquement par
+une copie identique privée résout les deux cas. Le lanceur démarre normalement.
+
+Tests exécutés : 1 112 Python généraux, 44 FFmpeg puis une nouvelle régression
+Windows, soit 1 157 tests distincts réussis ; 52 tests Web, build, types, Ruff,
+format, Pyright, Biome et schéma réussis. Quatre conflits FR/EN et dix parcours
+bibliothèque/préécoute passent sur Chromium/WebKit. Les 14 régressions de
+maintenance/restauration sont incluses dans les totaux, avec désormais un job
+Windows qui les couvre. Les tests natifs ne parlent pas au daemon Docker.
+
+Scans locaux actualisés : même dernière base disponible du 7 octobre, 0 critique,
+55 élevées par image Python et 8 sur Caddy ; aucune correspondance FFmpeg/npm.
+Aucun inventaire cloud. Sauvegarde native réelle et empreintes vérifiées,
+image scannée déployée : mêmes identités, scores, réponses, métadonnées, cookies,
+accès partagé, montages et certificat ; deux joueurs, 12 archives, 68 morceaux.
+Guides FR/EN, README et rapports du 8 octobre actualisés. La validation sur
+téléphones physiques, machine vierge et restauration indépendante reste ouverte.

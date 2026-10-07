@@ -86,6 +86,41 @@ def test_init_protects_windows_secrets_before_docker_writes(installation: Path) 
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_config_without_write_dacl_is_replaced_privately_without_changing_content(
+    installation: Path,
+) -> None:
+    result = run_script(f"""
+    $ErrorActionPreference = 'Stop'
+    . {quote(installation / "tools/private-config.ps1")}
+    $taskConfig = Join-Path {quote(installation)} '.local/docker'
+    New-TaskPrivateDirectory $taskConfig
+    $taskFile = Join-Path $taskConfig 'hosting.env'
+    $taskData = [Text.Encoding]::UTF8.GetBytes('SYNTHETIC_SECRET=example')
+    [IO.File]::WriteAllBytes($taskFile, $taskData)
+    $taskOwner = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $taskRights = New-Object Security.Principal.SecurityIdentifier('S-1-3-4')
+    $taskAcl = New-Object Security.AccessControl.FileSecurity
+    $taskAcl.SetAccessRuleProtection($true, $false)
+    foreach ($taskIdentity in @($taskOwner, $taskRights)) {{
+        $taskRule = New-Object Security.AccessControl.FileSystemAccessRule(
+            $taskIdentity, 'Modify', 'Allow')
+        $taskAcl.AddAccessRule($taskRule)
+    }}
+    (Get-Item -LiteralPath $taskFile).SetAccessControl($taskAcl)
+    Protect-TaskPath $taskFile
+    $taskAfter = Get-Acl -LiteralPath $taskFile
+    if (-not $taskAfter.AreAccessRulesProtected -or $taskAfter.Access.Count -ne 1) {{
+        throw 'Configuration remains shared'
+    }}
+    if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($taskFile)) -ne
+        [Convert]::ToBase64String($taskData)) {{ throw 'Configuration content changed' }}
+    if (Get-ChildItem -LiteralPath $taskConfig -Filter '.private-config-*') {{
+        throw 'Private temporary file leaked'
+    }}
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def mock_docker(root: Path, *, fail_copy: bool = False) -> str:
     return f"""
     $taskFixture = {quote(root)}

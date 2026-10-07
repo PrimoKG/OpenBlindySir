@@ -178,7 +178,7 @@ have passed local automated tests with synthetic clips; CI is configured to run
 the game suites on pushed changes. No release has been published.
 Real-device, accessibility and acoustic checks remain, along with unresolved
 system-package security alerts documented in the
-[latest local audit](docs/audits/2026-10-07-implementation.en.md).
+[latest local audit](docs/audits/2026-10-08-autofix.en.md).
 The API and protocol may change until v1.0.
 
 Roadmap:
@@ -224,7 +224,7 @@ without reloading the game, and the choice is saved separately in each browser.
 Please report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
 Do not open public issues for security problems.
 
-The [latest local audit](docs/audits/2026-10-07-implementation.en.md) records the fixes,
+The [latest local audit](docs/audits/2026-10-08-autofix.en.md) records the fixes,
 regression tests, exact deployed app image and remaining system advisories. Earlier
 reports retain their original scope and date. This is not a blanket assurance for
 other images or native installations.
