@@ -26,6 +26,8 @@ Initial failures led to fixes for accessible editor labels, target size, duplica
 
 Initial GitHub macOS jobs also exposed an older preinstalled FFmpeg and a missing Vorbis encoder in the standard formula. Apple Silicon/Intel CI now builds the same SHA-256-verified FFmpeg 9.0.2 source as Linux, including fixture encoders and portable checksum verification. The security minimum and affected tests remain intact. Remote matrices cover both macOS architectures with Python 3.12–3.14 and native archives; they do not replace physical-device checks.
 
+**Four additional pack-loader regressions passed**: coexistence with BSD `sha256sum`, modified archive, malformed checksum line and unexpected image identity. Corruption or a malformed checksum blocks every Docker command; unexpected images never become the wizard alias. Strict `shasum` verification is preferred. Image/checksum lists are generated with LF even on Windows, so Linux/macOS can read them.
+
 ## Deployment and retained state
 
 All three services run the exact scanned images and verified Web build. HTTPS validated with the existing local CA; served HTML/JS/CSS match the build. Anonymous host-tool access is denied. Mounts, configuration, secrets, identities, cookies, shared access, answers, score journal, metadata and **12 archives** were retained. Snapshot **7 → 8** verified; monotonic clocks are rebased and archives gain an empty optional `cleared_fields` property.

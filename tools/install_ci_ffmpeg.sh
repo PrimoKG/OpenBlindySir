@@ -14,10 +14,11 @@ if [ ! -x "$prefix/bin/ffmpeg" ] || ! "$prefix/bin/ffmpeg" -version | head -n1 |
     cd "$prefix/build"
     curl --fail --location --proto '=https' --tlsv1.2 --output source.tar.xz https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
     checksum='8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e  source.tar.xz'
-    if command -v sha256sum >/dev/null 2>&1; then
-        printf '%s\n' "$checksum" | sha256sum --check --strict
+    # macOS also ships a BSD sha256sum without GNU --strict; prefer shasum.
+    if command -v shasum >/dev/null 2>&1; then
+        printf '%s\n' "$checksum" | shasum -a 256 --check --strict
     else
-        printf '%s\n' "$checksum" | shasum -a 256 --check
+        printf '%s\n' "$checksum" | sha256sum --check --strict
     fi
     tar -xf source.tar.xz
     cd ffmpeg-9.0.2

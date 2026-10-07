@@ -113,6 +113,7 @@ def main() -> None:
         )
         + "\n",
         encoding="ascii",
+        newline="\n",
     )
     (target / "compose.yaml").write_text(compose, encoding="utf-8", newline="\n")
     (target / "README.md").write_text(
@@ -135,7 +136,7 @@ def main() -> None:
         with path.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
         hashes.append(f"{digest}  {path.relative_to(target).as_posix()}")
-    (target / "SHA256SUMS").write_text("\n".join(hashes) + "\n", encoding="ascii")
+    (target / "SHA256SUMS").write_text("\n".join(hashes) + "\n", encoding="ascii", newline="\n")
     print(f"Offline pack created: {target}")
 
 

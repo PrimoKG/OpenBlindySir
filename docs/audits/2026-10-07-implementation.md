@@ -28,6 +28,8 @@ Les premières exécutions ont détecté les défauts corrigés suivants : libel
 
 Les premiers jobs GitHub macOS ont ensuite détecté une version FFmpeg préinstallée trop ancienne et un encodeur Vorbis absent de la formule standard. La préparation CI Apple Silicon/Intel compile désormais la même source FFmpeg 9.0.2 vérifiée que Linux, avec les encodeurs des fixtures et une vérification SHA-256 portable. Le minimum de sécurité et les tests concernés sont conservés. La matrice distante couvre les deux architectures macOS avec Python 3.12–3.14, ainsi que leurs archives natives ; elle ne remplace pas les essais physiques.
 
+**Quatre régressions supplémentaires du chargeur de pack réussies** : coexistence avec `sha256sum` BSD, archive altérée, ligne d’empreinte malformée et identité d’image inattendue. Un fichier altéré ou un manifeste malformé bloque avant toute commande Docker ; une image inattendue ne devient pas l’alias de configuration. `shasum` est préféré avec vérification stricte. Le générateur écrit les listes d’images et d’empreintes en LF, y compris depuis Windows, pour leur lecture sur Linux/macOS.
+
 ## Relance et conservation
 
 Serveur, Bridge et proxy fonctionnent avec les images exactes scannées et le build Web final. HTTPS a été vérifié avec l’autorité locale existante ; HTML, JS et CSS servis sont identiques au build vérifié. Accès anonyme aux outils d’hôte refusé. Montages, configuration, secrets, identités, cookies, accès partagé, réponses, journal de scores, métadonnées et **12 archives** conservés. Snapshot **7 → 8** vérifié ; les horloges monotones sont recalées, les archives reçoivent le nouveau champ facultatif vide `cleared_fields`.

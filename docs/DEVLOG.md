@@ -2076,3 +2076,9 @@ compile désormais les sources FFmpeg 9.0.2 vérifiées par SHA-256, comme Linux
 avec LAME/Opus/Vorbis. Vérification d'empreinte portable et compilation bornée
 à quatre threads. Aucun seuil de sécurité abaissé et aucun test de format ignoré.
 Les guides FR/EN précisent la mise à jour d'un FFmpeg déjà installé sur macOS.
+
+La vérification distante a ensuite révélé que le `sha256sum` BSD du runner refuse
+les options GNU : `shasum` est désormais préféré pour les sources et le pack.
+Quatre régressions de chargement réussies sous Git Bash/Perl : archive altérée,
+manifeste malformé, utilitaire BSD présent et mauvaise identité d'image.
+Les listes du pack sont écrites en LF même depuis Windows ; contrôles Ruff réussis.
