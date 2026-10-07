@@ -61,6 +61,73 @@ const standings: StandingRow[] = players.map((p, i) => ({
 const myAnswer = { status: "DRAFT" as const, text: null, draft_text: "Exemple de brouillon" };
 const roundId = "r_example1";
 
+for (const language of ["fr", "en"] as const) {
+  test(`library toggle and bulk preserve concurrent changes (${language})`, async ({ page }) => {
+    const { view, library, track } = manualFixture();
+    const copy = language === "fr" ? fr : en;
+    await harness(page, view, library);
+    if (language === "en") await page.getByRole("button", { name: "English", exact: true }).click();
+    let revision = 7;
+    const tracks = [track, { ...track, track_id: "b".repeat(24), title: "Second example" }];
+    await page.route("**/api/host/library/search**", (route) =>
+      route.fulfill({
+        json: {
+          total: 2,
+          tracks: tracks.map((row) => ({ ...row, metadata_revision: revision })),
+          tags: [],
+          linked_to: [],
+        },
+      }),
+    );
+    const requests: { expected_revision?: number }[] = [];
+    let saved = 0;
+    await page.route("**/api/host/metadata", (route) => {
+      const body = route.request().postDataJSON();
+      requests.push(body);
+      if (body.expected_revision !== undefined && body.expected_revision !== revision)
+        return route.fulfill({ status: 409, json: { error: "stale_command" } });
+      saved++;
+      revision++;
+      // A second host edits between the two bulk requests.
+      if (saved === 1) revision++;
+      return route.fulfill({ json: { ok: true } });
+    });
+    await page.getByRole("button", { name: copy["library.manage"], exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: copy["library.manage"], exact: true });
+    await expect(dialog.locator(".library-tracks > li")).toHaveCount(2);
+    await expect(
+      dialog
+        .locator(".library-tracks > li")
+        .first()
+        .getByRole("button", { name: copy["library.disable"], exact: true }),
+    ).toBeEnabled();
+    revision = 9;
+    await dialog
+      .locator(".library-tracks > li")
+      .first()
+      .getByRole("button", { name: copy["library.disable"], exact: true })
+      .click();
+    await expect(dialog.getByRole("alert")).toContainText(copy["library.editConflict"]);
+    expect(saved).toBe(0);
+    expect(requests[0]?.expected_revision).toBe(7);
+    await dialog.getByRole("button", { name: copy["library.refresh"], exact: true }).last().click();
+    await expect(dialog.getByRole("alert")).toHaveCount(0);
+    for (const card of await dialog.locator(".library-tracks > li").all())
+      await card.getByRole("checkbox").check();
+    const bulk = dialog.locator(".library-bulk");
+    await bulk.locator("summary").click();
+    await bulk.getByRole("textbox").first().fill("Example tag");
+    await bulk.getByRole("button", { name: copy["library.bulk"], exact: true }).click();
+    await expect.poll(() => requests.length).toBe(3);
+    expect(requests.map((row) => row.expected_revision)).toEqual([7, 9, 10]);
+    expect(saved).toBe(1);
+    await expect(dialog.getByRole("status")).toContainText([
+      copy["library.bulkSaved"].replace("{count}", "1").replace("{total}", "2"),
+    ]);
+    await expect(dialog.getByRole("status")).toContainText([copy["library.editConflict"]]);
+  });
+}
+
 function silentWav(seconds: number): Buffer {
   const clip = Buffer.alloc(44 + 16000 * seconds);
   clip.write("RIFF", 0);

@@ -82,6 +82,8 @@ def main() -> None:
         "tools/docker-host.sh",
         "tools/docker-context.ps1",
         "tools/file-integrity.ps1",
+        "tools/private-config.ps1",
+        "tools/restore_pack_state.py",
         "tools/party-assistant.ps1",
         "tools/pack-maintenance.ps1",
         "deploy/compose.public.yaml",

@@ -2,8 +2,10 @@
 
 import asyncio
 import gzip
+import io
 import json
 import threading
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -19,6 +21,31 @@ from openblindysir_server.library import routes
 
 CLIENT = TypeAdapter(ClientMessage)
 SECOND = "12345678-1234-1234-1234-123456789abd"
+
+
+def test_corrupt_deflate_archive_is_rejected_without_changing_metadata(harness: Harness) -> None:
+    _, token, _ = private_library(harness)
+    content = io.BytesIO()
+    with zipfile.ZipFile(content, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("metadata-000001.json", '{"version":2,"rows":[]}')
+    raw = bytearray(content.getvalue())
+    # Reserved DEFLATE block type: valid ZIP headers, invalid compressed content.
+    raw[30 + len("metadata-000001.json")] = 0x06
+    state = harness.runtime.engine.state
+    revision = state.metadata_revision
+    response = harness.client.post(
+        "/api/host/metadata/import-archive",
+        headers={**harness.cookie(token), "Origin": ORIGIN, "Content-Type": "application/zip"},
+        content=bytes(raw),
+    )
+    assert response.status_code == 400
+    assert state.metadata_revision == revision
+    assert not state.imported_metadata
+    # An invalid archive must also release the shared library worker slot.
+    assert (
+        harness.client.get("/api/host/metadata/export", headers=harness.cookie(token)).status_code
+        == 200
+    )
 
 
 def test_metadata_pack_reimport_and_revision_conflict(harness: Harness) -> None:

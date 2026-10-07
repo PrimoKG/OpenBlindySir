@@ -408,6 +408,8 @@ export function LibraryManager({
 
       void (async () => {
         let count = 0;
+        const expectedRevision = tracks[0]?.metadata_revision ?? 0;
+        let failure: (() => string) | null = null;
 
         for (const track of tracks) {
           const metadata: MusicalMetadata = {
@@ -424,10 +426,15 @@ export function LibraryManager({
             track_id: track.track_id,
 
             metadata,
+            expected_revision: expectedRevision + count,
           });
 
           if (!saved.ok) {
-            setError(() => tCode("error", saved.error));
+            failure = () =>
+              saved.error === "stale_command"
+                ? t("library.editConflict")
+                : tCode("error", saved.error);
+            setError(failure);
 
             break;
           }
@@ -445,7 +452,10 @@ export function LibraryManager({
 
         setMutating(false);
 
-        setNotice(() => t("library.bulkSaved", { count, total: tracks.length }));
+        setNotice(
+          () =>
+            `${t("library.bulkSaved", { count, total: tracks.length })}${failure ? ` · ${failure()}` : ""}`,
+        );
 
         refresh();
       })();
@@ -498,6 +508,8 @@ export function LibraryManager({
           event.currentTarget.focus();
 
           setOpen(true);
+          // Another host may have edited while this dialog was closed.
+          setRevision((revision) => revision + 1);
         }}
       >
         {t("library.manage")}
@@ -878,6 +890,7 @@ export function LibraryManager({
             <Button
               disabled={
                 mutating ||
+                loading ||
                 editorSaving ||
                 !selectedTracks.size ||
                 (!bulkTags.trim() && !bulkLinks.trim() && !bulkActivation)
@@ -897,7 +910,7 @@ export function LibraryManager({
                       type="checkbox"
                       aria-label={t("library.select", { name: track.title || track.filename })}
                       checked={selectedTracks.has(identity(track))}
-                      disabled={mutating || editorSaving}
+                      disabled={loading || mutating || editorSaving}
                       onChange={(event) => {
                         const checked = event.target.checked;
 
@@ -1021,7 +1034,7 @@ export function LibraryManager({
                     </Button>
 
                     <Button
-                      disabled={mutating}
+                      disabled={loading || mutating}
                       onClick={() => {
                         guard(() => {
                           setMutating(true);
@@ -1036,6 +1049,7 @@ export function LibraryManager({
                               track_id: track.track_id,
 
                               metadata: { enabled: track.enabled === false },
+                              expected_revision: track.metadata_revision ?? 0,
                             })
 
                             .then((result) => {
@@ -1045,7 +1059,12 @@ export function LibraryManager({
                                 setNotice(() => (track.reserved ? t("library.reservedHint") : ""));
 
                                 refresh();
-                              } else setError(() => tCode("error", result.error));
+                              } else
+                                setError(() =>
+                                  result.error === "stale_command"
+                                    ? t("library.editConflict")
+                                    : tCode("error", result.error),
+                                );
                             });
                         });
                       }}

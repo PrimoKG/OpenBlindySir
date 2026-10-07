@@ -18,6 +18,7 @@ $taskData = Join-Path $taskRoot '.local/docker'
 $taskEnv = Join-Path $taskData 'hosting.env'
 . (Join-Path $PSScriptRoot 'docker-context.ps1')
 . (Join-Path $PSScriptRoot 'file-integrity.ps1')
+. (Join-Path $PSScriptRoot 'private-config.ps1')
 
 function Build-DockerImages([string[]]$Targets) {
     $taskContext = New-DockerBuildContext $taskRoot $taskData
@@ -56,7 +57,7 @@ try {
     if ($Action -eq 'init') {
         if (Test-Path -LiteralPath $taskEnv) { throw 'Configuration existante : modifiez .local/docker/hosting.env.' }
         if (-not $Address) { throw 'Indiquez -Address (IP LAN/VPN:port ou domaine public).' }
-        New-Item -ItemType Directory -Path $taskData -Force | Out-Null
+        New-TaskPrivateDirectory $taskData
         if ($Demo) {
             $MusicDir = Join-Path $taskData 'demo-mount'
             New-Item -ItemType Directory -Path $MusicDir -Force | Out-Null
@@ -74,11 +75,17 @@ try {
             '--mode', $Mode, '--music-dir', $taskMusic)
         if ($Demo) { $taskInit += '--demo' }
         Invoke-Docker $taskInit
+        Protect-TaskPath $taskEnv
         Write-Host 'Prêt : lancez .\tools\docker-host.ps1 start.'
         return
     }
     if (-not (Test-Path -LiteralPath $taskEnv)) {
         throw 'Configuration absente : utilisez init -Address ... -MusicDir ... (ou -Demo).'
+    }
+    Protect-TaskPath $taskData -Directory
+    foreach ($taskPrivateName in @('hosting.env', 'sources.override.yaml', 'rollback.override.yaml')) {
+        $taskPrivateFile = Join-Path $taskData $taskPrivateName
+        if (Test-Path -LiteralPath $taskPrivateFile) { Protect-TaskPath $taskPrivateFile }
     }
     # Read only public routing metadata; never print the configuration or secrets.
     $taskRouting = @{}

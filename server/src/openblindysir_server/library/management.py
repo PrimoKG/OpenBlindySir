@@ -5,6 +5,7 @@ import posixpath
 import time
 import unicodedata
 import zipfile
+import zlib
 from dataclasses import asdict, replace
 
 from fastapi import APIRouter, Request
@@ -685,6 +686,7 @@ async def import_metadata_pack(request: Request) -> Response:
             zipfile.BadZipFile,
             RuntimeError,
             NotImplementedError,
+            zlib.error,
         ):
             return error(400, ErrorCode.INVALID_MESSAGE)
         denied = host_access(request, state, mutation=True)
