@@ -32,6 +32,8 @@ The remote matrix passed Windows, Linux, Intel macOS and Apple Silicon native ar
 
 WebKit game failures were reproduced in an isolated synthetic room: the automatic scenario left four criteria and changed metadata, then a later scenario expected two points. Application persistence is intentional; fixtures now select their rules and restore their references. The game passed after the automatic scenario. Two additional 320 px regressions with DejaVu Sans passed without weakening CSP. These checks access neither production music nor volumes.
 
+Full Linux WebKit run: **102 passed, one skipped**, specific to Chromium's native autoplay policy. Two more games after the automatic scenario passed, including the MC game, verifying reference restoration. The new wide-font case then exposed a Chromium issue at 320 px: host buttons wrapped into two rows and pushed Submit offscreen. Text/padding in this toolbar alone are compacted below 380 px while preserving 44 px targets. **42 responsive Chromium/WebKit checks passed** on the corrected build, with unchanged visibility assertions. The exact server image was rebuilt and rescanned offline, then the candidate pack regenerated. The final restart retains snapshot 8 after a private backup.
+
 ## Deployment and retained state
 
 All three services run the exact scanned images and verified Web build. HTTPS validated with the existing local CA; served HTML/JS/CSS match the build. Anonymous host-tool access is denied. Mounts, configuration, secrets, identities, cookies, shared access, answers, score journal, metadata and **12 archives** were retained. Snapshot **7 → 8** verified; monotonic clocks are rebased and archives gain an empty optional `cleared_fields` property.

@@ -551,6 +551,13 @@ html:has(.final-review) {
     font-size: 0.8rem;
   }
 }
+@media (max-width: 380px) {
+  .phase-in_game .host-toolbar .btn {
+    font-size: 0.875rem;
+    padding-inline: 0.6rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .answer-deadline.urgent .deadline-number,
   .finale-track.is-revealed,

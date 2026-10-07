@@ -34,6 +34,8 @@ La matrice distante a validé les archives natives Windows, Linux, macOS Intel e
 
 Les échecs de parties WebKit ont été reproduits sur une salle synthétique isolée : le scénario automatique conservait quatre critères et des métadonnées modifiées, puis le scénario suivant attendait deux points. La persistance de l’application est intentionnelle ; les fixtures choisissent maintenant leurs règles et restaurent leurs références. La partie a réussi après le scénario automatique. Deux régressions supplémentaires à 320 px avec DejaVu Sans ont réussi, sans assouplir la politique CSP. Ces vérifications n’utilisent ni musiques ni volumes de production.
 
+Suite complète WebKit Linux : **102 tests réussis, un exclu**, réservé à la politique de lecture native de Chromium. Deux parties supplémentaires après le scénario automatique ont réussi, dont celle de maître de cérémonie : la restauration des références est vérifiée. Le cas ajouté avec une police large a ensuite révélé dans Chromium que les boutons d’hôte à 320 px prenaient deux lignes et repoussaient « Valider ». Texte et marges de cette seule barre sont compactés sous 380 px, avec cibles de 44 px conservées. **42 contrôles adaptatifs Chromium/WebKit réussis** sur le build corrigé ; les assertions de visibilité restent inchangées. L’image serveur exacte a été reconstruite et rescannée localement, puis le pack régénéré. Le dernier redémarrage reste en snapshot 8, avec sauvegarde privée préalable.
+
 ## Relance et conservation
 
 Serveur, Bridge et proxy fonctionnent avec les images exactes scannées et le build Web final. HTTPS a été vérifié avec l’autorité locale existante ; HTML, JS et CSS servis sont identiques au build vérifié. Accès anonyme aux outils d’hôte refusé. Montages, configuration, secrets, identités, cookies, accès partagé, réponses, journal de scores, métadonnées et **12 archives** conservés. Snapshot **7 → 8** vérifié ; les horloges monotones sont recalées, les archives reçoivent le nouveau champ facultatif vide `cleared_fields`.
@@ -61,7 +63,7 @@ Les correspondances élevées restantes n’annoncent pas de version corrigée c
 Identités des images livrées :
 
 ```text
-server sha256:7661635985ecd6ef39c14a36d63a54feec43691558502ec186cf048e6109e09f
+server sha256:19f0b0bc840b69c64ed3d42bf2da3c872f3c24b2af83548c72cad35ebc9b5d6a
 bridge sha256:335ddad9e59a689ecbcc4709f2e624d4e17c364753cbcfe9e5a48b247ce509f2
 caddy  sha256:b2877ff4fb23df45e83eb48e5dad0756b72b74468222f4cea6a1afc412506193
 ```

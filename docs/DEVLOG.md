@@ -2097,3 +2097,14 @@ doivent choisir leurs règles et restaurer les références synthétiques modifi
 La partie après le scénario automatique réussit après correction de cette isolation.
 Deux contrôles à 320 px avec DejaVu Sans réussissent, avec la CSP active.
 Tests exécutés en conteneurs sans réseau extérieur, données ni musiques de production.
+
+## 2026-10-07 — Dernier correctif petit écran avec police large
+
+WebKit Linux : 102 parcours réussis, un cas de politique native Chromium exclu.
+Deux parties supplémentaires après la notation automatique vérifient la restauration
+des références. Le nouveau cas DejaVu Sans trouve un vrai défaut Chromium à 320 px :
+les boutons hôte prennent deux lignes et repoussent Valider. Sous 380 px, leurs
+marges et leur texte sont compactés, en conservant 44 px de hauteur tactile.
+42 parcours adaptatifs sur Chromium/WebKit réussissent avec les mêmes assertions.
+Build/lint réussis, image applicative reconstruite et scan local renouvelé.
+La relance conserve le snapshot 8 et dispose d’une sauvegarde privée préalable.
