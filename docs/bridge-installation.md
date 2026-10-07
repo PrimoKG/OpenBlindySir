@@ -45,8 +45,13 @@ winget install --id Gyan.FFmpeg --exact
 Sur macOS avec Homebrew :
 
 ```sh
+brew update
 brew install ffmpeg
 ```
+
+Si FFmpeg est déjà installé, utilisez aussi `brew upgrade ffmpeg`, puis
+vérifiez les deux versions ci-dessous : la mise à jour de Homebrew seule ne
+remplace pas un ancien binaire déjà installé.
 
 Sur Debian/Ubuntu :
 

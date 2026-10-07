@@ -2066,3 +2066,13 @@ rescan ; aucun fichier musical modifié. Guides et README FR/EN actualisés.
 Les alertes système restantes, l’audio sur appareils physiques, l’installation vierge et
 la restauration destructive gardent leurs réserves de publication. Aucune release officielle
 n’est publiée. Rapport : [livraison et vérification](audits/2026-10-07-implementation.md).
+
+## 2026-10-07 — Correction de la préparation CI macOS
+
+La première CI distante de la livraison a révélé une version FFmpeg préinstallée
+trop ancienne pour le smoke natif, et l'absence de l'encodeur Vorbis dans la
+formule standard utilisée pour générer les fixtures. La CI Apple Silicon/Intel
+compile désormais les sources FFmpeg 9.0.2 vérifiées par SHA-256, comme Linux,
+avec LAME/Opus/Vorbis. Vérification d'empreinte portable et compilation bornée
+à quatre threads. Aucun seuil de sécurité abaissé et aucun test de format ignoré.
+Les guides FR/EN précisent la mise à jour d'un FFmpeg déjà installé sur macOS.

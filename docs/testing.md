@@ -32,8 +32,12 @@ leur réussite graphique ne valide pas Safari/iOS. Comptes et limites de la
 dernière exécution : [DEVLOG](DEVLOG.md).
 
 Les tests natifs et navigateur génèrent des fixtures avec un FFmpeg complet.
-La CI Linux le compile via `tools/install_ci_ffmpeg.sh`, depuis une source fixée
-par SHA-256. Le build Docker de production est limité à l'audio ; ses tests de
+Les CI Linux et macOS (Apple Silicon/Intel) le compilent via
+`tools/install_ci_ffmpeg.sh`, depuis une source fixée par SHA-256, avec les
+encodeurs MP3, Opus et Vorbis nécessaires aux fixtures. Le script utilise
+`shasum` sur macOS lorsque `sha256sum` est absent. Il ne reprend pas la version
+préinstallée du runner, qui peut être ancienne ou manquer d'encodeurs.
+Le build Docker de production est limité à l'audio ; ses tests de
 formats doivent générer les fixtures avec un outil séparé, puis extraire avec
 les binaires de l'image finale. Le [rapport de sécurité](audits/2026-10-05-security-hardening.md)
 distingue ces vérifications des jobs GitHub et des recettes physiques restant à

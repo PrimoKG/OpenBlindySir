@@ -24,6 +24,8 @@ All eight implementation lots are delivered and the LAN stack has restarted. A01
 
 Initial failures led to fixes for accessible editor labels, target size, duplicate Results headings, frozen-reference fixtures, animation measurement and fractional WebKit overflow. Audio constructor failures in Windows WebKit were confirmed from traces and recorded as an environment limitation.
 
+Initial GitHub macOS jobs also exposed an older preinstalled FFmpeg and a missing Vorbis encoder in the standard formula. Apple Silicon/Intel CI now builds the same SHA-256-verified FFmpeg 9.0.2 source as Linux, including fixture encoders and portable checksum verification. The security minimum and affected tests remain intact. Remote matrices cover both macOS architectures with Python 3.12–3.14 and native archives; they do not replace physical-device checks.
+
 ## Deployment and retained state
 
 All three services run the exact scanned images and verified Web build. HTTPS validated with the existing local CA; served HTML/JS/CSS match the build. Anonymous host-tool access is denied. Mounts, configuration, secrets, identities, cookies, shared access, answers, score journal, metadata and **12 archives** were retained. Snapshot **7 → 8** verified; monotonic clocks are rebased and archives gain an empty optional `cleared_fields` property.

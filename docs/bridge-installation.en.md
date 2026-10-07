@@ -34,6 +34,10 @@ FFmpeg. Install using `winget install --id Gyan.FFmpeg --exact` (Windows),
 use your official package manager or [FFmpeg downloads](https://ffmpeg.org/download.html).
 Reopen the terminal after installation.
 
+On macOS, run `brew update` before installation. If FFmpeg is already installed,
+also run `brew upgrade ffmpeg`, then check both versions below: updating Homebrew
+alone does not replace an existing older binary.
+
 **Security minimum: FFmpeg and ffprobe 9.0.2.** A stable distribution's package
 can remain older after `apt update`; use the Docker Bridge or a current build
 linked by the FFmpeg project in that case. The Bridge rejects older/unidentified
