@@ -2465,14 +2465,19 @@ for (const viewport of [
   { width: 1280, height: 720 },
   { width: 390, height: 700 },
   { width: 320, height: 640 },
+  { width: 320, height: 640, font: "DejaVu Sans" },
 ]) {
   for (const host of [false, true]) {
-    test(`answer remains in the viewport before interaction and after clip end (${viewport.width}, ${host ? "host" : "player"})`, async ({
+    test(`answer remains in the viewport before interaction and after clip end (${viewport.width}, ${host ? "host" : "player"}${"font" in viewport ? `, ${viewport.font}` : ""})`, async ({
       page,
     }, info) => {
       await page.setViewportSize(viewport);
       const base = host ? (hostView() as Extract<HostView, { kind: "host_player" }>) : playerView();
       const ui = await harness(page, base);
+      if ("font" in viewport)
+        await page.evaluate((font) => {
+          document.documentElement.style.fontFamily = `"${font}", sans-serif`;
+        }, viewport.font);
       await page.getByRole("button", { name: "Tester mon audio", exact: true }).click();
       await page.route("**/api/audio/viewport", (route) =>
         route.fulfill({ contentType: "audio/wav", body: silentWav(8) }),

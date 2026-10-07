@@ -28,7 +28,7 @@ export default defineConfig({
         launchOptions: { args: ["--autoplay-policy=no-user-gesture-required"] },
       },
     },
-    // Nightly only, not an iOS validation (Safari on iPhone must be tested by hand).
+    // CI and nightly regression coverage; Safari on iPhone still needs physical testing.
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
   webServer: {

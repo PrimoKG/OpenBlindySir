@@ -28,6 +28,10 @@ Initial GitHub macOS jobs also exposed an older preinstalled FFmpeg and a missin
 
 **Four additional pack-loader regressions passed**: coexistence with BSD `sha256sum`, modified archive, malformed checksum line and unexpected image identity. Corruption or a malformed checksum blocks every Docker command; unexpected images never become the wizard alias. Strict `shasum` verification is preferred. Image/checksum lists are generated with LF even on Windows, so Linux/macOS can read them.
 
+The remote matrix passed Windows, Linux, Intel macOS and Apple Silicon native archives, plus all twelve OS/Python 3.12–3.14 combinations. One Ubuntu setup timed out on an APT mirror; its rerun passed. APT network operations now have bounded timeouts/retries without weakening signature checks. Running both browser suites together also exceeded the job budget; they now run independently while preserving the aggregated required check.
+
+WebKit game failures were reproduced in an isolated synthetic room: the automatic scenario left four criteria and changed metadata, then a later scenario expected two points. Application persistence is intentional; fixtures now select their rules and restore their references. The game passed after the automatic scenario. Two additional 320 px regressions with DejaVu Sans passed without weakening CSP. These checks access neither production music nor volumes.
+
 ## Deployment and retained state
 
 All three services run the exact scanned images and verified Web build. HTTPS validated with the existing local CA; served HTML/JS/CSS match the build. Anonymous host-tool access is denied. Mounts, configuration, secrets, identities, cookies, shared access, answers, score journal, metadata and **12 archives** were retained. Snapshot **7 → 8** verified; monotonic clocks are rebased and archives gain an empty optional `cleared_fields` property.

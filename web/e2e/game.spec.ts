@@ -8,6 +8,7 @@ import {
   type TestInfo,
   test,
 } from "@playwright/test";
+import type { LibraryTrack } from "../src/protocol";
 
 const BLIND = "example-e2e-blind";
 const HOST = "example-e2e-host";
@@ -90,6 +91,27 @@ async function seat(
   await unlockAudio(page);
   await page.getByRole("button", { name: "Je l'entends ✓" }).click();
   await expect(page.getByText("✓ Son prêt")).toBeVisible();
+  if (host) {
+    // Ending a session deliberately retains host settings. Each standard game
+    // must select its own rules after a preceding automatic-scoring scenario.
+    await prepare(page, "Règles");
+    const mode = page.getByRole("combobox", { name: "Réponse attendue", exact: true });
+    const scoring = page.getByRole("combobox", { name: "Attribution des points", exact: true });
+    const changed =
+      (await mode.inputValue()) !== "both" || (await scoring.inputValue()) !== "manual";
+    await mode.selectOption("both");
+    await scoring.selectOption("manual");
+    const save = page.getByRole("button", { name: "Enregistrer", exact: true });
+    if (changed) {
+      await expect(save).toBeEnabled();
+      await save.click();
+      await expect(page.locator(".setup").getByText("✓ Enregistré", { exact: true })).toBeVisible();
+    }
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Préparer la partie", exact: true })).toHaveCount(
+      0,
+    );
+  }
   return { page, frames, sent };
 }
 
@@ -614,6 +636,7 @@ test("real automatic scoring accepts the flexible multi-detail answer and reveal
   const host = await seat(browser, "AutoHost", true);
   const alice = await seat(browser, "AutoAlice", false, { width: 390, height: 844 });
   const h = host.page;
+  let originals: LibraryTrack[] = [];
   try {
     await prepare(h, "Musique");
     await expect(
@@ -621,7 +644,8 @@ test("real automatic scoring accepts the flexible multi-detail answer and reveal
     ).toBeVisible({ timeout: 90000 });
     const search = await h.request.get("/api/host/library/search?limit=20");
     expect(search.ok()).toBe(true);
-    const library = await search.json();
+    const library = (await search.json()) as { tracks: LibraryTrack[] };
+    originals = library.tracks;
     expect(library.tracks.length).toBeGreaterThan(0);
     const origin = new URL(h.url()).origin;
     for (const track of library.tracks) {
@@ -686,6 +710,30 @@ test("real automatic scoring accepts the flexible multi-detail answer and reveal
     await h.getByRole("button", { name: "Confirmer", exact: true }).click();
     await expect(alice.page.getByRole("heading", { name: "Résultats", exact: true })).toBeVisible();
   } finally {
+    // Metadata survives session resets too; restore the synthetic references.
+    const origin = new URL(h.url()).origin;
+    for (const track of originals) {
+      const restored = await h.request.put("/api/host/metadata", {
+        headers: { Origin: origin },
+        data: {
+          bridge_id: track.bridge_id,
+          track_id: track.track_id,
+          metadata: {
+            title: track.title,
+            artist: track.artist,
+            featuring: track.featuring,
+            album: track.album,
+            year: track.year,
+            tags: track.tags,
+            linked_to: track.linked_to,
+            aliases: track.aliases,
+            enabled: track.enabled,
+            cleared_fields: track.cleared_fields,
+          },
+        },
+      });
+      expect(restored.ok()).toBe(true);
+    }
     await Promise.all([host.page.context().close(), alice.page.context().close()]);
   }
 });

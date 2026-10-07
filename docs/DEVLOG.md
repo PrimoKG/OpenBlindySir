@@ -2082,3 +2082,18 @@ les options GNU : `shasum` est désormais préféré pour les sources et le pack
 Quatre régressions de chargement réussies sous Git Bash/Perl : archive altérée,
 manifeste malformé, utilitaire BSD présent et mauvaise identité d'image.
 Les listes du pack sont écrites en LF même depuis Windows ; contrôles Ruff réussis.
+
+## 2026-10-07 — Isolation des salles de régression navigateur
+
+La matrice distante valide les douze combinaisons système/Python et les quatre
+archives natives. Un miroir Ubuntu a bloqué APT ; le nouvel essai réussit et la
+préparation Linux borne maintenant ses délais réseau et reprises sans changer
+la vérification des signatures. Les jobs Chromium et WebKit sont séparés pour
+éviter le cumul de leurs durées, en gardant le contrôle agrégé obligatoire.
+
+Une reproduction WebKit Linux isole la cause des erreurs de notation : la salle
+garde volontairement les réglages et métadonnées entre sessions ; les fixtures
+doivent choisir leurs règles et restaurer les références synthétiques modifiées.
+La partie après le scénario automatique réussit après correction de cette isolation.
+Deux contrôles à 320 px avec DejaVu Sans réussissent, avec la CSP active.
+Tests exécutés en conteneurs sans réseau extérieur, données ni musiques de production.

@@ -82,9 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-      - run: |
-          sudo apt-get update && sudo apt-get install -y build-essential nasm pkg-config libmp3lame-dev libopus-dev libvorbis-dev xz-utils curl
-          sh tools/install_ci_ffmpeg.sh
+      - run: sh tools/prepare_ci_ffmpeg.sh
       - run: uv sync --locked
       - run: uv run pytest bridge/tests
 
@@ -103,15 +101,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-      - run: |
-          sudo apt-get update && sudo apt-get install -y build-essential nasm pkg-config libmp3lame-dev libopus-dev libvorbis-dev xz-utils curl
-          sh tools/install_ci_ffmpeg.sh
+      - run: sh tools/prepare_ci_ffmpeg.sh
       - run: uv sync --locked
       - run: uv run pytest server/tests/integration -m integration
 
-  e2e:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  e2e-browsers:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -120,22 +120,28 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: |
-          sudo apt-get update && sudo apt-get install -y build-essential nasm pkg-config libmp3lame-dev libopus-dev libvorbis-dev xz-utils curl
-          sh tools/install_ci_ffmpeg.sh
+      - run: sh tools/prepare_ci_ffmpeg.sh
       - run: uv sync --locked
       - run: npm --prefix web ci
       - run: npm --prefix web run build
-      - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
         working-directory: web
       - name: Browser, keyboard, history and compatibility regression checks
-        run: npx playwright test --project=chromium --project=webkit
+        run: npx playwright test --project=${{ matrix.browser }}
         working-directory: web
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-browsers
+          name: playwright-${{ matrix.browser }}
           path: |
             web/playwright-report
             web/test-results
           retention-days: 7
+
+  # Preserve the existing required check name while isolating each browser's room.
+  e2e:
+    needs: e2e-browsers
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - run: test '${{ needs.e2e-browsers.result }}' = success
