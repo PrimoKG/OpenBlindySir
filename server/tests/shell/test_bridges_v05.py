@@ -7,6 +7,7 @@ import pytest
 from conftest import BRIDGE_ID, ORIGIN, SECRET, Harness, bridge_hello, catalog
 from starlette.websockets import WebSocketDisconnect
 
+from openblindysir_protocol.version import PROTOCOL_VERSION
 from openblindysir_server.auth.bridges import BridgeCredentials
 from openblindysir_server.library import routes as catalog_routes
 
@@ -14,7 +15,7 @@ SECOND = "12345678-1234-1234-1234-123456789abd"
 SECOND_SECRET = "synthetic-second-bridge-private-0123456789abcdef"
 
 
-def hello(identity=BRIDGE_ID, protocol=6):
+def hello(identity=BRIDGE_ID, protocol=PROTOCOL_VERSION):
     message = json.loads(bridge_hello(catalog()["catalog_hash"], 6))
     return {**message, "bridge_id": identity, "protocol": protocol}
 
@@ -116,11 +117,11 @@ def test_bridge_protocol_mismatch_reports_supported_range(harness: Harness, prot
         with pytest.raises(WebSocketDisconnect) as closed:
             bridge.receive_json()
         assert closed.value.code == 1008
-        assert closed.value.reason == "protocol_mismatch;required=6..6"
+        assert closed.value.reason == "protocol_mismatch;required=10..10"
     assert not harness.runtime.bridge.connections
     info = harness.client.get("/api/compatibility").json()
-    assert info["protocol_min"] == info["protocol_max"] == 6
-    assert info["snapshot_format"] == 5
+    assert info["protocol_min"] == info["protocol_max"] == 10
+    assert info["snapshot_format"] == 8
 
 
 def test_player_protocol_mismatch_has_actionable_structured_range(harness: Harness):
@@ -129,7 +130,7 @@ def test_player_protocol_mismatch_has_actionable_structured_range(harness: Harne
         ws.send_json({"t": "HELLO", "client_version": "0.3.0", "protocol": 4})
         error = ws.receive_json()
         assert error["code"] == "protocol_mismatch"
-        assert error["compatibility"]["protocol_min"] == 6
+        assert error["compatibility"]["protocol_min"] == 10
         with pytest.raises(WebSocketDisconnect):
             ws.receive_json()
 

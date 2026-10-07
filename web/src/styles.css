@@ -1667,8 +1667,35 @@ textarea:focus-visible {
   border-bottom: 1px solid var(--border);
   overflow-wrap: break-word;
 }
-.language-choice select {
+.language-choice {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.language-choice button {
   min-height: 44px;
+  min-width: 44px;
+  padding: 0.35rem 0.55rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.language-choice button[aria-pressed="true"] {
+  background: var(--accent);
+  color: white;
+}
+.language-choice button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .review h1 {
   font-size: clamp(1.4rem, 4vw, 2.2rem);

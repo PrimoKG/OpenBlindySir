@@ -92,6 +92,13 @@ class LibraryBridge(OutboundModel):
 
 
 class LibraryTrack(OutboundModel):
+    metadata_revision: int = 0
+    cleared_fields: list[str] = Field(default_factory=list)
+    missing_references: list[str] = Field(default_factory=list)
+    aliases: dict[str, list[str]] | None = None
+    enabled: bool = True
+    tags: list[str] = Field(default_factory=list)
+    linked_to: list[str] = Field(default_factory=list)
     consumption: str = "available"
     bridge_name: str = ""
     duration_ms: int | None = None
@@ -114,6 +121,8 @@ class LibraryTrack(OutboundModel):
 class LibrarySearch(OutboundModel):
     total: int
     tracks: list[LibraryTrack]
+    tags: list[str] = Field(default_factory=list)
+    linked_to: list[str] = Field(default_factory=list)
 
 
 class SourceUpdate(InboundModel):
@@ -122,6 +131,7 @@ class SourceUpdate(InboundModel):
 
 
 class MetadataEdit(InboundModel):
+    expected_revision: Annotated[int, Field(ge=0)] | None = None
     bridge_id: BridgeId
     track_id: TrackId
     metadata: MusicalMetadata

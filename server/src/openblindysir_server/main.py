@@ -18,6 +18,7 @@ from openblindysir_server import __version__, bridge_admin, history
 from openblindysir_server.audio import review as review_routes
 from openblindysir_server.audio import routes as audio_routes
 from openblindysir_server.audio.cache import AudioCache
+from openblindysir_server.auth import access_routes
 from openblindysir_server.auth import routes as auth_routes
 from openblindysir_server.auth.sessions import SessionRegistry
 from openblindysir_server.config import Settings, to_core_config
@@ -39,7 +40,6 @@ from openblindysir_server.ws.hub import PlayerHub
 LOG = get("server")
 SWEEP_INTERVAL_S = 5
 OFFLINE_AFTER_MS = 20_000
-MAX_WS_PER_IP = 20
 
 
 def create_app(
@@ -78,7 +78,9 @@ def create_app(
         runtime=runtime,
         join_limiter=SlidingWindowLimiter(5, 60),
         host_limiter=SlidingWindowLimiter(3, 20),
-        ws_counter=ConnectionCounter(MAX_WS_PER_IP),
+        ws_counter=ConnectionCounter(
+            2 * settings.max_players + 4, global_limit=2 * settings.max_players + 4
+        ),
         started_mono=clock.now().mono_ms,
         lag=lag,
     )
@@ -121,6 +123,7 @@ def create_app(
 
     for router in (
         auth_routes.router,
+        access_routes.router,
         player_endpoint.router,
         bridge_endpoint.router,
         library_routes.router,

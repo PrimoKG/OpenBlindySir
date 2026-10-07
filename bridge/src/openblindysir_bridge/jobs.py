@@ -211,7 +211,13 @@ class JobRunner:
         if not probe.has_audio:
             raise JobError(JobFailureCode.NO_AUDIO, "no audio stream")
         try:
-            start, duration = compute_start(probe.duration_s, request.duration_s, request.fraction)
+            if prepare.review_mode == "preview":
+                duration = min(15, request.duration_s, probe.duration_s)
+                start = max(0, (probe.duration_s - duration) / 2)
+            else:
+                start, duration = compute_start(
+                    probe.duration_s, request.duration_s, request.fraction
+                )
         except TooShortError as exc:
             raise JobError(JobFailureCode.TOO_SHORT, "piste trop courte") from exc
         if request.exact_start_s is not None:

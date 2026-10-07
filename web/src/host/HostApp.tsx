@@ -1,17 +1,19 @@
 // Host interface: a stable toolbar opens optional parameter modals.
 // Buttons shown = view.host.commands: the client never recomputes game rules.
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import * as cmd from "../app/commands";
-import { useGame, useUi } from "../app/hooks";
-import { t, tCode } from "../i18n";
+import { useGame, useServerNow, useUi } from "../app/hooks";
+import { t, tCode, useMessage } from "../i18n";
 import { formatDelta, formatLate } from "../i18n/format";
 import { api } from "../net/api";
-import { nameOf, PlayerApp } from "../player/PlayerApp";
+import { FinaleStage, podiumStep, trackTitle } from "../player/Finale";
+import { AudioGate, nameOf, PlayerApp } from "../player/PlayerApp";
 import { PlayerHistory } from "../player/Recap";
 import type { HostView } from "../protocol";
 import { readLocal, writeLocal } from "../storage";
 import { AudioBadge, Button, ConfirmDialog, Modal, Tabs } from "../ui/components";
 import { NumericDraft } from "../ui/NumericDraft";
+import { ScoreScroll } from "../ui/ScoreScroll";
 import { BridgeConnections } from "./BridgeConnections";
 import { LibraryManager } from "./LibraryManager";
 import { Invite, LibraryIssues, Participation, PartyHistory } from "./PartyTools";
@@ -37,6 +39,12 @@ function Drawer({ view }: { readonly view: HostView }) {
   const tabId = useId();
   const [tab, setTab] = useState("actions");
   const [selecting, setSelecting] = useState(false);
+  const [claims, setClaims] = useState(0);
+  useEffect(() => {
+    const update = (event: Event) => setClaims((event as CustomEvent<number>).detail);
+    window.addEventListener("openblindysir:claims", update);
+    return () => window.removeEventListener("openblindysir:claims", update);
+  }, []);
   const game = useGame();
   const ui = useUi();
   const can = (name: string) => view.host.commands.includes(name);
@@ -66,45 +74,68 @@ function Drawer({ view }: { readonly view: HostView }) {
           {t("ux.persistenceFailed")}
         </p>
       )}
-      {view.session.recovered && <p className="notice">{t("ux.sessionRecovered")}</p>}
-      <fieldset className="row wrap host-toolbar" disabled={ui.socket !== "open" || selecting}>
-        <legend className="sr-only">{t("hostui.drawer")}</legend>
-        {can("pause") && (
-          <Button onClick={() => game.send(cmd.roundCmd(view, "pause"))}>{t("ux.pause")}</Button>
-        )}
-        {can("resume") && (
-          <Button kind="primary" onClick={() => game.send(cmd.roundCmd(view, "resume"))}>
-            {t("ux.resume")}
+      {view.session.recovered && view.phase !== "IN_GAME" && (
+        <details className="recovery-notice">
+          <summary>{t("experience.sessionInfo")}</summary>
+          <p>{t("ux.sessionRecovered")}</p>
+          <p className="muted">{t("finale.recoveryHint")}</p>
+        </details>
+      )}
+      <div className="host-tools">
+        <fieldset className="row wrap host-toolbar" disabled={ui.socket !== "open" || selecting}>
+          <legend className="sr-only">{t("hostui.drawer")}</legend>
+          {view.phase === "LOBBY" && !open && (
+            <Button
+              kind="primary"
+              disabled={!can("start_game") || view.host.start_blockers.length > 0}
+              onClick={() => game.send(cmd.startGame())}
+            >
+              {t("hostui.start")}
+            </Button>
+          )}
+          {can("pause") && (
+            <Button onClick={() => game.send(cmd.roundCmd(view, "pause"))}>{t("ux.pause")}</Button>
+          )}
+          {can("resume") && (
+            <Button kind="primary" onClick={() => game.send(cmd.roundCmd(view, "resume"))}>
+              {t("ux.resume")}
+            </Button>
+          )}
+          <Button
+            kind="secondary"
+            onClick={(event) => {
+              event.currentTarget.focus();
+              setOpen(true);
+            }}
+          >
+            {t(view.phase === "LOBBY" ? "flow.prepare" : "flow.parameters")}
           </Button>
-        )}
-        <Button
-          kind={view.phase === "LOBBY" ? "primary" : "secondary"}
-          onClick={(event) => {
-            event.currentTarget.focus();
-            setOpen(true);
-          }}
-        >
-          {t(view.phase === "LOBBY" ? "flow.prepare" : "flow.parameters")}
+          {(view.phase !== "IN_GAME" || view.kind === "host_mc") && (
+            <LibraryManager view={view} onSelectionPending={setSelecting} />
+          )}
+        </fieldset>
+      </div>
+      <Warnings view={view} />
+      {claims > 0 && view.phase !== "LOBBY" && (
+        <Button onClick={() => setOpen(true)}>
+          {t("session.pendingClaims")} ({claims})
         </Button>
-        {(view.phase !== "IN_GAME" || view.kind === "host_mc") && (
-          <LibraryManager view={view} onSelectionPending={setSelecting} />
-        )}
-      </fieldset>
-      {view.phase !== "LOBBY" && <Warnings view={view} />}
+      )}
       {view.kind === "host_mc" && view.phase === "IN_GAME" && <McPanel view={view} />}
       {view.phase === "LOBBY" && <Invite />}
-      {view.phase === "FINAL_SCORE_REVIEW" && <FinalReview view={view} />}
-      {view.phase === "FINAL_RESULTS" && (
+      {view.phase === "FINAL_SCORE_REVIEW" && (
         <>
-          <EndActions view={view} />
-          <PartyHistory view={view} />
+          <AudioGate view={view} />
+          <FinalReview view={view} />
         </>
       )}
+      {view.phase === "FINAL_RESULTS" && <AfterPodium view={view} />}
       <Modal
         open={open}
         title={t(view.phase === "LOBBY" ? "flow.prepare" : "flow.parameters")}
         onClose={close}
       >
+        {view.phase !== "LOBBY" && <Invite />}
         <fieldset className="stack host" disabled={ui.socket !== "open" || selecting}>
           <legend className="sr-only">{t("flow.parameters")}</legend>
           {view.phase === "LOBBY" ? (
@@ -259,12 +290,15 @@ function ModeSwitch(props: { readonly view: HostView }) {
 
 function Warnings(props: { readonly view: HostView }) {
   const { host } = props.view;
-  if (host.warnings.length === 0 && host.start_blockers.length === 0) {
+  if (
+    host.warnings.length === 0 &&
+    (props.view.phase !== "LOBBY" || host.start_blockers.length === 0)
+  ) {
     return null;
   }
   return (
     <ul className="warnings" role="status">
-      {host.start_blockers.map((b) => (
+      {(props.view.phase === "LOBBY" ? host.start_blockers : []).map((b) => (
         <li key={`b-${b}`}>⚠ {tCode("blocker", b)}</li>
       ))}
       {host.warnings.map((w) => (
@@ -374,6 +408,7 @@ function FinalReview(props: { readonly view: HostView }) {
   const { view } = props;
   const send = useSend();
   const rows = view.host.final_review ?? [];
+  const [fastFinale, setFastFinale] = useState(() => readLocal("fastFinale") === "true");
   const [confirm, setConfirm] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
@@ -381,7 +416,104 @@ function FinalReview(props: { readonly view: HostView }) {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState(false);
   const [roundBusy, setRoundBusy] = useState(false);
+  const [corrected, setCorrected] = useState<ReadonlySet<string>>(new Set());
+  const [listenBusy, setListenBusy] = useState(false);
+  const [listenError, setListenError] = useState(false);
+  const listenRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => listenRequest.current?.abort(), []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a different public round invalidates the outstanding replay request.
   useEffect(() => {
+    listenRequest.current?.abort();
+    listenRequest.current = null;
+    setListenBusy(false);
+    setListenError(false);
+  }, [view.finale?.round?.round_id]);
+  const [presenting, setPresenting] = useState<string | null>(null);
+  const actionBar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = actionBar.current;
+    if (!bar) return;
+    const measure = () =>
+      document.documentElement.style.setProperty(
+        "--finale-bar-reserve",
+        `${bar.getBoundingClientRect().height + 24}px`,
+      );
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    measure();
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty("--finale-bar-reserve");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (view.finale?.round?.round_id === presenting) setPresenting(null);
+  }, [view.finale?.round?.round_id, presenting]);
+  useEffect(() => {
+    if (!presenting) return;
+    const timer = window.setTimeout(() => {
+      setPresenting(null);
+      setSaveError(true);
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [presenting]);
+  const fastSent = useRef<string | null>(null);
+  useEffect(() => {
+    const round = view.finale?.round;
+    if (!round?.awards_pending) fastSent.current = null;
+    if (
+      fastFinale &&
+      round?.awards_pending &&
+      fastSent.current !== round.round_id &&
+      send(cmd.finaleReveal(round.round_id, true))
+    )
+      fastSent.current = round.round_id;
+  }, [fastFinale, view.finale, send]);
+  const present = (id: string) => {
+    window.dispatchEvent(new CustomEvent("openblindysir:private-audio"));
+    listenRequest.current?.abort();
+    if (view.finale?.round?.round_id === id) {
+      setPresenting(null);
+      setSaveError(false);
+      return;
+    }
+    if (send(cmd.finaleReveal(id))) {
+      setPresenting(id);
+      setSaveError(false);
+    } else setSaveError(true);
+  };
+  const listen = async () => {
+    window.dispatchEvent(new CustomEvent("openblindysir:private-audio"));
+    const id = view.finale?.round?.round_id;
+    if (!id) return;
+    setListenBusy(true);
+    setListenError(false);
+    const controller = new AbortController();
+    listenRequest.current = controller;
+    try {
+      const result = await fetch(`/api/host/finale/${id}/listen`, {
+        method: "POST",
+        credentials: "same-origin",
+        signal: controller.signal,
+      });
+      if (!result.ok && !controller.signal.aborted) setListenError(true);
+    } catch {
+      if (!controller.signal.aborted) setListenError(true);
+    } finally {
+      if (listenRequest.current === controller) {
+        listenRequest.current = null;
+        setListenBusy(false);
+      }
+    }
+  };
+  useEffect(() => {
+    const confirmed = rows.filter(
+      (row) =>
+        pending.get(row.player_id) === JSON.stringify([row.draft_delta, row.draft_note ?? ""]),
+    );
+    if (confirmed.length)
+      setCorrected((old) => new Set([...old, ...confirmed.map((row) => row.player_id)]));
     setPending((old) => {
       const next = new Map(old);
       for (const row of rows)
@@ -389,7 +521,7 @@ function FinalReview(props: { readonly view: HostView }) {
           next.delete(row.player_id);
       return next.size === old.size ? old : next;
     });
-  }, [rows]);
+  }, [rows, pending]);
   useEffect(() => {
     if (!pending.size) return;
     const timer = window.setTimeout(() => {
@@ -402,6 +534,7 @@ function FinalReview(props: { readonly view: HostView }) {
     const row = rows.find((item) => item.player_id === pid);
     const note = value ? (notes[pid] ?? row?.draft_note ?? "").trim() : "";
     if (row?.draft_delta === value && (row.draft_note ?? "") === note) {
+      setCorrected((old) => new Set([...old, pid]));
       setSaveError(false);
       setNotes((old) => {
         const next = { ...old };
@@ -442,7 +575,12 @@ function FinalReview(props: { readonly view: HostView }) {
     }
   };
   const saving =
-    busy.size > 0 || pending.size > 0 || roundBusy || Object.keys(notes).length > 0 || saveError;
+    busy.size > 0 ||
+    pending.size > 0 ||
+    roundBusy ||
+    Object.keys(notes).length > 0 ||
+    !!presenting ||
+    listenBusy;
   const rounds = view.host.review_rounds ?? [];
   const [selected, setSelected] = useState(
     () => readLocal(`review:${view.game?.game_id}`) ?? rounds[0]?.round_id ?? "",
@@ -459,215 +597,301 @@ function FinalReview(props: { readonly view: HostView }) {
     writeLocal(`review:${view.game?.game_id}`, id);
   };
   const corrections = rows.filter((r) => r.draft_delta !== 0);
-  const teams = new Map<string, number>();
-  for (const row of rows) {
-    const team = view.players.find((p) => p.id === row.player_id)?.team;
-    if (team) teams.set(team, (teams.get(team) ?? 0) + row.score_after);
-  }
+  const played = rounds.filter((r) => r.played);
+  const unshown = played.filter((r) => !view.finale?.revealed_round_ids.includes(r.round_id));
+  const isPresented = !!active && active.round_id === view.finale?.round?.round_id;
   return (
     <section className="stack final-review">
-      <h2>{t("final.title")}</h2>
-      <p className="muted">{t("review.privateHint")}</p>
-      <p role="status">{t("review.remaining", { count: unchecked })}</p>
-      <div className="global-review-layout">
-        <nav className="review-navigation" aria-label={t("review.rounds")}>
-          <label>
-            {t("library.search")}
-            <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} />
-          </label>
-          <label className="folder-option">
+      <FinaleStage view={view}>
+        <div className="stack finale-host-controls">
+          <label className="folder-option finale-pace">
             <input
               type="checkbox"
-              checked={onlyUnchecked}
-              onChange={(event) => setOnlyUnchecked(event.target.checked)}
+              checked={fastFinale}
+              onChange={(e) => {
+                setFastFinale(e.target.checked);
+                writeLocal("fastFinale", String(e.target.checked));
+              }}
             />
-            {t("flow.onlyUnchecked")}
+            {t("finale.fastPace")}
           </label>
-          <Button
-            disabled={roundBusy}
-            onClick={() => {
-              const next = [...rounds.slice(index + 1), ...rounds.slice(0, index + 1)].find(
-                (round) => round.included && round.answers.some((row) => !row.reviewed),
-              );
-              if (next) choose(next.round_id);
-            }}
-          >
-            {t("flow.nextUnchecked")}
-          </Button>
-          <ul className="list">
-            {rounds
-              .filter((r) =>
-                `${r.number} ${r.track?.display_name ?? ""} ${r.track?.title ?? ""} ${r.track?.artist ?? ""}`
-                  .toLocaleLowerCase()
-                  .includes(query.toLocaleLowerCase()),
-              )
-              .filter(
-                (r) => !onlyUnchecked || (r.included && r.answers.some((row) => !row.reviewed)),
-              )
-              .map((r) => (
-                <li key={r.round_id}>
+          <ol className="finale-steps" aria-label={t("finale.guide")}>
+            {["reveal", "listen", "awards", "ranking", "next"].map((step, position) => (
+              <li
+                key={step}
+                aria-current={
+                  position ===
+                  (!isPresented
+                    ? 0
+                    : view.play
+                      ? 1
+                      : view.finale?.round?.awards_pending ||
+                          active?.answers.some((a) => !a.reviewed)
+                        ? 2
+                        : 4)
+                    ? "step"
+                    : undefined
+                }
+              >
+                {t(`finale.step.${step}` as "finale.step.reveal")}
+              </li>
+            ))}
+          </ol>
+          <div className="row finale-present-controls">
+            <p className="scene-context" role="status">
+              {t(view.finale?.round ? "experience.publicRound" : "experience.publicWaiting", {
+                number: view.finale?.round?.number ?? 1,
+              })}
+            </p>
+            {isPresented && (
+              <>
+                <span className="on-stage-label">{t("finale.onStage")}</span>
+                <Button disabled={listenBusy || saving} onClick={() => void listen()}>
+                  {t(listenBusy ? "finale.preparingAudio" : "finale.listen")}
+                </Button>
+              </>
+            )}
+            {isPresented && view.finale?.round?.awards_pending && (
+              <Button onClick={() => send(cmd.finaleReveal(active.round_id, true))}>
+                {t("auto.fastForward")}
+              </Button>
+            )}
+            {(view.play || listenBusy) && (
+              <Button
+                onClick={() => {
+                  listenRequest.current?.abort();
+                  listenRequest.current = null;
+                  setListenBusy(false);
+                  send(cmd.finaleStop());
+                }}
+              >
+                {t("finale.stopAudio")}
+              </Button>
+            )}
+          </div>
+          {listenError && (
+            <p className="error" role="alert">
+              {t("finale.audioError")}
+            </p>
+          )}
+          <div className="global-review-layout">
+            <nav className="review-navigation" aria-label={t("review.rounds")}>
+              <details className="round-browser">
+                <summary>{t("experience.reviewAll")}</summary>
+                <details className="review-search">
+                  <summary>{t("finale.browse")}</summary>
+                  <label>
+                    {t("library.search")}
+                    <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} />
+                  </label>
+                  <label className="folder-option">
+                    <input
+                      type="checkbox"
+                      checked={onlyUnchecked}
+                      onChange={(event) => setOnlyUnchecked(event.target.checked)}
+                    />
+                    {t("flow.onlyUnchecked")}
+                  </label>
                   <Button
                     disabled={roundBusy}
-                    aria-current={r.round_id === active?.round_id ? "step" : undefined}
-                    onClick={() => choose(r.round_id)}
+                    onClick={() => {
+                      const next = [...rounds.slice(index + 1), ...rounds.slice(0, index + 1)].find(
+                        (round) => round.included && round.answers.some((row) => !row.reviewed),
+                      );
+                      if (next) choose(next.round_id);
+                    }}
                   >
-                    {r.number}. {r.track?.title ?? r.track?.display_name ?? "—"} ·{" "}
-                    {r.included
-                      ? `${r.answers.filter((a) => a.reviewed).length}/${r.answers.length}`
-                      : t("review.cancelledShort")}
+                    {t("flow.nextUnchecked")}
                   </Button>
-                </li>
-              ))}
-          </ul>
-        </nav>
-        <div className="stack">
-          <div className="row wrap">
-            <Button
-              disabled={roundBusy || index === 0}
-              onClick={() => choose(rounds[index - 1]?.round_id ?? "")}
-            >
-              {t("review.previous")}
-            </Button>
-            <strong>
-              {active
-                ? `${t("ux.historyRound", { number: active.number })} · ${index + 1}/${rounds.length}`
-                : t("review.empty")}
-            </strong>
-            <Button
-              disabled={roundBusy || index >= rounds.length - 1}
-              onClick={() => choose(rounds[index + 1]?.round_id ?? "")}
-            >
-              {t("hostui.next")}
-            </Button>
+                </details>
+                <ul className="list">
+                  {rounds
+                    .filter((r) =>
+                      `${r.number} ${r.track?.display_name ?? ""} ${r.track?.title ?? ""} ${r.track?.artist ?? ""}`
+                        .toLocaleLowerCase()
+                        .includes(query.toLocaleLowerCase()),
+                    )
+                    .filter(
+                      (r) =>
+                        !onlyUnchecked || (r.included && r.answers.some((row) => !row.reviewed)),
+                    )
+                    .map((r) => (
+                      <li key={r.round_id}>
+                        <Button
+                          disabled={roundBusy}
+                          aria-current={r.round_id === active?.round_id ? "step" : undefined}
+                          onClick={() => choose(r.round_id)}
+                        >
+                          <span className="round-chip-number">{r.number}</span>
+                          <span className="round-chip-label">
+                            {trackTitle(r.track)}
+                            <small>
+                              {!r.included
+                                ? t("review.cancelledShort")
+                                : r.round_id === view.finale?.round?.round_id
+                                  ? t("experience.onStage")
+                                  : view.finale?.revealed_round_ids.includes(r.round_id)
+                                    ? t(
+                                        r.answers.every((a) => a.reviewed)
+                                          ? "experience.finished"
+                                          : "experience.presented",
+                                      )
+                                    : t("experience.toPresent")}
+                            </small>
+                          </span>
+                        </Button>
+                      </li>
+                    ))}
+                </ul>
+              </details>
+            </nav>
+            <div className="stack">
+              <div className="preparation-choice">
+                <label htmlFor="prepare-round">{t("experience.prepare")}</label>
+                <select
+                  id="prepare-round"
+                  value={active?.round_id ?? ""}
+                  disabled={roundBusy}
+                  onChange={(event) => choose(event.target.value)}
+                >
+                  {rounds.map((r) => (
+                    <option key={r.round_id} value={r.round_id}>
+                      {r.number}. {trackTitle(r.track)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {active && (
+                <ReviewRound
+                  key={active.round_id}
+                  round={active}
+                  view={view}
+                  presented={isPresented}
+                  onBusy={setRoundBusy}
+                />
+              )}
+            </div>
           </div>
-          {active && (
-            <ReviewRound key={active.round_id} round={active} view={view} onBusy={setRoundBusy} />
-          )}
         </div>
-      </div>
-      {teams.size > 0 && (
-        <table className="table provisional-teams">
-          <caption>{t("review.teamTotals")}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("ux.team")}</th>
-              <th scope="col">{t("final.after")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...teams]
-              .sort((a, b) => b[1] - a[1])
-              .map(([team, total]) => (
-                <tr key={team}>
-                  <td>{team}</td>
-                  <td>{total}</td>
+      </FinaleStage>
+      <details className="disclosure finale-adjustments">
+        <summary>{t("finale.adjustments")}</summary>
+        <ScoreScroll
+          controls
+          scope={view.game?.game_id ?? ""}
+          rows={rows.map((row) => ({
+            id: row.player_id,
+            reviewed: corrected.has(row.player_id),
+            revision: corrected.has(row.player_id) ? 1 : 0,
+          }))}
+        >
+          <table className="table final-table">
+            <caption className="sr-only">{t("final.title")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("reveal.player")}</th>
+                <th scope="col">{t("final.before")}</th>
+                <th scope="col">{t("final.correction")}</th>
+                <th scope="col">{t("final.after")}</th>
+                <th scope="col">{t("final.detail")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.player_id} data-scroll-id={row.player_id}>
+                  <td className="final-player">{nameOf(view, row.player_id)}</td>
+                  <td className="final-before">{row.score_before}</td>
+                  <td className="final-correction">
+                    <div className="score-controls">
+                      <Button
+                        disabled={
+                          busy.has(row.player_id) ||
+                          pending.has(row.player_id) ||
+                          row.draft_delta <= -1000
+                        }
+                        aria-label={t("final.decrease", { name: nameOf(view, row.player_id) })}
+                        onClick={() => setCorrection(row.player_id, row.draft_delta - 1)}
+                      >
+                        −
+                      </Button>
+                      <NumericDraft
+                        label={t("final.correctionFor", { name: nameOf(view, row.player_id) })}
+                        value={row.draft_delta}
+                        disabled={pending.has(row.player_id)}
+                        onCommit={(value) => setCorrection(row.player_id, value)}
+                        onBusy={(value) =>
+                          setBusy((old) => {
+                            const next = new Set(old);
+                            if (value) next.add(row.player_id);
+                            else next.delete(row.player_id);
+                            return next;
+                          })
+                        }
+                      />
+                      <Button
+                        disabled={
+                          busy.has(row.player_id) ||
+                          pending.has(row.player_id) ||
+                          row.draft_delta >= 1000
+                        }
+                        aria-label={t("final.increase", { name: nameOf(view, row.player_id) })}
+                        onClick={() => setCorrection(row.player_id, row.draft_delta + 1)}
+                      >
+                        +
+                      </Button>
+                    </div>
+                    <label>
+                      {t("flow.reason")}
+                      <input
+                        maxLength={120}
+                        value={notes[row.player_id] ?? row.draft_note ?? ""}
+                        disabled={pending.has(row.player_id)}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setNotes((old) => {
+                            const next = { ...old };
+                            if (value.trim() === (row.draft_note ?? "")) delete next[row.player_id];
+                            else next[row.player_id] = value;
+                            return next;
+                          });
+                        }}
+                      />
+                    </label>
+                    <Button
+                      disabled={
+                        pending.has(row.player_id) ||
+                        busy.has(row.player_id) ||
+                        notes[row.player_id] === undefined
+                      }
+                      onClick={() => setCorrection(row.player_id, row.draft_delta)}
+                    >
+                      {t("flow.saveReason")}
+                    </Button>
+                  </td>
+                  <td className="final-after">
+                    {row.score_before} → {formatDelta(row.draft_delta)} → {row.score_after}
+                  </td>
+                  <td className="final-detail">
+                    <button
+                      type="button"
+                      className="link"
+                      aria-expanded={detail === row.player_id}
+                      aria-label={`${t("final.detail")} — ${nameOf(view, row.player_id)}`}
+                      onClick={() => setDetail(detail === row.player_id ? null : row.player_id)}
+                    >
+                      {t("final.detail")}
+                    </button>
+                    {detail === row.player_id && <PlayerHistory row={row} />}
+                  </td>
                 </tr>
               ))}
-          </tbody>
-        </table>
-      )}
-      <table className="table final-table">
-        <caption className="sr-only">{t("final.title")}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{t("reveal.player")}</th>
-            <th scope="col">{t("final.before")}</th>
-            <th scope="col">{t("final.correction")}</th>
-            <th scope="col">{t("final.after")}</th>
-            <th scope="col">{t("final.detail")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.player_id}>
-              <td className="final-player">{nameOf(view, row.player_id)}</td>
-              <td className="final-before">{row.score_before}</td>
-              <td className="final-correction">
-                <div className="score-controls">
-                  <Button
-                    disabled={
-                      busy.has(row.player_id) ||
-                      pending.has(row.player_id) ||
-                      row.draft_delta <= -1000
-                    }
-                    aria-label={t("final.decrease", { name: nameOf(view, row.player_id) })}
-                    onClick={() => setCorrection(row.player_id, row.draft_delta - 1)}
-                  >
-                    −
-                  </Button>
-                  <NumericDraft
-                    label={t("final.correctionFor", { name: nameOf(view, row.player_id) })}
-                    value={row.draft_delta}
-                    disabled={pending.has(row.player_id)}
-                    onCommit={(value) => setCorrection(row.player_id, value)}
-                    onBusy={(value) =>
-                      setBusy((old) => {
-                        const next = new Set(old);
-                        if (value) next.add(row.player_id);
-                        else next.delete(row.player_id);
-                        return next;
-                      })
-                    }
-                  />
-                  <Button
-                    disabled={
-                      busy.has(row.player_id) ||
-                      pending.has(row.player_id) ||
-                      row.draft_delta >= 1000
-                    }
-                    aria-label={t("final.increase", { name: nameOf(view, row.player_id) })}
-                    onClick={() => setCorrection(row.player_id, row.draft_delta + 1)}
-                  >
-                    +
-                  </Button>
-                </div>
-                <label>
-                  {t("flow.reason")}
-                  <input
-                    maxLength={120}
-                    value={notes[row.player_id] ?? row.draft_note ?? ""}
-                    disabled={pending.has(row.player_id)}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setNotes((old) => {
-                        const next = { ...old };
-                        if (value.trim() === (row.draft_note ?? "")) delete next[row.player_id];
-                        else next[row.player_id] = value;
-                        return next;
-                      });
-                    }}
-                  />
-                </label>
-                <Button
-                  disabled={
-                    pending.has(row.player_id) ||
-                    busy.has(row.player_id) ||
-                    notes[row.player_id] === undefined
-                  }
-                  onClick={() => setCorrection(row.player_id, row.draft_delta)}
-                >
-                  {t("flow.saveReason")}
-                </Button>
-              </td>
-              <td className="final-after">
-                {row.score_before} → {formatDelta(row.draft_delta)} → {row.score_after}
-              </td>
-              <td className="final-detail">
-                <button
-                  type="button"
-                  className="link"
-                  aria-expanded={detail === row.player_id}
-                  aria-label={`${t("final.detail")} — ${nameOf(view, row.player_id)}`}
-                  onClick={() => setDetail(detail === row.player_id ? null : row.player_id)}
-                >
-                  {t("final.detail")}
-                </button>
-                {detail === row.player_id && <PlayerHistory row={row} />}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            </tbody>
+          </table>
+        </ScoreScroll>
+        <Button disabled={saving} onClick={resetCorrections}>
+          {t("final.reset")}
+        </Button>
+      </details>
       {saveError && (
         <p role="alert" className="error">
           {t("ux.saveTimeout")}
@@ -678,11 +902,41 @@ function FinalReview(props: { readonly view: HostView }) {
           {t("ux.waitingScores")}
         </p>
       )}
-      <div className="row">
-        <Button disabled={saving} onClick={resetCorrections}>
-          {t("final.reset")}
-        </Button>
-        <Button kind="primary" disabled={saving} onClick={() => setConfirm(true)}>
+      <div className="row finale-action-bar" ref={actionBar}>
+        <FinishGameButton view={view} disabled={saving} />
+        <span role="status">
+          {saving
+            ? t("experience.saveBusy")
+            : unshown.length
+              ? t("experience.remainingReveals", { count: unshown.length })
+              : unchecked
+                ? t("experience.scoringRemaining", { count: unchecked })
+                : t("experience.readyPodium")}
+        </span>
+        {active && !isPresented && active.played ? (
+          <Button kind="primary" disabled={saving} onClick={() => present(active.round_id)}>
+            {t("finale.reveal", { number: active.number })}
+          </Button>
+        ) : unshown.length > 0 ? (
+          <Button
+            kind="primary"
+            disabled={saving}
+            onClick={() => {
+              const next = unshown[0];
+              if (next) {
+                choose(next.round_id);
+                present(next.round_id);
+              }
+            }}
+          >
+            {t("finale.reveal", { number: unshown[0]?.number ?? 1 })}
+          </Button>
+        ) : null}
+        <Button
+          kind={unshown.length ? "secondary" : "primary"}
+          disabled={saving || unshown.length > 0 || !!view.finale?.round?.awards_pending}
+          onClick={() => setConfirm(true)}
+        >
           {t("final.validate")}
         </Button>
       </div>
@@ -692,13 +946,30 @@ function FinalReview(props: { readonly view: HostView }) {
         message={
           unchecked ? t("ux.confirmUnchecked", { count: unchecked }) : t("review.privateHint")
         }
+        confirmLabel={t(unchecked ? "finale.reviewRemaining" : "hostui.confirm")}
         onConfirm={() => {
-          send(cmd.finalValidate(unchecked > 0));
+          if (unchecked) {
+            const next = rounds.find((r) => r.included && r.answers.some((a) => !a.reviewed));
+            if (next) choose(next.round_id);
+            requestAnimationFrame(() =>
+              document.querySelector(".review-section")?.scrollIntoView({ block: "start" }),
+            );
+          } else send(cmd.finalValidate(false));
           setConfirm(false);
         }}
         onCancel={() => setConfirm(false)}
       >
-        <table className="table">
+        {unchecked > 0 && (
+          <Button
+            onClick={() => {
+              send(cmd.finalValidate(true));
+              setConfirm(false);
+            }}
+          >
+            {t("finale.publishCurrent")}
+          </Button>
+        )}
+        <table className="table podium-confirmation">
           <caption>{t("final.title")}</caption>
           <thead>
             <tr>
@@ -731,29 +1002,84 @@ function FinalReview(props: { readonly view: HostView }) {
 
 function SessionControls({ view }: { readonly view: HostView }) {
   const send = useSend();
-  const [confirm, setConfirm] = useState(false);
   return (
     <section className="row wrap session-controls">
       <Button onClick={() => send(cmd.joinLock(view, !view.host.joins_locked))}>
         {t(view.host.joins_locked ? "session.unlock" : "session.lock")}
       </Button>
-      {view.host.commands.includes("end_game") && (
-        <Button kind="danger" onClick={() => setConfirm(true)}>
-          {t("session.stop")}
-        </Button>
-      )}
+      <FinishGameButton view={view} />
+    </section>
+  );
+}
+
+function FinishGameButton({
+  view,
+  disabled = false,
+}: {
+  readonly view: HostView;
+  readonly disabled?: boolean;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useMessage(null);
+  if (view.phase === "LOBBY" || view.phase === "FINAL_RESULTS") return null;
+  const finish = async () => {
+    if (busy || disabled) return;
+    window.dispatchEvent(new CustomEvent("openblindysir:private-audio"));
+    setBusy(true);
+    setError(null);
+    const result = await api.finishGame(view);
+    setBusy(false);
+    if (result.ok) setConfirm(false);
+    else setError(() => tCode("error", result.error));
+  };
+  return (
+    <>
+      <Button kind="danger" disabled={disabled || busy} onClick={() => setConfirm(true)}>
+        {t("session.stop")}
+      </Button>
       <ConfirmDialog
         open={confirm}
         title={t("session.stop")}
-        message={t("session.stopHint")}
-        onCancel={() => setConfirm(false)}
-        onConfirm={() => {
-          send(cmd.endGame(view, "score"));
-          setConfirm(false);
+        message={t("session.finishHint")}
+        cancelLabel={t("session.returnScoring")}
+        confirmLabel={t("session.finish")}
+        onCancel={() => {
+          if (!busy) setConfirm(false);
         }}
-      />
-    </section>
+        onConfirm={() => void finish()}
+      >
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        {busy && <p role="status">{t("ux.saving")}</p>}
+      </ConfirmDialog>
+    </>
   );
+}
+
+function AfterPodium({ view }: { readonly view: HostView }) {
+  const game = useGame();
+  const start = view.final_results?.podium_started_at;
+  const now = useServerNow(
+    start != null && performance.now() + (game.clock.estimate()?.offset ?? 0) < start + 5400,
+  );
+  const rows = view.team_standings.length
+    ? view.team_standings
+    : (view.final_results?.podium ?? []);
+  const { done } = podiumStep(
+    now,
+    start,
+    rows.map((row) => row.rank),
+  );
+  return done ? (
+    <>
+      <EndActions view={view} />
+      <PartyHistory view={view} />
+    </>
+  ) : null;
 }
 
 function EndActions(props: { readonly view: HostView }) {
@@ -874,7 +1200,7 @@ function McPanel(props: { readonly view: Extract<HostView, { kind: "host_mc" }> 
 
 function Diagnostics() {
   const [data, setData] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useMessage(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const load = () => {
@@ -885,7 +1211,7 @@ function Diagnostics() {
       setBusy(false);
       if (result.ok) {
         setData(JSON.stringify(result.data, null, 2));
-      } else setError(tCode("error", result.error));
+      } else setError(() => tCode("error", result.error));
     });
   };
   return (
@@ -910,7 +1236,7 @@ function Diagnostics() {
                 await navigator.clipboard.writeText(data);
                 setCopied(true);
               } catch {
-                setError(t("ux.copyDiagnosticsFallback"));
+                setError(() => t("ux.copyDiagnosticsFallback"));
               }
             }}
           >

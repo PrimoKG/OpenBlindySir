@@ -4,6 +4,7 @@ from collections import deque
 
 from openblindysir_protocol.enums import BridgeState, GamePhase, RoundState
 from openblindysir_protocol.views import PoolStatus
+from openblindysir_server.game.metadata import musical_metadata
 from openblindysir_server.game.state import SessionState, Slot, TrackRef, current_round
 
 
@@ -20,7 +21,10 @@ def pool(s: SessionState) -> list[TrackRef]:
         if catalog is None:
             continue
         for track_id, entry in catalog.entries.items():
-            if matches(entry.relpath, prefix):
+            if (
+                matches(entry.relpath, prefix)
+                and musical_metadata(s, TrackRef(bridge_id, track_id)).enabled is not False
+            ):
                 found.add(TrackRef(bridge_id, track_id))
     return sorted(found - s.game.unavailable)
 
@@ -113,6 +117,7 @@ def take(s: SessionState) -> TrackRef | None:
         reserved = set(s.game.manual_tracks.values()) | {slot.track_ref for slot in live_slots(s)}
         if (
             ref not in s.game.unavailable
+            and musical_metadata(s, ref).enabled is not False
             and ref not in reserved
             and track_exists(s, ref)
             and online(s, ref)
@@ -148,7 +153,10 @@ def pool_status(s: SessionState) -> PoolStatus:
     reserved_refs = {slot.track_ref for slot in live_slots(s)} | set(s.game.manual_tracks.values())
     reserved = len((reserved_refs - {None}) - s.played)
     if s.game.phase is GamePhase.IN_GAME:
-        remaining = len(s.game.queue) + len(s.game.manual_tracks)
+        valid = set(tracks)
+        remaining = sum(ref in valid for ref in s.game.queue) + sum(
+            ref in valid for ref in s.game.manual_tracks.values()
+        )
     else:
         remaining = size if s.game.settings.allow_repeats else fresh
     return PoolStatus(

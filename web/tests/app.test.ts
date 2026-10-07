@@ -98,6 +98,7 @@ function fakeView(overrides: Record<string, unknown> = {}): AnyView {
     audio: { current: null, next: null },
     play: { play_id: "pl_000002", asset_id: "a_x", start_at: 1, clip_offset: 0 },
     final_results: null,
+    finale: null,
     rules: null,
     paused: null,
     team_standings: [],

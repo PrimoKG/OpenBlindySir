@@ -202,7 +202,9 @@ aucune ouverture de port entrant, même lorsqu'il tourne sur un autre PC.
 Ouvrez l'URL HTTPS imprimée, rejoignez avec le mot de passe de partie, puis allez
 sur `/host` avec le mot de passe hôte. Vérifiez « Bibliothèque connectée »,
 choisissez les dossiers, enregistrez les réglages et faites tester l'audio par
-les joueurs. Le [guide utilisateur](guide-utilisateur.md) décrit ensuite toutes
+les joueurs. Partagez ensuite le QR/lien de **Inviter les joueurs** : un pseudo
+suffit aux invités. Avec l’adresse simple, donnez aussi le mot de passe de partie.
+Ne partagez jamais le mot de passe hôte. Le [guide utilisateur](guide-utilisateur.md) décrit ensuite toutes
 les étapes du jeu, la notation et la vérification finale.
 
 ## Dépannage de l'hébergement
@@ -212,7 +214,7 @@ par défaut, relatif au répertoire de lancement). Gardez ce dossier accessible 
 et faites-en une sauvegarde avant une mise à jour. Les réponses et le catalogue y sont
 privés ; aucune musique ni mot de passe en clair n'y est stocké. Une manche OPEN
 interrompue revient en correction, les préparations reprennent via le Bridge.
-Serveur, interface et Bridge doivent utiliser le même protocole (actuellement 2).
+Serveur, interface et Bridge doivent utiliser le même protocole (actuellement 9).
 
 | Symptôme | Vérification |
 |---|---|
@@ -245,6 +247,14 @@ passer `--credentials` au Bridge ; conserver ses choix de racine et URL locaux.
 Révocation depuis le panneau hôte ou `bridge-revoke`, rotation avec le même UUID et
 un nouveau fichier de sortie. Voir [les commandes natives/Docker V0.5](v0.5.md).
 Sauvegarder tout `STATE_DIR`, registre d'identités compris, et les fichiers de
-configuration privés. Logiciel 0.5.0.dev0, protocole 6, snapshot 5, historique 2 :
+configuration privés. Logiciel 0.5.0.dev0, protocole 9, snapshot 7, historique 2 :
 aucune publication ni gel. [Retour arrière](operations.md) exige un backup antérieur
 à la migration pour reprendre V0.3.
+
+## Certificat LAN et notation optionnelle
+
+Pour approuver l’autorité HTTPS locale sur Windows/iOS/Android, voir
+[certificat-local.md](certificat-local.md). Partager uniquement le certificat public
+`root.crt`, jamais ses clés. Le mode LAN est conservé.
+La [notation automatique](notation-automatique.md) nécessite de mettre à jour
+serveur, Bridge et interface ensemble (protocole 9, snapshot 7), après sauvegarde privée.

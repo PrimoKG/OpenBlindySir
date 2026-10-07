@@ -62,5 +62,5 @@ NonZeroPoints = Annotated[
 ]
 # Server monotonic clock, in milliseconds.
 ServerMs = Annotated[int, Field(ge=0, le=2**53 - 1)]
-AnswerText = Annotated[str, StringConstraints(max_length=200)]
+AnswerText = Annotated[str, StringConstraints(max_length=1500)]
 NoteText = Annotated[str, StringConstraints(max_length=120)]

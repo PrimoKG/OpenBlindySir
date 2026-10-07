@@ -48,6 +48,10 @@ export class GameSocket {
   private retryTimer: number | undefined;
   private pending: { roundId: string; text: string } | null = null;
   private stopped = false;
+  private generation = 0;
+  private connecting: Promise<void> | null = null;
+  private sessionRequest: AbortController | null = null;
+  private burstTimers = new Set<number>();
   status: SocketStatus = "connecting";
 
   constructor(private readonly opts: Options) {}
@@ -57,9 +61,25 @@ export class GameSocket {
     this.opts.onStatus(status);
   }
 
-  async connect(): Promise<void> {
+  connect(): Promise<void> {
+    if (this.connecting && !this.stopped) return this.connecting;
+    if (this.ws && this.ws.readyState < 2 && !this.stopped) return Promise.resolve();
     this.stopped = false;
-    const session = await api.session(); // also refreshes the cookie lifetime
+    window.clearTimeout(this.retryTimer);
+    const generation = ++this.generation;
+    const controller = new AbortController();
+    this.sessionRequest = controller;
+    const request = this.openSession(generation, controller).finally(() => {
+      if (this.connecting === request) this.connecting = null;
+      if (this.sessionRequest === controller) this.sessionRequest = null;
+    });
+    this.connecting = request;
+    return request;
+  }
+
+  private async openSession(generation: number, controller: AbortController): Promise<void> {
+    const session = await api.session(controller.signal); // also refreshes the cookie lifetime
+    if (this.stopped || generation !== this.generation || controller.signal.aborted) return;
     if (!session.ok) {
       if (session.error === "unauthenticated") {
         this.setStatus("rejoin");
@@ -71,8 +91,10 @@ export class GameSocket {
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(`${scheme}://${location.host}/api/ws`);
     this.ws = ws;
+    const active = () => !this.stopped && this.ws === ws && this.generation === generation;
     this.firstState = true;
     ws.onopen = () => {
+      if (!active()) return;
       this.attempt = 0;
       this.lastError = null;
       this.send({ t: "HELLO", client_version: CLIENT_VERSION, protocol: PROTOCOL_VERSION });
@@ -82,8 +104,12 @@ export class GameSocket {
       this.pingTimer = window.setInterval(() => this.ping(), PING_INTERVAL_MS);
       this.setStatus("open");
     };
-    ws.onmessage = (event) => this.onMessage(event);
-    ws.onclose = (event) => this.onClose(event.code);
+    ws.onmessage = (event) => {
+      if (active()) this.onMessage(event);
+    };
+    ws.onclose = (event) => {
+      if (active()) this.onClose(event.code);
+    };
   }
 
   private onMessage(event: MessageEvent): void {
@@ -157,6 +183,7 @@ export class GameSocket {
   }
 
   private scheduleReconnect(): void {
+    if (this.stopped) return;
     this.setStatus("reconnecting");
     window.clearTimeout(this.retryTimer);
     const delay = nextDelay(this.attempt, Math.random);
@@ -199,15 +226,31 @@ export class GameSocket {
   }
 
   burstSync(): void {
+    if (this.stopped) return;
     for (let i = 0; i < BURST_PINGS; i += 1) {
-      window.setTimeout(() => this.ping(), i * BURST_SPACING_MS);
+      const timer = window.setTimeout(() => {
+        this.burstTimers.delete(timer);
+        this.ping();
+      }, i * BURST_SPACING_MS);
+      this.burstTimers.add(timer);
     }
   }
 
   close(): void {
     this.stopped = true;
+    this.generation++;
+    this.sessionRequest?.abort();
+    this.sessionRequest = null;
+    this.connecting = null;
     window.clearInterval(this.pingTimer);
     window.clearTimeout(this.retryTimer);
-    this.ws?.close(1000);
+    for (const timer of this.burstTimers) window.clearTimeout(timer);
+    this.burstTimers.clear();
+    const ws = this.ws;
+    this.ws = null;
+    if (ws) {
+      ws.onopen = ws.onmessage = ws.onclose = null;
+      ws.close(1000);
+    }
   }
 }

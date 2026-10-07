@@ -4,8 +4,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
-from openblindysir_protocol.enums import Role
-from openblindysir_protocol.errors import CloseCode, ErrorCode
+from openblindysir_protocol.errors import ErrorCode
 from openblindysir_protocol.http import (
     HostElevateRequest,
     HostElevateResponse,
@@ -45,6 +44,11 @@ def _session_response(state: AppState, player_id: str) -> SessionResponse:
 
 def _json(model: object, status: int = 200) -> JSONResponse:
     return JSONResponse(model.model_dump(mode="json"), status_code=status)  # type: ignore[attr-defined]
+
+
+def persistence_error() -> JSONResponse:
+    # HTTP-only access error: no WebSocket protocol change.
+    return JSONResponse({"error": "persistence_failed"}, status_code=503)
 
 
 def current_player(request: Request, state: AppState) -> str | None:
@@ -111,8 +115,10 @@ async def recovery_code(request: Request) -> Response:
         return error(401, ErrorCode.UNAUTHENTICATED)
     if not state.recovery_limiter.allow(pid, state.runtime.clock.now().mono_ms):
         return error(429, ErrorCode.RATE_LIMITED)
-    code = state.runtime.sessions.recovery_code(pid)
-    state.runtime.save_snapshot()
+    candidate = state.runtime.session_candidate()
+    code = candidate.recovery_code(pid)
+    if not state.runtime.commit_sessions(candidate):
+        return persistence_error()
     return _json(RecoveryCode(code=code))
 
 
@@ -138,17 +144,13 @@ async def recover(request: Request) -> Response:
         return error(409, ErrorCode.ALREADY_JOINED)
     if not verify_password(payload.password, state.settings.blind_password):
         return error(401, ErrorCode.RECOVERY_INVALID)
-    pid = runtime.sessions.recover(payload.code)
+    candidate = runtime.session_candidate()
+    pid = candidate.recover(payload.code)
     if pid is None or not runtime.engine.player_exists(pid):
         return error(401, ErrorCode.RECOVERY_INVALID)
-    runtime.sessions.revoke((pid,))
-    runtime.hub.close(pid, int(CloseCode.SUPERSEDED))
-    runtime.dispatch(c.Disconnected(pid))
-    # A recovery code restores participation, never host privileges.
-    runtime.engine.state.players[pid].role = Role.PLAYER
-    token = runtime.sessions.issue(pid, now)
-    runtime.hub.mark_dirty()
-    runtime.save_snapshot()
+    token = runtime.transfer_identity(pid, candidate, runtime.clock.now().mono_ms)
+    if token is None:
+        return persistence_error()
     response = _json(_session_response(state, pid))
     set_session_cookie(response, token, state.settings)
     return response

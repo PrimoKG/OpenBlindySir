@@ -26,6 +26,7 @@ from openblindysir_protocol.enums import (
     Role,
 )
 from openblindysir_protocol.errors import StartBlocker
+from openblindysir_protocol.metadata import MusicalMetadata
 from openblindysir_protocol.settings import GameSettings, ServerLimits
 
 # --- common sub-models -------------------------------------------------------------------
@@ -67,6 +68,13 @@ class TeamStanding(OutboundModel):
 
 
 class GameRules(OutboundModel):
+    answer_max_chars: int = 1000
+    scoring_mode: str = "manual"
+    acceptance_threshold: int = 90
+    answer_fields: list[str] = Field(default_factory=lambda: ["title", "artist"])
+    album_points: int = 1
+    year_points: int = 1
+    featuring_points: int = 1
     custom_points: int = 1
     answer_mode: str
     title_points: int
@@ -131,6 +139,8 @@ class MyAnswer(OutboundModel):
 
 
 class RevealTrack(OutboundModel):
+    cleared_fields: list[str] = Field(default_factory=list)
+    aliases: dict[str, list[str]] | None = None
     display_name: str
     folder: str
     title: str | None
@@ -213,11 +223,25 @@ class RoundMcOpen(OutboundModel):
     per_player: list[McOpenRow]
 
 
+class AutoMatchInfo(OutboundModel):
+    criterion: str
+    reference: str | None
+    fragment: str | None
+    similarity: float
+    threshold: int
+    status: str
+
+
 class ReviewRow(OutboundModel):
+    auto_evidence: list[AutoMatchInfo] = Field(default_factory=list)
+    auto_overridden: bool = False
     judgement: str = "manual"
     title_correct: bool | None = None
     artist_correct: bool | None = None
     custom_correct: bool | None = None
+    album_correct: bool | None = None
+    year_correct: bool | None = None
+    featuring_correct: bool | None = None
     score_revision: int = 0
     player_id: PlayerId
     text: str | None
@@ -233,6 +257,9 @@ class ReviewRow(OutboundModel):
 
 
 class ReviewRound(OutboundModel):
+    scoring_reference: MusicalMetadata | None = None
+    reference_changed: bool = False
+    played: bool = False
     full_review_allowed: bool = False
     bridge_online: bool = False
     round_id: RoundId
@@ -327,6 +354,9 @@ class PoolStatus(OutboundModel):
 
 
 class HistoryEntry(OutboundModel):
+    album_correct: bool | None = None
+    year_correct: bool | None = None
+    featuring_correct: bool | None = None
     judgement: str = "manual"
     title_correct: bool | None = None
     artist_correct: bool | None = None
@@ -376,6 +406,7 @@ class ManualTrackChoice(OutboundModel):
 
 
 class HostPanel(OutboundModel):
+    auto_missing_references: int = 0
     settings: GameSettings
     limits: ServerLimits
     commands: list[str]  # HOST commands allowed now
@@ -425,6 +456,42 @@ class FinalResults(OutboundModel):
     final_adjustments: list[FinalAdjustmentShown]
     recap: list[FinalReviewRow] = Field(default_factory=list)
     finished_at: int | None = None
+    podium_started_at: int | None = None
+
+
+class FinaleAnswer(OutboundModel):
+    """Only closed answers of a deliberately revealed round; no private timing data."""
+
+    player_id: PlayerId
+    text: str | None
+    points: int
+    reviewed: bool
+    revision: int
+    title_correct: bool | None = None
+    artist_correct: bool | None = None
+    custom_correct: bool | None = None
+    album_correct: bool | None = None
+    year_correct: bool | None = None
+    featuring_correct: bool | None = None
+
+
+class FinaleRound(OutboundModel):
+    awards_pending: bool = False
+    round_id: RoundId
+    number: int
+    track: RevealTrack | None
+    answers: list[FinaleAnswer]
+    included: bool
+
+
+class Finale(OutboundModel):
+    round: FinaleRound | None
+    revealed_round_ids: list[RoundId]
+    rounds_total: int
+    reviewed: int
+    expected: int
+    standings: list[StandingRow]
+    teams: list[TeamStanding]
 
 
 class GameRecord(OutboundModel):
@@ -477,6 +544,7 @@ class _ViewBase(OutboundModel):
     rules: GameRules | None = None
     paused: PauseInfo | None = None
     team_standings: list[TeamStanding] = Field(default_factory=list)
+    finale: Finale | None = None
 
 
 class PlayerView(_ViewBase):

@@ -5,6 +5,7 @@ by ``_reveal_track``, ``_mc_panel`` and ``_mc_track_info``.
 """
 
 import posixpath
+from dataclasses import asdict
 
 from openblindysir_protocol.enums import (
     AnswerStatus,
@@ -18,6 +19,7 @@ from openblindysir_protocol.enums import (
     RoundState,
     ScoreKind,
 )
+from openblindysir_protocol.metadata import MusicalMetadata
 from openblindysir_protocol.settings import GameSettings, ServerLimits, SourceView
 from openblindysir_protocol.version import PROTOCOL_VERSION
 from openblindysir_protocol.views import (
@@ -25,9 +27,13 @@ from openblindysir_protocol.views import (
     ArchiveSource,
     AudioRef,
     AudioSlots,
+    AutoMatchInfo,
     BridgeDetail,
     BridgeStatus,
     FinalAdjustmentShown,
+    Finale,
+    FinaleAnswer,
+    FinaleRound,
     FinalResults,
     FinalReviewRow,
     GameInfo,
@@ -65,7 +71,8 @@ from openblindysir_protocol.views import (
     ViewPlayer,
 )
 from openblindysir_server import __version__
-from openblindysir_server.game import assets, manual, permissions, rounds, selection
+from openblindysir_server.game import assets, auto_scoring, manual, permissions, rounds, selection
+from openblindysir_server.game.metadata import musical_metadata
 from openblindysir_server.game.readiness import expected_ready, ready_ids
 from openblindysir_server.game.standings import standings, standings_player_ids
 from openblindysir_server.game.state import (
@@ -113,6 +120,7 @@ def view_for(s: SessionState, player_id: str) -> AnyView:
     audio = audio_slots(s)
     play = _play(s)
     final_results = _final_results(s, ranking)
+    finale = _finale(s)
     rules, paused, teams = _rules(s), _paused(s), team_standings(s, ranking)
     if p.role is Role.PLAYER:
         return PlayerView(
@@ -126,6 +134,7 @@ def view_for(s: SessionState, player_id: str) -> AnyView:
             audio=audio,
             play=play,
             final_results=final_results,
+            finale=finale,
             round=_round_player(s, p),
             rules=rules,
             paused=paused,
@@ -144,6 +153,7 @@ def view_for(s: SessionState, player_id: str) -> AnyView:
             audio=audio,
             play=play,
             final_results=final_results,
+            finale=finale,
             round=_round_host_pm(s, p),
             host=host,
             rules=rules,
@@ -161,6 +171,7 @@ def view_for(s: SessionState, player_id: str) -> AnyView:
         audio=audio,
         play=play,
         final_results=final_results,
+        finale=finale,
         round=_round_mc(s),
         host=host,
         mc=_mc_panel(s),
@@ -186,6 +197,13 @@ def _session(s: SessionState) -> SessionInfo:
 def _rules(s: SessionState) -> GameRules:
     cfg = s.game.settings
     return GameRules(
+        answer_max_chars=s.config.answer_max_chars,
+        scoring_mode=cfg.scoring_mode,
+        acceptance_threshold=cfg.acceptance_threshold,
+        answer_fields=cfg.answer_fields,
+        album_points=cfg.album_points,
+        year_points=cfg.year_points,
+        featuring_points=cfg.featuring_points,
         answer_mode=cfg.answer_mode,
         title_points=cfg.title_points,
         artist_points=cfg.artist_points,
@@ -296,6 +314,11 @@ def _audio_ref(s: SessionState, asset_id: str | None) -> AudioRef | None:
 
 def audio_slots(s: SessionState) -> AudioSlots:
     """Downloadable clips; ``next`` only while the current round is REVIEW/REVEALED (§7.3)."""
+    if s.game.phase is GamePhase.FINAL_SCORE_REVIEW:
+        play = s.game.finale_play
+        return AudioSlots(current=_audio_ref(s, play.asset_id) if play else None, next=None)
+    if s.game.phase is GamePhase.FINAL_RESULTS:
+        return AudioSlots(current=None, next=None)
     r = current_round(s.game)
     if r is None:
         return AudioSlots(current=None, next=None)
@@ -308,7 +331,19 @@ def audio_slots(s: SessionState) -> AudioSlots:
 
 def _play(s: SessionState) -> PlayInfo | None:
     r = current_round(s.game)
-    play = active_play(r) if r is not None else None
+    play = (
+        s.game.finale_play
+        if s.game.phase is GamePhase.FINAL_SCORE_REVIEW
+        else active_play(r)
+        if r is not None
+        else None
+    )
+    if (
+        s.game.phase is GamePhase.FINAL_SCORE_REVIEW
+        and play is not None
+        and s.last_at >= play.ends_at
+    ):
+        return None
     if play is None:
         return None
     return PlayInfo(
@@ -335,6 +370,9 @@ def _final_results(s: SessionState, ranking: list[StandingRow]) -> FinalResults 
         final_adjustments=shown,
         recap=_final_rows(s, ranking),
         finished_at=g.finalized_wall_ms,
+        podium_started_at=g.finalized_at + 800
+        if g.finalized_at is not None and not g.podium_skipped
+        else None,
     )
 
 
@@ -448,6 +486,10 @@ def _review_rows(s: SessionState, r: Round) -> list[ReviewRow]:
         status = answer.status if answer.status is not AnswerStatus.DRAFT else AnswerStatus.NONE
         rows.append(
             ReviewRow(
+                auto_evidence=[
+                    AutoMatchInfo(**asdict(row)) for row in r.auto_evidence.get(pid, [])
+                ],
+                auto_overridden=pid in r.auto_overrides,
                 player_id=pid,
                 text=answer.text if status is not AnswerStatus.NONE else None,
                 status=status,
@@ -491,6 +533,8 @@ def _reveal_track(r: Round) -> RevealTrack:
 
 def _track_info(info: RevealInfo) -> RevealTrack:
     return RevealTrack(
+        cleared_fields=info.cleared_fields or [],
+        aliases=info.aliases,
         display_name=info.display_name,
         folder=info.folder,
         title=info.title,
@@ -671,6 +715,12 @@ def _round_mc(
 def _settings(s: SessionState) -> GameSettings:
     settings = s.game.settings
     return GameSettings(
+        scoring_mode=settings.scoring_mode,
+        acceptance_threshold=settings.acceptance_threshold,
+        answer_fields=settings.answer_fields,
+        album_points=settings.album_points,
+        year_points=settings.year_points,
+        featuring_points=settings.featuring_points,
         rounds=settings.rounds,
         clip_seconds=settings.clip_seconds,
         answer_grace_s=settings.answer_grace_s,
@@ -858,9 +908,93 @@ def _draft_score(s: SessionState, pid: str) -> int:
     )
 
 
-def _review_rounds(s: SessionState) -> list[ReviewRound]:
+def _finale(s: SessionState) -> Finale | None:
+    if s.game.phase is not GamePhase.FINAL_SCORE_REVIEW:
+        return None
+    revealed = set(s.game.finale_revealed)
+    played = [r for r in s.game.rounds if r.official_start_at is not None]
+    scores = s.journal.scores(s.game.game_id)
+    ids = standings_player_ids(s)
+    totals = {
+        pid: scores.get(pid, 0)
+        + s.game.final_draft.get(pid, 0)
+        + sum(
+            r.score_draft.get(pid, 0)
+            for r in played
+            if r.included
+            and r.id in revealed
+            and (r.finale_awarded is None or pid in r.finale_awarded)
+        )
+        for pid in ids
+    }
+    ordered = sorted(ids, key=lambda pid: (-totals[pid], s.players[pid].join_seq))
+    ranking = []
+    previous, rank = None, 0
+    for position, pid in enumerate(ordered, 1):
+        if totals[pid] != previous:
+            previous, rank = totals[pid], position
+        ranking.append(StandingRow(player_id=pid, score=totals[pid], rank=rank))
+    active = (
+        next(iter(_review_rounds(s, only_id=s.game.finale_round_id)), None)
+        if s.game.finale_round_id is not None
+        else None
+    )
+    public = None
+    if active is not None and active.round_id in revealed:
+        source = next(r for r in played if r.id == active.round_id)
+        public = FinaleRound(
+            awards_pending=source.finale_wave_at is not None,
+            round_id=active.round_id,
+            number=active.number,
+            track=active.track,
+            included=active.included,
+            answers=[
+                FinaleAnswer(
+                    player_id=a.player_id,
+                    text=a.text,
+                    points=a.points_draft
+                    if active.included
+                    and (source.finale_awarded is None or a.player_id in source.finale_awarded)
+                    else 0,
+                    reviewed=a.reviewed
+                    and (source.finale_awarded is None or a.player_id in source.finale_awarded),
+                    revision=a.score_revision
+                    if source.finale_awarded is None or a.player_id in source.finale_awarded
+                    else 0,
+                    **{
+                        f"{key}_correct": getattr(a, f"{key}_correct")
+                        if source.finale_awarded is None or a.player_id in source.finale_awarded
+                        else None
+                        for key in ("title", "artist", "custom", "album", "year", "featuring")
+                    },
+                )
+                for a in active.answers
+            ],
+        )
+    visible = [r for r in played if r.included and r.id in revealed]
+    return Finale(
+        round=public,
+        revealed_round_ids=s.game.finale_revealed,
+        rounds_total=len(played),
+        reviewed=sum(
+            len(
+                r.score_reviewed
+                & set(rounds.review_player_ids(s, r))
+                & (r.finale_awarded if r.finale_awarded is not None else r.score_reviewed)
+            )
+            for r in visible
+        ),
+        expected=sum(len(rounds.review_player_ids(s, r)) for r in played if r.included),
+        standings=ranking,
+        teams=team_standings(s, ranking),
+    )
+
+
+def _review_rounds(s: SessionState, *, only_id: str | None = None) -> list[ReviewRound]:
     result = []
     for r in s.game.rounds:
+        if only_id is not None and r.id != only_id:
+            continue
         if r.official_start_at is None and r.state is not RoundState.CANCELLED:
             continue
         bridge = s.bridges.get(r.slot.track_ref.bridge_id) if r.slot.track_ref else None
@@ -868,6 +1002,15 @@ def _review_rounds(s: SessionState) -> list[ReviewRound]:
         reason = r.cancel_reason or r.close_reason
         result.append(
             ReviewRound(
+                scoring_reference=MusicalMetadata.model_validate(asdict(r.auto_reference))
+                if r.auto_reference
+                else None,
+                reference_changed=bool(
+                    r.auto_reference
+                    and r.slot.track_ref
+                    and r.auto_reference != rounds.build_auto_reference(s, r)
+                ),
+                played=r.official_start_at is not None,
                 round_id=r.id,
                 number=r.number,
                 track=_track_info(rounds.build_reveal(s, r)) if r.slot.track_ref else None,
@@ -911,7 +1054,27 @@ def _host_panel(s: SessionState, p: Player, ranking: list[StandingRow]) -> HostP
     r = current_round(g)
     target = undo_target(g)
     private_sources = g.phase is not GamePhase.IN_GAME or p.host_mode is HostMode.MC
+    missing = 0
+    if g.phase is GamePhase.LOBBY:
+        tagged = {asset.track_ref: asset for asset in s.assets.values()}
+        for ref in selection.pool(s):
+            meta = musical_metadata(s, ref)
+            asset = tagged.get(ref)
+            if any(
+                not (
+                    key not in (meta.cleared_fields or [])
+                    and (
+                        getattr(meta, key, None)
+                        or getattr(asset, key, None)
+                        or (meta.aliases or {}).get(key)
+                    )
+                )
+                for key in auto_scoring.criteria(g.settings)
+                if key != "custom"
+            ):
+                missing += 1
     return HostPanel(
+        auto_missing_references=missing,
         settings=_settings(s)
         if private_sources
         else _settings(s).model_copy(update={"sources": []}),

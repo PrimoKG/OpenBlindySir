@@ -31,8 +31,18 @@ export function publish(view: AnyView, confirm = false): Host {
   };
 }
 
-export function trackMetadata(roundId: string, metadata: MusicalMetadata): Host {
-  return { t: "HOST", cmd: "track_metadata", round_id: roundId, args: metadata };
+export function trackMetadata(
+  roundId: string,
+  metadata: MusicalMetadata,
+  regradeAuto = false,
+  expectedRevision?: number,
+): Host {
+  return {
+    t: "HOST",
+    cmd: "track_metadata",
+    round_id: roundId,
+    args: { ...metadata, regrade_auto: regradeAuto, expected_revision: expectedRevision ?? null },
+  };
 }
 
 export function participation(playerId: string, spectator: boolean, team: string | null): Host {
@@ -134,6 +144,9 @@ export function scoreDraft(
     title_correct?: boolean | null;
     artist_correct?: boolean | null;
     custom_correct?: boolean | null;
+    album_correct?: boolean | null;
+    year_correct?: boolean | null;
+    featuring_correct?: boolean | null;
     expected_revision?: number;
   },
 ): Host {
@@ -182,6 +195,19 @@ export function finalSet(
 
 export function finalReset(): Host {
   return { t: "HOST", cmd: "final_reset", expected_phase: "FINAL_SCORE_REVIEW", args: {} };
+}
+
+export function finaleReveal(roundId: string, fastForward = false): Host {
+  return {
+    t: "HOST",
+    cmd: "finale_reveal",
+    expected_phase: "FINAL_SCORE_REVIEW",
+    args: { round_id: roundId, fast_forward: fastForward },
+  };
+}
+
+export function finaleStop(): Host {
+  return { t: "HOST", cmd: "finale_stop", expected_phase: "FINAL_SCORE_REVIEW", args: {} };
 }
 
 export function finalValidate(confirmUnreviewed = false): Host {

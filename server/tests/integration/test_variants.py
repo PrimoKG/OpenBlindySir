@@ -157,7 +157,9 @@ def test_bridge_lost_while_a_job_is_running(bare_stack: Stack) -> None:
 
 async def _first_round_then_abandon(stack: Stack) -> None:
     async with Table(stack.base_url, 2, BLIND, HOST) as table:
-        await table.setup(rounds=2, clip=8, grace=5)
+        # Faults target job 1: a random TOO_SHORT source must not consume that job
+        # before reaching the upload/delete behavior this scenario validates.
+        await table.setup(rounds=2, clip=8, grace=5, folder="Demo/Sines")
         await table.start()
         await table.wait_round(1, "OPEN", timeout_s=90)
         await table.host.on_round("end_game", {"current_round": "abandon"})

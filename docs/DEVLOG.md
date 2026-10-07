@@ -1588,3 +1588,481 @@ réussie**, Biome et vérification du diff réussis. Le déploiement Docker pré
 inclut les corrections d'affichage et d'horloge : santé, HTTPS, session, identités,
 réglages, archives, métadonnées et les deux montages musicaux vérifiés conservés.
 Cette dernière modification concerne uniquement le banc de test et le journal.
+
+## 2026-10-04 — Grand final partagé et correction conviviale
+
+La revue finale devient une scène commune : l’hôte prépare ses manches en privé,
+puis les dévoile explicitement. Joueurs et équipes suivent les réponses fermées,
+les points confirmés et un classement provisoire qui ne compte que les manches
+déjà dévoilées, plus les ajustements finaux. Revisiter une manche ne double pas
+les points. Les cartes distinguent attente, correction partielle et zéro vérifié.
+Critères, saisies manuelles, motifs et protections des accusés serveur sont conservés.
+
+Les réglages, métadonnées, diagnostics et réécoutes privées sont repliés. Les titres
+importés sont raccourcis pour l’affichage, avec accès au libellé original. Sur mobile,
+le classement précède les réponses. Les résultats arrivent avant les actions de
+relance et évitent de répéter un petit classement d’équipes déjà présent au podium.
+
+La réécoute commune réutilise l’extrait original vérifié ou le régénère par le
+transfert privé borné. Le PLAY synchronisé existant dessert tous les navigateurs.
+Arrêter ou changer de manche invalide une préparation tardive. La validation fige
+toujours le journal explicitement, puis le podium révèle les rangs 3/2/1 sur l’horloge
+serveur, ex æquo ensemble. Reconnexion et restauration ne répètent pas les cérémonies
+passées ; la scène et les corrections restent persistées. Protocole **7**,
+snapshot **5**, historique **2** ; mise à jour serveur/web/Bridges ensemble.
+
+Validation Windows : **966 tests Python réussis**, deux skips propres à l’OS
+(permissions Unix et création de symlink), **41 tests Vitest** et **46 tests
+Chromium**, dont parties réelles à 1280/320 px, réécoute commune, podium et captures
+1280/390/320 px. Ruff, Pyright, Biome, TypeScript, build et verrou de schéma réussis.
+Intégration réelle : 10/11 au premier passage ; le scénario d’upload corrompu avait
+tiré une piste trop courte au premier job, avant l’injection de faute. Sa relance
+ciblée réussit, sans modification du code ni des assertions. Les tests du final
+et du filtrage de vues réussissent aussi après optimisation de leur construction.
+Un dernier contrôle ajoute la réactivation audio pendant une réécoute commune,
+chez le joueur comme chez l’hôte reconnecté, et corrige le lien d’évitement vers
+la scène hôte. Les **44 tests UI Chromium** passent après ce changement ; avec
+les trois parties réelles déjà vérifiées, 47 scénarios navigateur sont couverts.
+Les captures synthétiques restent sous `.local/finale-preview`, hors Git.
+Ce travail n’a pas déployé ni publié une release ; la validation Safari/iOS réelle
+et acoustique reste distincte des tests headless.
+
+## 2026-10-04 — Déploiement local du grand final
+
+Après accord de l’utilisateur, les images serveur/web et Bridge ont été construites
+avec le contexte Docker autorisé, puis activées sur l’installation LAN existante.
+Une sauvegarde privée des volumes à l’arrêt, des réglages et des images de retour
+en arrière précède le redémarrage. Aucun nouveau jeu ni score n’a été créé pour
+la vérification sur cette installation.
+
+Contrôle réussi : HTTPS avec le certificat local, serveur et Caddy sains, Bridge
+reconnecté en protocole **7**, snapshot **5**, JS/CSS servis identiques au build
+validé. Les **2 joueurs**, **4 parties archivées** et **24 morceaux** sont conservés,
+ainsi que les identités de session, l’authentification, les réglages, le journal des
+scores, les jeux figés, les métadonnées, les exclusions et la configuration du
+Bridge. Les volumes et montages musicaux en lecture seule restent identiques.
+La validation acoustique et Safari/iOS réelle reste à effectuer sur appareils.
+
+## 2026-10-04 — Refonte de l’expérience après l’audit vidéo
+
+Les six lots approuvés sont implémentés : lobby adapté à l’hôte, lancement direct,
+pause visible, en-tête compact pendant le jeu, formulaire stable à l’arrêt de
+l’extrait, minuteur de réponse dominant et transitions entre manches explicites.
+Les modes titre/artiste/personnalisé ont des indications adaptées ; les consignes
+longues restent consultables dans leur zone défilante sur un petit écran.
+
+Le final sépare la préparation privée de la scène vue par les joueurs. La barre
+persistante nomme précisément la manche à présenter et indique ce qui reste avant
+le podium. Navigation détaillée, métadonnées, réécoute privée et corrections finales
+sont repliées. Les absences utilisent des lignes compactes, avec zéro explicite
+ou exception manuelle ; les non-participants d’une manche ne deviennent pas des
+absences. Une confirmation à zéro et une attribution positive dans le même état
+apparaissent toutes deux dans la dernière attribution publique.
+
+Le podium conserve la progression commune et les ex æquo, ajoute des confettis
+compatibles avec le mouvement réduit et des ponctuations musicales facultatives.
+Les sons réutilisent le volume et l’AudioContext activé par le joueur, ne couvrent
+pas une réécoute et ne rejouent pas les événements manqués après reconnexion.
+Les résultats précèdent les actions de nouvelle partie.
+
+Validation exécutée : **60 tests UI Chromium**, **trois parcours de partie réelle**
+(hôte joueur avec deux joueurs à 1280 et 320 px, puis MC/brouillon capturé),
+**44 tests Vitest** et **73 tests ciblés serveur/protocole** du final, des vues,
+de la notation et des régressions. Biome, TypeScript et build réussis.
+Les nouveaux tests mesurent la visibilité avant tout clic à 1920×900, 1366×650,
+1280×720, 390×700 et 320×640 ; le bouton reste visible et le champ ne bouge pas
+quand l’extrait se termine. Sont aussi vérifiés les quatre modes de réponse sur
+téléphone court, le contraste réel au survol, les zéros avec accusé de révision,
+le dégagement de la barre fixe et Chromium sans exemption d’autoplay.
+Les captures de recette restent sous `.local/finale-refined-preview`, hors Git.
+Le premier lancement Pytest a passé les assertions mais échoué à écrire un cache
+préexistant protégé ; la relance sans plugin de cache réussit avec les 73 tests.
+La sortie acoustique et les appareils Safari/iOS physiques ne sont pas validés
+par cette recette.
+
+La refonte est ensuite activée sur l’installation LAN existante après sauvegarde
+privée des volumes à l’arrêt et conservation des runtimes de retour en arrière.
+Le contrôle HTTPS avec le certificat local confirme que les JS/CSS servis sont
+exactement ceux du build validé. Serveur, Caddy et Bridge sont sains ; protocole 7,
+snapshot 5 et Bridge en ligne. La revue finale courante, les deux joueurs,
+quatre archives et 24 morceaux sont conservés. Identités, authentification,
+réglages, journal de scores, jeux figés, métadonnées, exclusions, volumes et
+montages musicaux restent identiques à la sauvegarde.
+
+## 2026-10-05 — Disposition PC pour les petits écrans de portable
+
+Les vues de partie utilisent davantage la largeur disponible sur les fenêtres
+paysage d’au moins 900 px : conteneur jusqu’à 1480 px, écoute et consignes à gauche,
+réponse et validation à droite. Le minuteur reste commun aux deux colonnes.
+La réponse enregistrée conserve sa colonne ; la fermeture de manche sépare
+la transition et la réponse. Le lobby dispose les joueurs et le test audio côte
+à côte, et le mode MC sépare l’écoute du suivi des joueurs. Les fenêtres étroites
+et les téléphones conservent leur disposition verticale.
+
+Validation : **68 tests UI Chromium**, **trois parties complètes** à 1280/320 px
+et en mode MC, **44 tests Vitest**, Biome, TypeScript et build réussis. Les huit
+nouveaux scénarios couvrent joueur et hôte à 1024×560, 1093×500, 1280×600 et
+1440×700, avec des consignes longues. Ils vérifient la visibilité du bouton avant
+toute interaction, les deux colonnes du lobby, la stabilité du champ à la fin de
+l’extrait et la validation au clavier. Un premier passage a échoué à fermer
+les paramètres avec Escape ; cinq relances ciblées puis la suite UI complète
+réussissent sans changer le scénario ni le code des modales. Les captures sont
+conservées sous `.local/desktop-preview`, hors Git.
+
+L’installation Docker étant arrêtée à l’arrivée, les images sont construites
+et les conteneurs recréés **sans démarrage**, après sauvegarde privée des données
+et conservation des images de retour en arrière. Contrôle hors ligne réussi :
+JS/CSS exactement identiques au build validé, protocole 7 dans les images,
+session persistée intégralement identique, configuration Bridge et montages
+conservés, trois services arrêtés. La revue finale, les **3 joueurs**, **5 archives**
+et **24 morceaux** restent présents. Aucun contrôle HTTPS sur l’installation
+arrêtée n’est revendiqué ; la mise à jour sera servie au prochain lancement.
+
+
+## 2026-10-05 — Finale, accès commun et bibliothèque adaptative
+
+La réécoute privée est directement accessible sous la manche ; les informations
+du morceau restent repliables. Le filtre des manches décrit précisément les
+attributions manquantes. Les accusés de présentation distinguent la préparation
+privée de la manche publique : revenir aux dernières manches ne double ni les
+révélations ni les points. L’arrêt confirmé termine réellement la partie, conserve
+les points et réponses, puis affiche directement les résultats et les actions de
+nouvelle partie/session, sans obliger à lancer le podium.
+
+Les deux panneaux de notation et les réponses publiques mesurent leur espace
+local. Ils avancent après confirmation serveur du dernier joueur visible, y
+compris une attribution à zéro. Le défilement manuel suspend cet automatisme ;
+un contrôle permet de rejoindre le prochain joueur. Les classements sont bornés
+à cinq lignes ou moins selon la hauteur, conservent leur ancrage lors d’un changement
+de rang et proposent le retour à sa position. Le dégagement de la barre fixe
+utilise sa hauteur réelle sur mobile.
+
+Le QR invite avec un jeton distinct du mot de passe et demande seulement un pseudo.
+Le cookie HttpOnly reprend le joueur sur le même navigateur. Un code commun est
+accessible aux joueurs et à l’hôte, qui peut le changer ou le régénérer avec le QR.
+Une reprise sur un autre navigateur avec un pseudo existant attend l’approbation
+de l’hôte ; elle révoque l’ancien navigateur et ne donne pas automatiquement le
+rôle hôte. Demandes bornées et expirantes, contrôles Origin et limites de tentatives.
+Le code et le jeton d’invitation persistent chiffrés dans le snapshot 6. Les formats
+1 à 5 restent lisibles ; clients, serveur et Bridge utilisent le protocole 8.
+
+La bibliothèque conserve sources, filtres, tri, import/export et choix numérotés.
+Elle ajoute activation/désactivation, tags et œuvres liées, facettes et recherche,
+édition sous la carte concernée avec protection des changements non enregistrés,
+pagination adaptative (20 entrées en deux colonnes larges, 10 en une colonne,
+5 par colonne sur fenêtre courte), navigation et changement de page direct.
+Les catégories et l’activation peuvent être modifiées par lot sur les cartes
+sélectionnées de la page. Les métadonnées omises sont conservées ; l’import v1
+reste accepté et l’export utilise v2. Les morceaux désactivés quittent les futurs
+tirages et capacités ; les extraits déjà préparés, fichiers et archives restent
+conservés. Le workflow thématique utilise les filtres et la sélection manuelle MC.
+
+La préécoute privée prépare **15 secondes centrées sur le milieu** du morceau,
+soit `(durée − min(15 s, durée)) / 2`, ou le fichier entier s’il dure moins de 15 s.
+Une seule écoute privée joue à la fois ; arrêt/fermeture/page/lecture collective
+l’interrompent. Aucun tirage, consommation ou son public n’est déclenché. Un test
+réel a aussi révélé et corrigé le catalogue vide conservé si le Bridge se connectait
+après l’ouverture : la disponibilité et le nombre de morceaux actualisent la vue.
+
+Validation exécutée : **976 tests Python réussis**, deux skips Windows explicites
+et onze tests d’intégration exclus par la sélection habituelle ; les 12 essais
+FFmpeg réels sont inclus, dont les aperçus 90 s/6 s. **74 scénarios UI Chromium**,
+**quatre parcours complets sur serveur/Bridge réels synthétiques**, **44 tests
+Vitest**, Ruff/format, Pyright avec le venv, Biome, TypeScript et build réussis.
+Sept relances ciblées confirment les panneaux/aperçus et le dernier libellé.
+Les parties réelles couvrent 1280/320 px, MC, QR/cookie/transfert approuvé, aperçu
+privé et arrêt direct avec réponse conservée. Le harnais Windows ferme désormais
+l’arbre de ses enfants Python, afin que Playwright termine sans laisser le serveur
+actif. Les captures de recette sont sous `.local/refinements-preview`, hors Git.
+Safari/iOS physiques et la sortie acoustique restent une recette distincte.
+
+Les images app/Bridge du protocole 8 sont construites. L’installation relancée
+pendant les travaux était aux résultats ; la mise à jour conserve cette phase.
+Une sauvegarde privée des volumes à l’arrêt et les runtimes de retour en arrière
+précèdent l’activation. Contrôle LAN HTTPS avec le certificat local : JS/CSS
+identiques au build validé, app/Caddy sains, Bridge en ligne, snapshot 6 repris,
+cookies/identités/réglages/journal/réponses/archives/métadonnées/catalogue/montages
+conservés. **3 joueurs, 7 archives et 24 morceaux** restent présents.
+
+## 2026-10-05 — Audit avant publication officielle
+
+[Rapport](audits/2026-10-05-prepublication.md) : neuf constats confirmés (cinq sécurité/disponibilité, quatre fonctionnement/documentation), non corrigés dans cet audit. Publication officielle différée recommandée, en priorité pour la durabilité des changements d'accès lors d'un échec de snapshot.
+
+Validation relancée : 976 tests Python réussis et deux skips Windows, 11 tests d’intégration réussis, 78 scénarios Chromium (74 UI + quatre parcours), 44 Vitest ; Ruff/format, Pyright, Biome, TypeScript, schéma et build web réussis. OSV sur 70 versions PyPI et npm audit sur 132 dépendances : aucun avis retourné. Inventaire Docker local obtenu ; couverture CVE système incomplète. Le contrôle automatique a refusé la transmission potentielle de métadonnées à Docker Scout ; le mainteneur a choisi de conserver l’audit local. Les services actifs n’ont pas été modifiés pendant l’audit.
+
+
+## 2026-10-05 — Corrections de l’audit et images durcies
+
+[Rapport de corrections](audits/2026-10-05-corrections.md) : neuf constats
+applicatifs clos par modifications et tests adverses. Accès persistés avant
+révocation/succès, erreur 503 récupérable, formats ASCII, demandes d’identité
+bornées et distinguées par référence, GET sans réécriture, quota revérifié après
+lecture du corps, participation MC conservée, recherche hors boucle réseau et
+modèles construits après pagination, quotas WebSocket compatibles avec le NAT.
+Documentation actuelle alignée sur protocole 8 / snapshot 6.
+
+Validation : 1 034 pytest, deux skips Windows ; 11 intégrations ; 81 Chromium ;
+44 Vitest ; Ruff/format 235 fichiers, Pyright zéro erreur, Biome 62 fichiers,
+TypeScript/build et schéma réussis. Le harnais d’upload corrompu utilise désormais
+des sons synthétiques assez longs pour atteindre l’injection de faute.
+Recherche 200 000 morceaux : contrôle santé max 4 ms dans l’essai dense, avec une
+recherche complète de 3,87 s ; aucune promesse de performance générale.
+
+Scan Grype 0.120.0 des seules archives d’images, hors réseau et sans volumes privés,
+avec base publique du 5 octobre. Aucun inventaire transmis à Scout. Runtimes Debian
+13 / Python 3.13.16, FFmpeg 7.1.5, Caddy 2.11.6 fixés par digest ; mises à jour APT
+au build. App : huit correspondances critiques → zéro ; Bridge : 25 → 11 ; Caddy :
+28 correspondances toutes sévérités → cinq. Les avis restants sont conservés et
+explicités, sans annoncer zéro vulnérabilité. Tests des images Linux : 113 Bridge
+(quatre skips) et 60 régressions serveur/persistance ; smoke HTTP synthétique réussi.
+Correction supplémentaire du contexte Docker : dépendances/caches locaux exclus,
+environ 984 Mo → 569 Ko lors du build réel.
+
+Candidate construite et testée, activation LAN en attente d’accord : le contrôle
+automatique a refusé l’arrêt/remplacement des services actifs. Lecture seule :
+trois joueurs, sept archives et 24 morceaux en FINAL_RESULTS. Services inchangés,
+pas de release publique. Sauvegarde privée et retour arrière préparés dans la
+procédure d’activation ; leur exécution reste à effectuer après autorisation.
+
+
+## 2026-10-05 — Activation LAN des corrections après accord
+
+Le mainteneur a explicitement approuvé le redémarrage et le remplacement des
+services LAN après explication des risques. Sauvegarde privée cohérente des
+volumes app/Bridge/Caddy et configuration Caddy effectuée ; anciennes images et
+override de retour arrière conservés. Les images testées/scannées ont été
+activées sans nouveau build ni changement de volumes ou sources musicales.
+
+Contrôle HTTPS : JS/CSS identiques au build validé, app/Caddy sains, Caddy 2.11.6
+au digest scanné, Bridge en ligne, protocole 8, snapshot 6 restauré et persistance
+ready. Comparaison avec la sauvegarde : cookies, identités/rôles/équipes, journal,
+scores, réponses, archives, réglages, métadonnées, catalogue, configuration Bridge
+et montages conservés. Code commun et invitation QR comparés localement après
+déchiffrement, conservés sans impression des accès. **3 joueurs, 7 archives et
+24 morceaux** en FINAL_RESULTS. Rapport de corrections actualisé ; aucune
+release publique. Les alertes système résiduelles et recettes physiques restent
+à traiter avant publication officielle.
+
+## 2026-10-05 — Relecture des README et guides d’installation/utilisation
+
+Huit documents relus et corrigés : README principal et Bridge, installation Bridge
+FR/EN, hébergement natif/Docker et utilisation FR/EN. Parcours actuel depuis le
+dépôt séparé des commandes d’une future release PyPI ; protocole 8/snapshot 6
+alignés. Invitation QR sans mot de passe, code commun et reprise navigateur précisés.
+Pagination adaptée, préécoute au milieu, catégories/activation et défilement du
+final regroupés dans leurs sections. Navigation rapide ajoutée ; le guide anglais
+commence par rejoindre la partie. Arrêt anticipé distingué du déroulement du podium.
+La documentation Docker précise le rescan sans redémarrage et les fichiers override
+à conserver, notamment avec Compose direct sous Linux/macOS.
+
+Validation documentaire : 99 liens locaux et ancres valides dans les huit documents,
+aide/version et options de la CLI Bridge, aide du lanceur PC, contrôle de diff et
+hygiène du contenu local destiné au dépôt. Les validations applicatives précédentes
+restent celles du rapport de corrections ; pas de nouvelle revendication de CI
+réussie. Vérification Git : main et origin/main au même commit e4aaff7, modifications
+récentes encore locales et non commitées/poussées. Aucun déploiement ou publication
+supplémentaire pour cette relecture.
+
+## 2026-10-05 — Switch FR/EN permanent et changement immédiat
+
+Les 656 messages d’interface disposent de traductions FR/EN, avec contrôle des
+clés, valeurs et paramètres. Le sélecteur devient deux boutons FR/EN dans tous
+les headers : connexion, accès hôte, lobby, manches, grand final et résultats.
+Préférence locale au navigateur, conservée entre visites et entre `/` et `/host`.
+Un lien `?lang=` initialise la préférence ; le choix explicite retire ce paramètre
+sans toucher aux autres paramètres ni au fragment d’invitation QR.
+
+Le changement provoque un rendu React sans recharger la page ni recréer la
+connexion ou le moteur audio. Les messages en mémoire sont résolus dans la langue
+courante ; les formulaires et brouillons sont conservés. Les dates/heures et
+nombres suivent la langue choisie. Le switch reste utilisable si le stockage est
+bloqué. Pseudos, réponses, consignes personnalisées et informations musicales
+restent dans leur langue d’origine. Les guides FR/EN et README décrivent ce parcours.
+
+Validation : 47 Vitest ; 85 tests UI Chromium après correction d’une régression
+de hauteur sur téléphone 320 px ; quatre scénarios de partie réelle réussis lors
+du contrôle complet. Les tests spécifiques couvrent aussi erreur déjà affichée,
+champs conservés, stockage bloqué, indépendance des navigateurs, QR, lecture audio
+sans interruption et headers dans toutes les phases sur téléphone/PC. TypeScript,
+build et Biome 63 fichiers réussis ; captures mobile et PC inspectées.
+
+Activation LAN après sauvegarde privée et conservation d’une image de retour
+arrière. La première recréation de l’app seule a laissé Caddy/Bridge dans l’ancien
+réseau partagé ; les deux dépendants ont été recréés avec leurs mêmes images et
+volumes. Cette contrainte est ajoutée au guide Docker. Contrôle final HTTPS avec
+autorité privée : JS/CSS identiques au build testé, services sains, Bridge en ligne,
+protocole 8/snapshot 6, cookies, identités, points, réponses, métadonnées, catalogue,
+montages, code commun et QR conservés. Trois joueurs, sept archives et 24 morceaux.
+Aucune publication ni push ; les réserves de l’audit avant release restent ouvertes.
+
+## 2026-10-05 — Durcissement des images et qualification des alertes système
+
+FFmpeg 9.0.2 officiel compilé avec une sélection audio locale : aucun protocole
+réseau, décodeur vidéo/sous-titre, libtiff, libxml2 ou iconv dans le runtime Bridge.
+Source, signature et clé fixées par SHA-256 ; empreinte officielle et signature
+contrôlées. Sources exactes, licence LGPL et recette incluses dans l'image.
+Minimum natif 9.0.2 vérifié séparément pour FFmpeg/ffprobe ; anciennes versions,
+versions inconnues et couples mixtes refusés. Guides FR/EN adaptés. Les trois
+workflows Linux compilent désormais le FFmpeg complet des fixtures avec une
+recette exécutée dans Ubuntu 22.04 ; les jobs GitHub restent à lancer après push.
+
+App/Bridge fixent LOCALDOMAIN=. pour atténuer le crash glibc lié aux longues listes
+de recherche DNS ; test avec domaine valide de 218 caractères réussi hors réseau.
+Cette protection n'est pas une correction du binaire glibc. Nouvel outil de scan
+local hors réseau : sauvegarde par identité immuable, hash réel de configuration
+comparé à Grype et supplément FFmpeg compilé lié à la version/source de l'image.
+Scanner et base identifiés, résultats bruts conservés sans exclusion d'avis.
+La collecte ciblée des CVE a été refusée par le contrôle automatique ; la base
+publique Debian complète est téléchargée depuis une URL fixe et analysée
+localement, sans transmission d'inventaire ni recours à Docker Scout.
+
+Résultats des images finales : zéro correspondance critique app/Bridge/Caddy ;
+Bridge auparavant 11 critiques. App et Bridge : 55 élevées, 51 moyennes ; Caddy :
+1 élevée, 4 moyennes. Les 72 avis uniques, dont 14 élevés, sont conservés dans
+une matrice et un relevé structuré. Les élevés/moyens sont qualifiés par fonction,
+configuration et imports inspectés ; les faibles/négligeables restent suivis.
+Les bibliothèques système ne sont pas toutes corrigées et le risque résiduel
+n'est pas accepté implicitement pour une release publique.
+
+Validation : 143 tests Bridge réussis dans l'image Linux finale (4 skips), 126
+tests d'accès/persistance serveur Linux, 124 régressions applicatives Windows,
+35 tests de seuils/intégrité de scan. Seize combinaisons de formats et sorties
+AAC/Opus vérifiées avec générateur de fixtures distinct. Douze sons synthétiques
+démo générés par le FFmpeg audio final, hors réseau et sans volumes privés.
+Ruff, format, Pyright avec l'interpréteur du venv et actionlint réussis.
+Hygiène : 350 fichiers actuels destinés au dépôt, aucun constat ; lockfiles
+inchangés depuis l'audit de dépendances du jour. Treize documents contrôlés,
+124 liens locaux valides.
+
+Activation LAN après vérification du lobby et sauvegarde froide privée, avec
+retour arrière conservé ; trois services du réseau partagé recréés ensemble.
+HTTPS et état comparés : 3 joueurs, 7 archives, 24 morceaux, cookies, identités,
+réponses, scores, réglages, bibliothèque, métadonnées, montages, code commun et
+QR conservés. Assets FR/EN inchangés. Identités exactes et preuves locales dans
+le [rapport de durcissement](audits/2026-10-05-security-hardening.md).
+Aucun push, tag ou publication ; révision propre, CI complète, matrice native,
+recettes physiques et décision explicite sur les risques restent requis.
+
+## 2026-10-05 — Liste des joueurs et reprise audio du final
+
+La hauteur des listes d'attribution dépend désormais du budget de la fenêtre,
+avec réserve pour les contrôles et la barre d'actions. Leur position initiale
+sous la zone visible ne réduit plus la liste à une bande de 88 px. Hauteur stable
+pendant le défilement de la page, lots adaptés à chaque navigateur et avancement
+uniquement après confirmation serveur conservés ; classement limité à cinq
+lignes. Régression vérifiée à 1280×720, 1440×900 et 390×740, avant déplacement de
+la page puis après une nouvelle mesure.
+
+Le test audio est accessible dans le header du final lorsque le son fonctionne
+et dans le menu Son à toutes les phases concernées. La récupération reste
+visible durant toute la distribution et les résultats, même entre deux extraits.
+Au retour d'arrière-plan, l'état réel du contexte est relu. Une suspension arrête
+la source figée ; sa réactivation réutilise le même AudioContext et rejoint
+l'extrait à la position courante. Un extrait terminé n'est pas relancé depuis
+son début ; une lecture normale n'est pas resynchronisée.
+
+Validation : 47 tests Vitest, 87 tests UI Chromium, TypeScript, build et Biome
+réussis. Deux nouveaux scénarios FR/EN sur téléphone simulé couvrent menu Son,
+test entre réécoutes, suspension sans événement d'état puis retour visible,
+réactivation et reprise à un offset avancé sans nouveau contexte. Captures PC et
+mobile inspectées. Aucun contrôle acoustique sur téléphone physique revendiqué.
+
+Activation LAN en FINAL_RESULTS après sauvegarde froide privée et conservation
+du retour arrière, avec recréation des trois services du réseau partagé.
+Candidate construite sur le runtime audité : seuls les fichiers web sont
+remplacés ; configuration de l'image et couches runtime vérifiées identiques.
+Nouvelle app : sha256:79c8f715ec196a2a9f7548a9e2a38988b176f7109fa92de332425cce879d3657.
+Rescan local hors réseau : correspondances identiques à l'audit précédent,
+zéro critique ; les réserves système précédentes restent ouvertes. Bridge et
+Caddy inchangés. HTTPS vérifié : assets conformes au build testé, état conservé,
+4 joueurs, 8 archives, 69 morceaux, cookies, réponses, scores, accès QR/code commun,
+métadonnées et montages. Preuves locales : `.local/score-audio-scan-20261005`,
+`.local/score-audio-lan-activation-20261005.json` et sauvegarde privée distincte.
+Aucun push ou publication.
+
+
+## 2026-10-06 — Notation optionnelle, révélation par vagues et certificat LAN
+
+Demande approuvée : reconnaître plusieurs informations musicales dans un seul champ,
+avec seuil réglable et corrections humaines ; enrichir le final, conserver le LAN,
+mettre à jour FR/EN et relancer les conteneurs.
+
+Protocole 9 / snapshot 7 : critères titre/artiste/album/année/featuring, barèmes,
+variantes explicites, références figées au lancement, preuves privées, recalcul
+explicite conservant les décisions humaines. RapidFuzz local, seuil 90 % réglable
+80–100 %, années et références courtes exactes. Aucune conversion de vitesse en points.
+Budget de distance déterministe ajouté après test adversarial ; chiffres Unicode
+normalisés sans crash. Réponses par défaut 1000 caractères, plafond 1500.
+
+Final : points par vagues de trois après 1,5 s puis chaque seconde, classement
+partiellement dévoilé, fin immédiate possible, dépassements/critères visibles,
+animations de changement d’ordre respectant le mouvement réduit. Correction des
+animations déclenchées par un simple défilement et d’un débordement du recalcul sur
+mobile EN. Variantes nommées pour éviter les ambiguïtés avec les champs canoniques.
+
+Guides complets notation et certificat local en FR/EN, aide d’invitation et export
+root.crt avec empreinte SHA-256 ; README, guides opérationnels et spécification
+actualisés. Les audits historiques restent datés et ne sont pas réécrits.
+
+Vérifié : 1052 tests Python, 44 tests FFmpeg, 11 intégrations, 47 tests Web,
+91 parcours UI Chromium, quatre parties réelles et une nouvelle partie automatique
+réelle, rejouée avec un nouveau serveur de test utilisant le code final. Exemple
+demandé reconnu et correction de l’hôte appliquée. Ruff/Pyright/
+TypeScript/Biome/types générés/build réussis. Rapport local détaillé :
+[audit du chantier](audits/2026-10-06-automatic-scoring.md).
+
+App et Bridge reconstruits, images finales scannées hors ligne puis conteneurs
+relancés. App/Caddy sains, Bridge en ligne, HTTPS vérifié avec la CA locale.
+Migration manuelle par défaut ; 4 joueurs, 8 archives, 69 morceaux et scores/accès
+préservés après comparaison. Sauvegardes privées et images de retour arrière conservées.
+Aucun inventaire envoyé à Docker Scout. Les CVE de base restantes et l’ajout de code
+C++ natif sont explicitement consignés ; pas de déclaration de release publique sûre.
+
+
+## 2026-10-06 — Audit et autofix de la notation automatique
+
+Correction de l'export des variantes JSON, affectation globale bornée des fragments,
+contrôle des précisions featuring et métadonnées supplémentaires, séparateurs de champs,
+titres numériques et recalcul sans référence dérivée d'un nom de fichier. Durcissement
+de l'arrêt HTTP (authentification avant lecture, JSON profondément imbriqué refusé).
+Régressions moteur/HTTP, parcours Chromium FR/EN, reconstruction et audit local de l'image.
+Rapport : `audits/2026-10-06-autofix.md`.
+
+## 2026-10-06 — Deuxième passe audit et autofix
+
+Expiration de la réécoute collective diffusée aux clients, libération de l’extrait
+et retour automatique de la réécoute privée. Préécoute bibliothèque relançable après
+erreur de décodage, sans retéléchargement inutile lors d’un simple refus de démarrage
+audio. Autorisation et origine vérifiées avant lecture du corps sur les deux routes
+privées de rotation du code et d’approbation d’identité, puis revérifiées après attente.
+
+1 125 tests Python, onze intégrations serveur/Bridge, 47 tests Web,
+huit parcours UI FR/EN et quatre parties réelles
+Chromium réussis. Image app reconstruite et scannée hors ligne ; application relancée,
+session et montages conservés, HTTPS et assets vérifiés. Guides FR/EN actualisés.
+Les réserves sur les paquets système restent consignées. Rapport :
+[deuxième audit](audits/2026-10-06-autofix-2.md).
+
+## 2026-10-07 — Livraison des huit lots après vidéo et audit complémentaire
+
+A01–A07 corrigés : brouillons manuels, propositions numériques, erreurs audio tardives,
+connexions concurrentes, nettoyage du contrôleur, contexte fermé et exports réimportables.
+Références de notation figées et affichées, effacement explicite, révisions d’édition,
+final desktop en colonnes, défilement adaptatif, confirmation des attributions en attente,
+guide de final, rythme et animations réglables, annulation contrôlée et filtres qualité.
+
+1 138 tests Python, 11 intégrations, 52 tests Web ; suite Chromium complète de 100 parcours,
+puis contrôles ciblés et 16 parcours finaux Chromium/WebKit réussis. Deux tests audio WebKit
+ignorés explicitement faute de Web Audio dans ce runtime Windows. Vérifications statiques,
+types, build, analyse visuelle et dictionnaires FR/EN réussis.
+
+Proxy zlib corrigé, scans locaux actualisés des images exactes, supplément FFmpeg et
+composants npm. Pack précompilé avec manifeste/empreintes, assistant et sauvegarde privée
+réellement vérifiés. Scripts compatibles PowerShell 5.1/7 ; approbation de CA toujours explicite.
+Images LAN relancées, migration 7→8 et protocole 10 contrôlés, scores/cookies/accès/métadonnées
+et douze archives conservés. Une entrée de catalogue absente physiquement a été retirée au
+rescan ; aucun fichier musical modifié. Guides et README FR/EN actualisés.
+
+Les alertes système restantes, l’audio sur appareils physiques, l’installation vierge et
+la restauration destructive gardent leurs réserves de publication. Aucune release officielle
+n’est publiée. Rapport : [livraison et vérification](audits/2026-10-07-implementation.md).

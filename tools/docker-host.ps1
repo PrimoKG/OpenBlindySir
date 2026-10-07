@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('init', 'start', 'stop', 'status', 'open', 'certificate', 'bridge-credential', 'bridge-revoke')]
     [string]$Action = 'start',
@@ -17,12 +17,13 @@ $taskRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $taskData = Join-Path $taskRoot '.local/docker'
 $taskEnv = Join-Path $taskData 'hosting.env'
 . (Join-Path $PSScriptRoot 'docker-context.ps1')
+. (Join-Path $PSScriptRoot 'file-integrity.ps1')
 
 function Build-DockerImages([string[]]$Targets) {
     $taskContext = New-DockerBuildContext $taskRoot $taskData
     try {
         foreach ($target in $Targets) {
-            $tag = if ($target -eq 'app') { 'openblindysir-server:local' } else { 'openblindysir-bridge:local' }
+            $tag = switch ($target) { 'app' { 'openblindysir-server:local' } 'bridge' { 'openblindysir-bridge:local' } 'proxy' { 'openblindysir-caddy:local' } default { throw 'Unknown image target.' } }
             Invoke-Docker @('build', '--target', $target, '--tag', $tag, $taskContext)
         }
     } finally { Remove-DockerBuildContext $taskContext $taskData }
@@ -94,9 +95,11 @@ try {
     if (Test-Path -LiteralPath $taskSourcesOverride -PathType Leaf) {
         $taskCompose += @('-f', $taskSourcesOverride)
     }
+    $taskRollback = Join-Path $taskData 'rollback.override.yaml'
+    if (Test-Path -LiteralPath $taskRollback -PathType Leaf) { $taskCompose += @('-f', $taskRollback) }
     switch ($Action) {
         'start' {
-            if (-not $NoBuild) { Build-DockerImages @('app', 'bridge') }
+            if (-not $NoBuild) { Build-DockerImages @('app', 'bridge', 'proxy') }
             $taskUp = @('up', '-d', '--no-build', '--wait', '--wait-timeout', '120')
             Invoke-Docker ($taskCompose + $taskUp)
             Write-Host "Partie : https://$($taskRouting['DOMAIN'])`nHôte : $taskUrl"
@@ -104,6 +107,8 @@ try {
                 Invoke-Docker ($taskCompose + @('cp', 'caddy:/data/caddy/pki/authorities/local/root.crt',
                     (Join-Path $taskData 'root.crt')))
                 Write-Host "Certificat à approuver sur les appareils : $(Join-Path $taskData 'root.crt')"
+                Write-Host "SHA256 du fichier : $(Get-TaskSha256 (Join-Path $taskData 'root.crt'))"
+                Write-Host 'Guide FR / EN : docs/certificat-local.md / docs/local-certificate.en.md'
             }
             if (-not $NoBrowser) { Open-HostBrowser $taskUrl }
         }
@@ -128,6 +133,9 @@ try {
             if ($taskRouting['CADDY_PROFILE'] -ne 'private') { throw 'Le mode public utilise un certificat public.' }
             Invoke-Docker ($taskCompose + @('cp', 'caddy:/data/caddy/pki/authorities/local/root.crt',
                 (Join-Path $taskData 'root.crt')))
+            Write-Host "Certificat : $(Join-Path $taskData 'root.crt')"
+            Write-Host "SHA256 du fichier : $(Get-TaskSha256 (Join-Path $taskData 'root.crt'))"
+            Write-Host 'Guide FR / EN : docs/certificat-local.md / docs/local-certificate.en.md'
         }
     }
 } finally {

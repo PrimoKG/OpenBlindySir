@@ -55,13 +55,15 @@ task_domain=$(sed -n 's/^DOMAIN=//p' "$task_env")
 task_profile=$(sed -n 's/^CADDY_PROFILE=//p' "$task_env")
 task_url="https://$task_domain/host"
 compose() {
+    [ ! -f "$task_data/rollback.override.yaml" ] || set -- -f "$task_data/rollback.override.yaml" "$@"
+    [ ! -f "$task_data/sources.override.yaml" ] || set -- -f "$task_data/sources.override.yaml" "$@"
     if [ "$task_profile" = public ]; then
-        docker compose --env-file "$task_env" -f "$task_root/compose.yaml" -f "$task_root/deploy/compose.public.yaml" "$@"
-    elif [ "$task_profile" = private ]; then
-        docker compose --env-file "$task_env" -f "$task_root/compose.yaml" "$@"
-    else
+        set -- -f "$task_root/deploy/compose.public.yaml" "$@"
+    elif [ "$task_profile" != private ]; then
         echo 'CADDY_PROFILE doit être private ou public.' >&2; return 2
     fi
+    set -- --env-file "$task_env" -f "$task_root/compose.yaml" "$@"
+    docker compose "$@"
 }
 open_browser() {
     if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v xdg-open >/dev/null 2>&1; then
@@ -73,11 +75,14 @@ certificate() {
     [ "$task_profile" = private ] || { echo 'Le mode public utilise un certificat public.' >&2; return 2; }
     compose cp caddy:/data/caddy/pki/authorities/local/root.crt "$task_data/root.crt"
     echo "Certificat à approuver sur les appareils : $task_data/root.crt"
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum "$task_data/root.crt"
+    elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$task_data/root.crt"; fi
+    echo 'Guide FR / EN : docs/certificat-local.md / docs/local-certificate.en.md'
 }
 case "$task_action" in
     start)
         if [ "$task_build" = true ]; then compose up -d --build --wait --wait-timeout 120
-        else compose up -d --wait --wait-timeout 120; fi
+        else compose up -d --no-build --wait --wait-timeout 120; fi
         echo "Partie : https://$task_domain"
         echo "Hôte : $task_url"
         [ "$task_profile" != private ] || certificate

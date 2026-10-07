@@ -245,4 +245,4 @@ def test_format_four_migrates_missing_fields_without_revoking_sessions(tmp_path:
     assert engine.state.game.settings.auto_advance
     assert engine.state.game.rounds[0].auto_advance_at is None
     store.save(engine, restored, at)
-    assert json.loads(path.read_text(encoding="utf8"))["format"] == 5
+    assert json.loads(path.read_text(encoding="utf8"))["format"] == 8

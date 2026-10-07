@@ -78,6 +78,9 @@ class ScoreDraftArgs(InboundModel):
     title_correct: bool | None = None
     artist_correct: bool | None = None
     custom_correct: bool | None = None
+    album_correct: bool | None = None
+    year_correct: bool | None = None
+    featuring_correct: bool | None = None
     expected_revision: Annotated[int, Field(ge=0)] | None = None
 
 
@@ -121,7 +124,8 @@ class PublishArgs(InboundModel):
 
 
 class TrackMetadataArgs(MusicalMetadata):
-    pass
+    expected_revision: Annotated[int, Field(ge=0)] | None = None
+    regrade_auto: bool = False
 
 
 class JoinLockArgs(InboundModel):
@@ -289,6 +293,23 @@ class HostFinalValidate(_Host):
     args: PublishArgs
 
 
+class FinaleRevealArgs(InboundModel):
+    round_id: RoundId
+    fast_forward: bool = False
+
+
+class HostFinaleReveal(_Host):
+    cmd: Literal["finale_reveal"]
+    expected_phase: Literal[GamePhase.FINAL_SCORE_REVIEW]
+    args: FinaleRevealArgs
+
+
+class HostFinaleStop(_Host):
+    cmd: Literal["finale_stop"]
+    expected_phase: Literal[GamePhase.FINAL_SCORE_REVIEW]
+    args: EmptyArgs
+
+
 class HostJoinLock(_Host):
     cmd: Literal["join_lock"]
     expected_phase: AnyPhase
@@ -339,6 +360,8 @@ HostCommandVariant = (
     | HostFinalSet
     | HostFinalReset
     | HostFinalValidate
+    | HostFinaleReveal
+    | HostFinaleStop
     | HostKick
     | HostRename
     | HostParticipation
@@ -390,6 +413,8 @@ HOST_COMMAND_EXAMPLES: Final[Mapping[str, dict[str, Any]]] = {
     },
     "final_reset": {"expected_phase": "FINAL_SCORE_REVIEW", "args": {}},
     "final_validate": {"expected_phase": "FINAL_SCORE_REVIEW", "args": {}},
+    "finale_reveal": {"expected_phase": "FINAL_SCORE_REVIEW", "args": {"round_id": _ROUND}},
+    "finale_stop": {"expected_phase": "FINAL_SCORE_REVIEW", "args": {}},
     "kick": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER}},
     "rename": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER, "nickname": "Yo"}},
     "participation": {"expected_phase": "LOBBY", "args": {"player_id": _PLAYER}},

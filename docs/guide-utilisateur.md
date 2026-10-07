@@ -3,35 +3,63 @@
 [English guide](user-guide.en.md). Une instance accueille une partie à la fois,
 entre amis dans leur navigateur, sur LAN, VPN ou Internet. Aucun compte à créer.
 Préparez [l'hébergement](deployment.md) ou le [lancement Docker](docker.md).
-Mettez à jour serveur, Bridge et interface ensemble : **protocole 6**.
-Le Bridge s'installe sans clone après publication, par [uvx ou archive native](bridge-installation.md).
+Mettez à jour serveur, Bridge et interface ensemble : **protocole 9**.
+Aujourd’hui, utilisez Docker ou [l’installation du Bridge depuis le dépôt](bridge-installation.md).
+Le parcours uvx/archive sera disponible après publication.
+
+Accès rapide : [rejoindre et tester le son](#préparer-et-rejoindre-la-soirée),
+[préparer comme hôte](#préparer-la-partie-comme-hôte),
+[bibliothèque](#gérer-les-sources-et-rechercher), [grand final](#le-grand-final),
+[arrêt et reprise](#arrêter-et-retrouver-la-session).
 
 ## Préparer et rejoindre la soirée
 
-L'hôte partage l'adresse et le **mot de passe de la partie** ; il garde le mot de
-passe hôte. Chaque propriétaire de Bridge reçoit son propre
+L’hôte partage le **QR ou lien d’invitation** depuis **Inviter les joueurs**.
+Il peut aussi partager l’adresse simple et le **mot de passe de la partie**.
+Le mot de passe hôte reste privé. Chaque propriétaire de Bridge reçoit son propre
 [fichier d'identité privé](bridge-installation.md#première-configuration), à conserver
 sur son appareil ; ne le partagez pas avec les joueurs. En LAN/VPN, préparez la confiance du certificat
 selon le guide réseau. Chaque joueur écoute dans son navigateur, idéalement au casque.
 
-1. Entrez un pseudo (24 caractères maximum) et le mot de passe, puis **Entrer**.
+1. Ouvrez le QR/lien d’invitation : saisissez seulement un pseudo (24 caractères
+   maximum), puis **Entrer**. Avec l’adresse simple, saisissez aussi le mot de passe.
+   Pour utiliser le code commun, ouvrez **Retrouver ma place** : un nouveau pseudo
+   rejoint directement si les inscriptions sont ouvertes ; un pseudo existant
+   suit la confirmation de l’hôte décrite ci-dessous.
 2. Dans le lobby, **Tester mon audio**, puis **Je l'entends ✓** après le bip.
 3. Ajustez le volume. Gardez le navigateur actif pendant les manches.
 
-Le choix Français/English est mémorisé localement. **Correction audio (ms)**
+Le switch **FR / EN** reste dans le header, depuis l’accueil jusqu’aux résultats,
+également sur l’écran d’accès hôte. Le changement est immédiat, sans rechargement,
+sans couper l’audio ni perdre les saisies. Le choix est enregistré localement dans
+ce navigateur et retrouvé à la prochaine visite ; chaque joueur choisit sa langue.
+Si le navigateur bloque le stockage local, le switch fonctionne pour l’onglet courant.
+Les pseudos, réponses, consignes personnalisées et informations musicales restent tels que saisis.
+
+**Correction audio (ms)**
 compense une sortie lente : une valeur positive avance la prochaine lecture,
 une valeur négative la retarde (−500 à +500 ms). Commencez à zéro ; par exemple
 +150 ms pour une sortie Bluetooth en retard de 150 ms. Le réglage n'interrompt
 pas une lecture en cours, persiste dans ce navigateur et ne modifie jamais le
 temps de réponse officiel ni les points. La compensation physique reste à mesurer.
 
-**Créer un code de récupération** crée un code privé de six caractères.
-Gardez-le pour changer d'appareil ou retrouver votre place si le cookie est perdu.
-À l'entrée, **Retrouver ma place** demande le code et le mot de passe de partie.
-Le code s'utilise une seule fois ; en recréer un invalide le précédent. Les anciens
-onglets sont déconnectés. Vos réponses et votre identité restent conservées ;
-un ancien hôte doit saisir à nouveau le mot de passe hôte. La récupération reste
-possible lorsque les inscriptions sont verrouillées. Un joueur retiré ne peut pas revenir ainsi.
+Sur le même navigateur, le cookie reprend automatiquement votre place dans la
+même session. Le **Code de session** est commun à tous les joueurs ; l’hôte le
+retrouve dans **Inviter les joueurs**, y compris depuis **Paramètres** pendant une
+partie, et peut le changer/régénérer. Le QR demande seulement un pseudo.
+Régénérer invalide l’ancien code et le QR précédent, sans déconnecter les joueurs.
+
+Pour changer de navigateur, **Retrouver ma place** demande le pseudo et le code
+commun. Un pseudo existant nécessite une confirmation de l’hôte ; gardez l’écran
+ouvert pendant cette demande (2 minutes maximum). Communiquez à l’hôte la
+référence affichée pour qu’il identifie votre demande, surtout si plusieurs
+navigateurs réclament le même pseudo. Vos points, réponses et équipe
+restent conservés. Après confirmation, l’ancien navigateur est déconnecté ;
+les droits hôte exigent à nouveau le mot de passe hôte. Les reprises de places
+existantes restent possibles quand les nouvelles inscriptions sont verrouillées.
+Un MC récupéré reste spectateur jusqu’à une nouvelle activation du mode hôte.
+Si la sauvegarde de l’accès échoue, l’ancien accès reste valide et un message
+invite à réessayer ; la demande reste ouverte jusqu’à son expiration.
 
 ## Jouer les manches
 
@@ -39,7 +67,7 @@ possible lorsque les inscriptions sont verrouillées. Un joueur retiré ne peut 
 Écrivez dans **Ta réponse** et utilisez **VALIDER** ou Entrée. La validation est
 définitive ; attendez **✓ Réponse enregistrée**. Le texte non validé est un brouillon
 synchronisé ; après fermeture, le dernier texte reçu devient **Brouillon capturé**.
-Il n'a ni rang officiel ni temps de validation, et ne reçoit aucun point automatique.
+Il n’a ni rang officiel ni temps de validation. En notation automatique, il est évalué à la fermeture si la politique des brouillons le permet ; la politique zéro impose zéro.
 
 La fin du son ne ferme pas nécessairement les réponses : le délai restant est
 affiché. L'hôte peut suspendre son et réponses, reprendre, rejouer, ajouter du temps
@@ -48,8 +76,8 @@ ou fermer. La pause n'entre pas dans les temps de réponse.
 Après chaque manche, **Réponses conservées** confirme l’enregistrement. Par défaut,
 la suivante arrive automatiquement après **2 secondes** ; fermer l’onglet hôte ne
 bloque pas cette transition. La dernière manche ouvre directement la revue finale.
-**Tous les morceaux, réponses des autres et points sont révélés uniquement après
-la publication finale.** Le compteur anonyme n/m est masqué lorsqu’il y a moins de
+**Les morceaux, réponses des autres et points sont dévoilés par l’hôte pendant
+le grand final.** Le compteur anonyme n/m est masqué lorsqu’il y a moins de
 trois participants. L’animateur conserve ses informations privées.
 
 Pendant le jeu, la barre hôte reste compacte. **Paramètres** ouvre une modale sans
@@ -61,6 +89,9 @@ l’enchaînement automatique pour passer manuellement. Les actions exceptionnel
 **Actions de la partie**. Les règles/barèmes/dossiers restent fixés pour la partie.
 
 ## Préparer la partie comme hôte
+
+L’hôte peut lancer directement la partie quand ses réglages enregistrés sont prêts ;
+**Préparer la partie** permet de les modifier.
 
 Sur `/host` ou **Accès hôte**, entrez le mot de passe hôte, puis ouvrez
 **Préparer la partie**. Choisissez **Hôte joueur** pour jouer avec les mêmes protections
@@ -114,7 +145,8 @@ Un chemin inaccessible affiche les étapes de montage ; le dernier catalogue val
 Recherchez par nom de fichier, titre ou artiste importé/corrigé. Filtrez par Bridge,
 dossier, extension, disponibilité et morceaux encore inédits. La recherche de
 dossiers garde les ancêtres dans l’arbre. Le tri par titre, artiste, fichier ou dossier
-est appliqué au catalogue entier, avant pagination de **25 morceaux**. Les filtres
+est appliqué au catalogue entier, avant pagination adaptée : **20 morceaux en deux colonnes de 10** sur écran large,
+10 sur écran étroit et 5 par colonne si la hauteur est faible. Les filtres
 et la page sont conservés à la fermeture de la modale. Les états distinguent réservé,
 consommé/joué et consommé/annulé. Consulter les titres avant le lancement est permis
 à l’hôte joueur, avec un avertissement sur la surprise. Cette bibliothèque reste réservée aux hôtes au lobby, en revue
@@ -124,6 +156,27 @@ Les fichiers MP4/MOV/MKV/AVI et autres conteneurs autorisés fournissent **uniqu
 leur première piste audio**. Aucune vidéo, pochette ou tag n'est envoyé aux joueurs.
 Un fichier sans audio est écarté avec un diagnostic privé. Formats, tailles,
 codec manquant et fichier facultatif de métadonnées : [guide des sources](media-and-metadata.md).
+
+### Préécoute, catégories et activation
+
+**Préécouter 15 s · milieu du morceau** démarre une écoute privée directement
+sous le son choisi. **Arrêter la préécoute**, changer de morceau/page ou fermer la
+bibliothèque l’arrête. Un extrait public reste prioritaire. Aucun morceau n’est
+consommé par cette écoute. Si le navigateur ne peut pas lire l’extrait,
+réessayez avec le bouton de préécoute : un extrait défectueux est rechargé. Un simple
+blocage du démarrage audio conserve l’extrait pour la tentative suivante.
+**Corriger les informations du morceau** ouvre l’éditeur
+sur la même carte ; quitter avec des changements non enregistrés demande confirmation.
+
+**Désactiver ce morceau** l’exclut des prochains choix sans effacer le fichier,
+les parties passées ou un extrait déjà préparé. Réactivez-le depuis le filtre
+**Activation → Désactivés**. Les **Tags** et **Lié à** acceptent plusieurs valeurs
+séparées par des virgules : genre/époque/langue, jeu vidéo/anime/film, par exemple.
+La recherche et les filtres les retrouvent. En animateur, filtrez un thème puis
+choisissez les morceaux pour les manches souhaitées. Les cases de sélection et
+**Appliquer aux morceaux sélectionnés** ajoutent des catégories ou changent
+l’activation des morceaux de la page ; un compteur indique les modifications réussies.
+Les anciennes catégories sont conservées. Export JSON v2, import v1/v2.
 
 ## Choisir un morceau comme animateur
 
@@ -152,27 +205,53 @@ manche actuelle ne consomme pas une réservation de la manche suivante.
 Les joueurs et l'hôte joueur ne reçoivent pas ces informations avant le reveal.
 [Dépannage](troubleshooting.md#extraction-et-choix-mc).
 
-## Revue globale et publication
+## Le grand final
 
-La dernière manche ou **Arrêter la partie** ouvre **REVUE DE FIN DE PARTIE**.
-La navigation affiche toutes les manches entendues : recherchez un morceau,
-choisissez une manche ou utilisez précédent/suivant. Les joueurs attendent.
+La dernière manche ouvre **Le grand final**, partagé avec
+les joueurs. L’hôte utilise **Choisir une manche à présenter** pour sa préparation privée, puis
+**Présenter la manche N** dans la barre d’action persistante. Tous voient alors le morceau, les réponses et leur
+notation en direct. Naviguer seul ne change pas la scène publique.
+
+La scène indique la manche vue par les joueurs, séparément de celle préparée par
+l’hôte. **Toutes les manches** ouvre la navigation détaillée et la recherche ;
+chaque manche distingue « À présenter », « En scène », « Présentée » et « Terminée ».
+La barre indique les présentations encore nécessaires avant le podium.
+
+Le classement provisoire additionne les manches déjà dévoilées et les corrections
+finales. Une manche revisitée n’ajoute pas ses points une seconde fois. Les réponses
+en attente, partiellement notées et vérifiées ont des états distincts. Les joueurs
+retrouvent leur total et les points de la manche ; les équipes partagent un classement.
+
+**Réécouter ensemble** lance l’extrait exact du jeu en synchronisation pour tous.
+À la fin de l’extrait, la réécoute privée redevient disponible automatiquement.
+**Arrêter la réécoute** annule aussi une préparation en cours. Les informations du
+morceau restent dans un panneau secondaire ; la réécoute privée est directement
+accessible sous le morceau. L’hôte peut
+préparer une autre manche sans la dévoiler et utiliser la recherche des manches.
 
 Chaque réponse indique validation ou brouillon capturé, temps officiel/rang si
 disponibles, heure de réception serveur et retard audio connu. Une donnée absente
 reste « — ». Les joueurs retirés ayant participé restent dans cette revue.
 Corrigez titre, artiste, featuring, album et année si nécessaire.
 
-Utilisez **Vrai / Faux** pour le titre et/ou l’artiste, **Tout bon / Tout faux**,
-ou le champ numérique manuel entre −1 000 et +1 000. Les critères suivent le mode
+Utilisez **Trouvé / Manqué** pour le titre et/ou l’artiste, **Tout bon / Tout faux**,
+ou ouvrez les points manuels entre −1 000 et +1 000. Les critères suivent le mode
 et le barème enregistré : titre à 2 et artiste à 3 donnent 5 pour « Tout bon ».
 En mode personnalisé, le critère est « Réponse ». Une décision manquante reste
-**À vérifier**, distincte de Faux ; aucun rapprochement textuel automatique ne note
-les réponses. La saisie manuelle est identifiée et remplace les critères.
+**À vérifier**, distincte de Manqué. La notation manuelle reste le mode par défaut ;
+la [notation automatique optionnelle](notation-automatique.md) reconnaît les critères
+demandés dans un seul champ, au seuil de 90 % réglable de 80 à 100 %. Album, année
+et featuring peuvent être demandés avec leur propre barème. Les cas incertains
+restent à vérifier. La saisie manuelle est identifiée et remplace les critères.
 
-Les filtres **Uniquement les manches à vérifier** et **Prochaine réponse à vérifier**
+Les filtres **Afficher les manches où il manque des attributions de points** et **Prochaine réponse à vérifier**
 accélèrent la revue. **Noter les réponses absentes à zéro** ne touche pas aux
 brouillons capturés. Attendez l’accusé serveur avant de changer de manche ou publier.
+Une réponse absente occupe une ligne compacte : **Confirmer 0 point** confirme
+la décision ; **Attribuer autrement** permet une exception manuelle. Les personnes
+qui n’étaient pas participantes à cette manche ne sont pas ajoutées aux absences.
+La référence attendue affiche titre/artiste selon le mode et signale les métadonnées
+incomplètes. Un zéro confirmé apparaît aussi dans la dernière attribution publique.
 Une erreur de sauvegarde reste visible ; vérifiez et renvoyez votre correction.
 Les critères et notes enregistrés survivent à la reconnexion et aux snapshots,
 et sont conservés dans les récapitulatifs publiés.
@@ -182,7 +261,7 @@ et année pour **toutes les parties de la session**, même après réinitialisat
 la réserve. Cela ne modifie pas les fichiers musicaux ni les archives déjà publiées.
 La recherche utilise les titres et artistes corrigés.
 
-Les totaux provisoires additionnent toutes les manches et les corrections finales.
+Les totaux détaillés de l’hôte additionnent toutes les manches et les corrections finales.
 Les équipes additionnent les points individuels et passent en premier dans le podium,
 les totaux de revue et l’historique. Le classement individuel reste disponible ; les
 joueurs sans équipe y restent. Les ex æquo partagent leur rang. La politique de brouillons
@@ -195,11 +274,33 @@ réinitialise ces corrections, pas les notes par manche.
 Ces raccourcis et la remise à zéro attendent aussi l'accusé serveur avant une
 nouvelle modification ou la publication.
 
-**VALIDER LES SCORES ET AFFICHER LES RÉSULTATS** demande une confirmation avec les
+Après avoir dévoilé toutes les manches entendues, **Lancer le podium** demande une confirmation avec les
 totaux et le nombre de réponses restant à vérifier. Confirmer celles-ci conserve
 leurs valeurs actuelles, initialement zéro. La publication est unique et fige les
-scores. Tous voient alors morceaux, réponses, temps, points, classement, équipes
-et récapitulatif ; les exports CSV/JSON reprennent exactement ces résultats.
+scores. Le podium dévoile les places du troisième au premier, ensemble et en tenant
+compte des ex æquo. Une reconnexion reprend l’étape en cours ; après redémarrage,
+les résultats restaurés s’affichent directement. Le classement détaillé et le
+récapitulatif suivent ; les exports CSV/JSON reprennent ces résultats figés.
+
+Les confettis respectent la préférence de mouvement réduit. Dans **Son**, l’option
+**Ambiance sonore du final** active les ponctuations musicales ; elles utilisent le
+volume habituel, nécessitent l’activation audio et ne couvrent pas une réécoute.
+Les résultats apparaissent avant les actions permettant de relancer une partie.
+
+**Tester mon audio** reste disponible pendant le final et dans le menu **Son**.
+Si le téléphone suspend le son, utilisez **Touchez pour réactiver le son**, même
+entre deux réécoutes. Un extrait partagé en cours reprend à sa position actuelle ;
+un extrait terminé ne redémarre pas. Vérifiez également le volume et la sortie
+audio choisie sur le téléphone.
+
+### Défilement des joueurs et du classement
+
+Pendant le final, les deux listes de notation défilent dans leur propre zone.
+Après la dernière ligne visible confirmée, y compris zéro, **Défilement automatique**
+amène le prochain joueur encore à noter, selon la taille de cet appareil. Une saisie
+active ou un défilement manuel suspend ce déplacement ; le bouton du prochain joueur
+permet de reprendre. Le classement affiche au maximum cinq lignes, moins si la
+hauteur manque ; son défilement permet de retrouver les autres joueurs.
 
 ## Réécouter pendant la revue
 
@@ -223,19 +324,13 @@ la réécouter intégralement ensuite.
 
 ## Arrêter et retrouver la session
 
-**Arrêter la partie** reste accessible avant le premier morceau, pendant la
-préparation, la lecture, la pause et la revue. La confirmation explique les effets :
+**Arrêter la partie** est disponible pendant le jeu et le final. La confirmation
+propose de revenir aux attributions ou de terminer avec les points déjà attribués.
+Terminer arrête l’audio, conserve réponses/brouillons et points, publie les résultats
+une seule fois et affiche directement le menu pour rejouer ou terminer la session.
+Les attributions manquantes gardent leur valeur actuelle, initialement zéro ;
+les présentations restantes et l’animation du podium sont sautées.
 
-| Moment | Conséquence |
-|---|---|
-| Lobby, avant tout morceau | Revue vide, puis validation finale possible. |
-| Préparation/chargement/compte à rebours | Manche non entendue annulée, pas de points. |
-| Lecture/saisie/pause | Son arrêté, validations et derniers brouillons conservés, manche à noter en revue globale. |
-| Option « terminer sans noter cette manche » | Manche entendue conservée, annulée et exclue des points. |
-| Réponses déjà fermées | Toutes les manches jouées conservées. |
-| Revue globale déjà ouverte | Notes et corrections inchangées. |
-
-Aucun arrêt ne publie les résultats. Un double clic est sans effet supplémentaire.
 Les manches entendues puis annulées apparaissent dans le récapitulatif avec zéro.
 Deux choix après les résultats : **Nouvelle partie avec les morceaux restants**
 garde les exclusions musicales ; **Recommencer avec toute la bibliothèque** les
@@ -302,3 +397,25 @@ Les liens d'évitement, le clavier, les confirmations avec Échap/retour du focu
 les commandes audio ont des libellés accessibles. Les parcours automatisés incluent
 320 px et texte à 200 %. La recette NVDA/VoiceOver et les appareils physiques reste
 à effectuer ; ces tests ne constituent pas une certification d'accessibilité.
+
+## Nouveautés : notation et certificat LAN
+
+Voir le [guide complet de notation automatique](notation-automatique.md) pour les
+variantes acceptées, les références figées, le recalcul explicite et les vagues
+d’attribution du final. Les scores ne sont pas révélés pendant la saisie.
+Pour éviter l’alerte HTTPS locale sur les téléphones, suivre le
+[guide d’approbation du certificat](certificat-local.md). L’accès LAN est conservé.
+
+## Corrections du final et préparation des références
+
+Le final sur PC place le contexte musical à gauche des réponses et garde le classement à droite lorsque la largeur le permet. Les listes s’adaptent au navigateur, le classement montre au maximum cinq personnes, et le défilement automatique garde sa préférence lorsqu’une lecture manuelle le met en pause. **Reprendre le défilement** réactive la progression. Les boutons restent utilisables au clavier et mesurent au moins 44 px.
+
+La référence affichée en mode automatique est celle qui a servi à la notation, même si les informations du morceau ont été corrigées depuis. **Réévaluer** utilise les nouvelles références sans écraser les corrections manuelles. Un brouillon capturé avec la politique « décision de l’hôte » reste une suggestion : aucun point n’est attribué automatiquement. Les nombres supplémentaires inconnus ne permettent pas de gagner un titre numérique. Le seuil de ressemblance reste appliqué à chaque critère ; l’année est exacte.
+
+Les raisons des attentes sont visibles sur les cartes. L’hôte peut annuler sa dernière correction déjà enregistrée tant que sa révision n’a pas été modifiée par un autre écran. Le podium propose d’abord de terminer les attributions restantes ; publier malgré les réponses en attente est une action explicite. Une partie sans points est annoncée comme terminée. Le déroulé du final indique révélation, écoute facultative, points, classement et manche suivante. Le rythme rapide et les préférences d’animations sont mémorisés dans chaque navigateur ; son coupé et mouvement réduit sont respectés.
+
+La bibliothèque s’ouvre sur les morceaux ; les sources restent dans les outils avancés. Le filtre de qualité indique les références prêtes ou manquantes pour les critères de cette partie ; le filtre des sources permet de limiter la file de correction aux dossiers sélectionnés. Une référence absente n’est pas devinée à partir du nom du fichier pour la notation automatique. **Hériter** retrouve la valeur des sources, **Remplacer** saisit une valeur confirmée et **Effacer la référence** empêche sa réapparition depuis les imports ou tags audio. Les corrections concurrentes sont refusées et le brouillon local reste disponible.
+
+L’export est un pack ZIP de fichiers JSON limités à 1 Mio et 10 000 lignes. Un pack reste limité à 8 Mio et 10 000 lignes. Si nécessaire, **Télécharger le pack suivant** termine l’export de toute la collection. Chaque pack se réimporte séparément, sans extraire de fichiers sur le disque. Les JSON historiques restent acceptés avec leur limite de 1 Mio. Les imports ZIP chiffrés, les chemins arbitraires et les compressions autres que stockée/Deflate sont refusés.
+
+Le contexte audio fermé peut être recréé après une action de l’utilisateur. Les requêtes obsolètes, sockets remplacés et contrôleurs démontés sont nettoyés. Une erreur provenant d’un ancien morceau ne remplace plus l’état de lecture du morceau courant. L’écoute privée et collective partagent le volume du navigateur. **Tester mon audio** et la récupération restent accessibles pendant le final.

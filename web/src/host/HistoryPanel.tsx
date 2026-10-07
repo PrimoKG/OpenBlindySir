@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getLanguage, t, tCode } from "../i18n";
+import { getLanguage, t, tCode, useMessage } from "../i18n";
 import { api } from "../net/api";
 import { ExportResults, Recap } from "../player/Recap";
 import type { GameRecord, HistoryResponse, HostView } from "../protocol";
@@ -10,7 +10,7 @@ export function HistoryPanel({ view }: { readonly view: HostView }) {
   const [open, setOpen] = useState(false);
   const [list, setList] = useState<HistoryResponse | null>(null);
   const [record, setRecord] = useState<GameRecord | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useMessage(null);
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   const [deletion, setDeletion] = useState<string | "all" | null>(null);
@@ -30,7 +30,7 @@ export function HistoryPanel({ view }: { readonly view: HostView }) {
         setRecord((old) =>
           old && result.data.items.some((item) => item.game_id === old.game_id) ? old : null,
         );
-      } else setError(tCode("error", result.error));
+      } else setError(() => tCode("error", result.error));
     });
     return () => {
       active = false;
@@ -43,7 +43,7 @@ export function HistoryPanel({ view }: { readonly view: HostView }) {
     const result = await api.historyRecord(id);
     setBusy(false);
     if (result.ok) setRecord(result.data);
-    else setError(tCode("error", result.error));
+    else setError(() => tCode("error", result.error));
   };
   const remove = async () => {
     if (deletion === null || busy) return;
@@ -56,7 +56,7 @@ export function HistoryPanel({ view }: { readonly view: HostView }) {
       setRecord(null);
       setRevision((n) => n + 1);
       summary.current?.focus();
-    } else setError(tCode("error", result.error));
+    } else setError(() => tCode("error", result.error));
   };
   return (
     <details

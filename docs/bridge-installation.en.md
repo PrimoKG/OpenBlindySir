@@ -5,9 +5,17 @@ outbound to your self-hosted server. Complete sources remain local; only short
 reencoded clips are transferred. Host the server/web UI with [Docker](docker.md)
 or the [PC launcher](deployment.md).
 
-**Publication status:** this repository builds packages and archives; these changes
-do not publish a release. PyPI commands below require publication first. From a
-checkout, run `uv sync --locked` and replace `uvx` with `uv run`.
+**Publication status:** this development version has no published release.
+Use [Docker](docker.md) or the source checkout today. From the repository root,
+with [uv installed](https://docs.astral.sh/uv/getting-started/installation/):
+
+```sh
+uv sync --locked
+uv run openblindysir-bridge --version
+```
+
+The runnable examples below use `uv run`. After publication, `uvx` can run a
+matching published version without a checkout; native archives are another option.
 
 ## Requirements and platforms
 
@@ -26,21 +34,25 @@ FFmpeg. Install using `winget install --id Gyan.FFmpeg --exact` (Windows),
 use your official package manager or [FFmpeg downloads](https://ffmpeg.org/download.html).
 Reopen the terminal after installation.
 
+**Security minimum: FFmpeg and ffprobe 9.0.2.** A stable distribution's package
+can remain older after `apt update`; use the Docker Bridge or a current build
+linked by the FFmpeg project in that case. The Bridge rejects older/unidentified
+versions. Continue installing security updates from your build provider.
+
 ## uvx and guided setup
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) then run:
+From the source checkout prepared above:
 
 First obtain a **private identity file issued for this Bridge** from the host
 ([server-side issuance](#distinct-v05-identity)). Keep it outside shared checkouts
 and extracted archives, accessible only to your account. Replace
-`IDENTITY_PATH.toml` below with its actual path. From the unpublished checkout,
-use `uv run` instead of `uvx` after `uv sync --locked`.
+`IDENTITY_PATH.toml` below with its actual path.
 
 ```sh
-uvx openblindysir-bridge --version
-uvx openblindysir-bridge check-ffmpeg
-uvx openblindysir-bridge init --credentials IDENTITY_PATH.toml
-uvx openblindysir-bridge run --credentials IDENTITY_PATH.toml
+uv run openblindysir-bridge --version
+uv run openblindysir-bridge check-ffmpeg
+uv run openblindysir-bridge init --credentials IDENTITY_PATH.toml
+uv run openblindysir-bridge run --credentials IDENTITY_PATH.toml
 ```
 
 The French terminal wizard asks for the base server URL (HTTPS, no `/host`, query
@@ -79,11 +91,11 @@ account. Preserve this private configuration to keep the Bridge UUID. Independen
 Bridges need separate configurations; do not clone their identity.
 
 ```sh
-uvx openblindysir-bridge --help
-uvx openblindysir-bridge check-config --credentials IDENTITY_PATH.toml
-uvx openblindysir-bridge doctor --credentials IDENTITY_PATH.toml
-uvx openblindysir-bridge doctor --connect --credentials IDENTITY_PATH.toml
-uvx openblindysir-bridge doctor --json --credentials IDENTITY_PATH.toml
+uv run openblindysir-bridge --help
+uv run openblindysir-bridge check-config --credentials IDENTITY_PATH.toml
+uv run openblindysir-bridge doctor --credentials IDENTITY_PATH.toml
+uv run openblindysir-bridge doctor --connect --credentials IDENTITY_PATH.toml
+uv run openblindysir-bridge doctor --json --credentials IDENTITY_PATH.toml
 ```
 
 Configuration validation does not write, scan or connect. Doctor checks tools;
@@ -134,7 +146,7 @@ Unix execution also requires a filesystem allowing execution.
 
 ## Updating
 
-V0.5 requires **protocol 6**, admitted range 6 to 6, on all components. Protocols 2/3/4/5 are refused;
+V0.5 requires **protocol 9**, admitted range 9 to 9, on all components. Protocols 2/3/4/5/6/7 are refused;
 the Bridge package pins its protocol package to the exact same version. Pin a
 published release by replacing `VERSION` below with the published version matching
 the server:

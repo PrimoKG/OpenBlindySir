@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+
 import * as cmd from "../app/commands";
+
 import { useGame, useUi } from "../app/hooks";
-import { t, tCode } from "../i18n";
+
+import { t, tCode, useMessage } from "../i18n";
+
 import { api } from "../net/api";
+
 import type {
   HostView,
   LibraryBridge,
@@ -11,59 +16,199 @@ import type {
   LibraryTrack,
   MusicalMetadata,
 } from "../protocol";
-import { Button, Modal } from "../ui/components";
+
+import { Button, ConfirmDialog, Modal } from "../ui/components";
+
+import { MetadataFieldActions } from "../ui/MetadataFieldActions";
+
+import { AliasEditor } from "../ui/ScoringCriteria";
+
+import { PrivatePreview } from "./PrivatePreview";
 
 export function LibraryManager({
   view,
+
   onSelectionPending,
 }: {
   readonly view: HostView;
+
   readonly onSelectionPending?: (pending: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
+
   const [sort, setSort] = useState("title");
+
   const [descending, setDescending] = useState(false);
-  const pageSize = 25;
+
+  const [pageSize, setPageSize] = useState(20);
+
+  const listRegion = useRef<HTMLDivElement>(null);
+
   const game = useGame();
+
   const ui = useUi();
+
   const choices = view.kind === "host_mc" ? (view.mc.manual_choices ?? []) : [];
+
+  const catalogState = view.host.bridges
+
+    .map((bridge) => `${bridge.bridge_id}:${bridge.state}:${bridge.track_count}`)
+
+    .join("|");
+
   const selectionRevision = view.kind === "host_mc" ? (view.mc.selection_revision ?? 0) : 0;
+
   const [roundNumber, setRoundNumber] = useState(1);
+
   const [pendingChoice, setPendingChoice] = useState<{
     number: number;
+
     bridgeId: string | null;
+
     trackId: string | null;
+
     revision: number;
+
     toastAt: number | null;
+
     expiresAt: number;
   } | null>(null);
+
   const choice = choices.find((c) => c.round_number === roundNumber);
+
   const manualAllowed = view.kind === "host_mc" && view.host.commands.includes("select_track");
+
   const [library, setLibrary] = useState<LibraryResponse | null>(null);
+
   const [result, setResult] = useState<LibrarySearch | null>(null);
+
   const [q, setQuery] = useState("");
+
   const [bridge, setBridge] = useState("");
+
   const [folder, setFolder] = useState("");
+
   const [ext, setExt] = useState("");
+
   const [availability, setAvailability] = useState("all");
+
+  const [exportOffset, setExportOffset] = useState(0);
+
+  const [exportBusy, setExportBusy] = useState(false);
+
+  const [quality, setQuality] = useState("all");
+  const [poolOnly, setPoolOnly] = useState(false);
+
+  const [activation, setActivation] = useState("all");
+
+  const [tag, setTag] = useState("");
+
+  const [linkedTo, setLinkedTo] = useState("");
+
   const [offset, setOffset] = useState(0);
+
   const [revision, setRevision] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+
+  const [error, setError] = useMessage(null);
+
   const [loading, setLoading] = useState(false);
+
   const [editing, setEditing] = useState<LibraryTrack | null>(null);
-  const [notice, setNotice] = useState("");
+
+  const [editorDirty, setEditorDirty] = useState(false);
+
+  const [editorSaving, setEditorSaving] = useState(false);
+
+  const [leaveAction, setLeaveAction] = useState<(() => void) | null>(null);
+
+  const [preview, setPreview] = useState<LibraryTrack | null>(null);
+
+  const [mutating, setMutating] = useState(false);
+
+  const [selectedTracks, setSelectedTracks] = useState<ReadonlySet<string>>(new Set());
+
+  const [bulkTags, setBulkTags] = useState("");
+
+  const [bulkLinks, setBulkLinks] = useState("");
+
+  const [bulkActivation, setBulkActivation] = useState("");
+
+  const identity = (track: LibraryTrack) => `${track.bridge_id}:${track.track_id}`;
+
+  const guard = (action: () => void) => {
+    if (editorSaving || mutating) return;
+
+    if (editorDirty) {
+      setLeaveAction(() => action);
+
+      return;
+    }
+
+    setEditing(null);
+
+    setPreview(null);
+
+    action();
+  };
+
+  useEffect(() => {
+    const region = listRegion.current;
+
+    if (!region) return;
+
+    const resize = () => {
+      if (!region.clientWidth || editorDirty || editorSaving) return;
+
+      const columns = region.clientWidth >= 860 ? 2 : 1;
+
+      const size = columns * (innerHeight < 600 ? 5 : 10);
+
+      setPageSize((old) => {
+        if (old !== size) setOffset((offset) => Math.floor(offset / size) * size);
+
+        return size;
+      });
+    };
+
+    const observer = new ResizeObserver(resize);
+
+    observer.observe(region);
+
+    window.addEventListener("resize", resize);
+
+    resize();
+
+    return () => {
+      observer.disconnect();
+
+      window.removeEventListener("resize", resize);
+    };
+  }, [editorDirty, editorSaving]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: phase and public PLAY changes invalidate private previews.
+  useEffect(() => {
+    setPreview(null);
+  }, [view.phase, view.play?.play_id]);
+
+  const [notice, setNotice] = useMessage("");
+
   useEffect(() => {
     if (choices.length && !choices.some((c) => c.round_number === roundNumber)) {
       setRoundNumber(choices[0]?.round_number ?? 1);
     }
   }, [choices, roundNumber]);
+
   useEffect(() => {
     onSelectionPending?.(pendingChoice !== null);
+
     return () => onSelectionPending?.(false);
   }, [pendingChoice, onSelectionPending]);
+
   useEffect(() => {
     if (!pendingChoice) return;
+
     const confirmed = choices.find((c) => c.round_number === pendingChoice.number);
+
     if (
       selectionRevision > pendingChoice.revision &&
       confirmed &&
@@ -73,125 +218,310 @@ export function LibraryManager({
           confirmed.track_id === pendingChoice.trackId)
     ) {
       setPendingChoice(null);
-      setNotice(t("manual.saved"));
+
+      setNotice(() => t("manual.saved"));
+
       setRevision((r) => r + 1);
+
       return;
     }
+
     if (ui.toast && ui.toast.at !== pendingChoice.toastAt) {
       setPendingChoice(null);
-      setNotice(tCode("error", ui.toast.code));
+
+      const code = ui.toast.code;
+
+      setNotice(() => tCode("error", code));
+
       return;
     }
+
     const timer = window.setTimeout(
       () => {
         setPendingChoice(null);
-        setNotice(t("manual.saveFailed"));
+
+        setNotice(() => t("manual.saveFailed"));
       },
+
       Math.max(0, pendingChoice.expiresAt - Date.now()),
     );
+
     return () => window.clearTimeout(timer);
-  }, [pendingChoice, choices, selectionRevision, ui.toast]);
+  }, [pendingChoice, choices, selectionRevision, ui.toast, setNotice]);
+
   const choose = (track: LibraryTrack | null) => {
     if (view.kind !== "host_mc" || !choice || choice.locked || pendingChoice) return;
-    setNotice(t("manual.saving"));
+
+    setNotice(() => t("manual.saving"));
+
     setPendingChoice({
       number: roundNumber,
+
       bridgeId: track?.bridge_id ?? null,
+
       trackId: track?.track_id ?? null,
+
       revision: selectionRevision,
+
       toastAt: ui.toast?.at ?? null,
+
       expiresAt: Date.now() + 10000,
     });
+
     game.send(cmd.selectTrack(view, roundNumber, track));
   };
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision explicitly requests a catalog refresh
   useEffect(() => {
     let active = true;
+
     void api.library().then((r) => {
       if (!active) return;
+
       if (r.ok) setLibrary(r.data);
-      else setError(tCode("error", r.error));
+      else setError(() => tCode("error", r.error));
     });
+
     return () => {
       active = false;
     };
-  }, [revision]);
+  }, [revision, catalogState]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: edits and rescans invalidate the search response
   useEffect(() => {
     let active = true;
+
     setLoading(true);
+
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams({
         q,
+
         bridge,
+
         folder,
+
         ext,
+
         availability,
+
+        activation,
+
+        quality,
+        pool_only: String(poolOnly),
+
+        tag,
+
+        linked_to: linkedTo,
+
         offset: String(offset),
+
         limit: String(pageSize),
+
         sort,
+
         descending: String(descending),
       });
+
       void api.search(params).then((r) => {
         if (!active) return;
+
         setLoading(false);
+
         if (r.ok) {
           setResult(r.data);
+
+          if (offset >= r.data.total && offset > 0)
+            setOffset(Math.floor(Math.max(0, r.data.total - 1) / pageSize) * pageSize);
+
           setError(null);
-        } else setError(tCode("error", r.error));
+        } else setError(() => tCode("error", r.error));
       });
     }, 250);
+
     return () => {
       active = false;
+
       window.clearTimeout(timer);
     };
   }, [
     q,
+
     sort,
+
     descending,
+
     bridge,
+
     folder,
+
     ext,
+
     availability,
+
+    activation,
+
+    quality,
+    poolOnly,
+
+    tag,
+
+    linkedTo,
+
+    pageSize,
+
     offset,
+
     revision,
+
     selectionRevision,
+
+    catalogState,
+
     view.round?.state,
   ]);
+
   const refresh = (updated?: LibraryResponse) => {
     if (updated) setLibrary(updated);
+
     setRevision((n) => n + 1);
+
     window.dispatchEvent(new Event("openblindysir:library"));
   };
-  const filter = (set: (value: string) => void, value: string) => {
-    set(value);
-    setOffset(0);
+
+  const applyBulk = () => {
+    const tracks = result?.tracks.filter((track) => selectedTracks.has(identity(track))) ?? [];
+
+    const split = (value: string) =>
+      value
+
+        .split(",")
+
+        .map((label) => label.trim())
+
+        .filter(Boolean);
+
+    guard(() => {
+      setMutating(true);
+
+      setError(null);
+
+      void (async () => {
+        let count = 0;
+
+        for (const track of tracks) {
+          const metadata: MusicalMetadata = {
+            ...(bulkTags.trim() ? { tags: [...track.tags, ...split(bulkTags)] } : {}),
+
+            ...(bulkLinks.trim() ? { linked_to: [...track.linked_to, ...split(bulkLinks)] } : {}),
+
+            ...(bulkActivation ? { enabled: bulkActivation === "active" } : {}),
+          };
+
+          const saved = await api.editMetadata({
+            bridge_id: track.bridge_id,
+
+            track_id: track.track_id,
+
+            metadata,
+          });
+
+          if (!saved.ok) {
+            setError(() => tCode("error", saved.error));
+
+            break;
+          }
+
+          count++;
+
+          setSelectedTracks((old) => {
+            const next = new Set(old);
+
+            next.delete(identity(track));
+
+            return next;
+          });
+        }
+
+        setMutating(false);
+
+        setNotice(() => t("library.bulkSaved", { count, total: tracks.length }));
+
+        refresh();
+      })();
+    });
   };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the selection belongs to one filtered page, not the returned object identity.
+  useEffect(() => {
+    setSelectedTracks(new Set());
+  }, [
+    offset,
+
+    pageSize,
+
+    q,
+
+    sort,
+
+    descending,
+
+    bridge,
+
+    folder,
+
+    ext,
+
+    availability,
+
+    activation,
+
+    quality,
+
+    tag,
+
+    linkedTo,
+  ]);
+
+  const filter = (set: (value: string) => void, value: string) => {
+    guard(() => {
+      set(value);
+
+      setOffset(0);
+    });
+  };
+
   return (
     <>
       <Button
         onClick={(event) => {
           event.currentTarget.focus();
+
           setOpen(true);
         }}
       >
         {t("library.manage")}
       </Button>
+
       <Modal
         open={open}
         title={t("library.manage")}
         onClose={() => {
-          if (!pendingChoice) setOpen(false);
+          if (!pendingChoice && !mutating && !editorSaving) guard(() => setOpen(false));
         }}
       >
         {view.kind === "host_player" && <p className="notice">{t("flow.spoiler")}</p>}
+
         <div className="stack">
           {manualAllowed && (
             <section className="stack manual-picker" aria-label={t("manual.heading")}>
               <strong>{t("manual.heading")}</strong>
+
               <p className="muted">{t("manual.hint")}</p>
+
               <label>
                 {t("manual.round")}
+
                 <select
                   value={roundNumber}
                   onChange={(e) => setRoundNumber(Number(e.target.value))}
@@ -199,11 +529,13 @@ export function LibraryManager({
                   {choices.map((c) => (
                     <option key={c.round_number} value={c.round_number}>
                       {t("manual.number", { number: c.round_number })}
+
                       {c.locked ? ` · ${t("manual.locked")}` : ""}
                     </option>
                   ))}
                 </select>
               </label>
+
               {choice && (
                 <p role="status">
                   {choice.manual
@@ -211,7 +543,9 @@ export function LibraryManager({
                     : t("manual.random")}
                 </p>
               )}
+
               {choice?.locked && <p className="muted">{t("manual.lockedHint")}</p>}
+
               {choice?.error && (
                 <p role="alert" className="error">
                   {choice.error === "BRIDGE_OFFLINE"
@@ -220,14 +554,18 @@ export function LibraryManager({
                   {t("manual.replaceHint")}
                 </p>
               )}
+
               <Button
                 disabled={!choice?.manual || choice.locked || pendingChoice !== null}
                 onClick={() => choose(null)}
               >
                 {t("manual.clear")}
               </Button>
+
               {choices
+
                 .filter((c) => c.manual)
+
                 .map((c) => (
                   <p className="muted" key={c.round_number}>
                     {t("manual.number", { number: c.round_number })} ·{" "}
@@ -237,14 +575,100 @@ export function LibraryManager({
                 ))}
             </section>
           )}
-          <p className="muted">{t("library.sourcesHint")}</p>
-          {library?.bridges.map((b) => (
-            <SourceManager key={b.bridge_id} bridge={b} refresh={refresh} />
-          ))}
-          <p className="muted">{t("library.mountHint")}</p>
+
+          <details className="disclosure advanced-sources">
+            <summary>{t("library.advancedSources")}</summary>
+
+            <p className="muted">{t("library.sourcesHint")}</p>
+
+            {library?.bridges.map((b) => (
+              <SourceManager key={b.bridge_id} bridge={b} refresh={refresh} />
+            ))}
+
+            <p className="muted">{t("library.mountHint")}</p>
+          </details>
+
+          {view.phase === "LOBBY" && (
+            <p className="notice">
+              {t("library.preflight", { count: view.host.auto_missing_references ?? 0 })}
+            </p>
+          )}
+
           <div className="library-filters">
+            <label className="folder-option">
+              <input
+                type="checkbox"
+                checked={poolOnly}
+                onChange={(e) => {
+                  const value = e.target.checked;
+                  guard(() => {
+                    setPoolOnly(value);
+                    setOffset(0);
+                  });
+                }}
+              />
+              {t("library.selectedSources")}
+            </label>
+            <label>
+              {t("library.quality")}
+              <select value={quality} onChange={(e) => filter(setQuality, e.target.value)}>
+                {["all", "ready", "missing"].map((value) => (
+                  <option key={value} value={value}>
+                    {t(`library.quality.${value}` as "library.quality.all")}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              {t("library.activation")}
+
+              <select
+                value={activation}
+                onChange={(event) => filter(setActivation, event.target.value)}
+              >
+                {["all", "active", "disabled"].map((value) => (
+                  <option value={value} key={value}>
+                    {t(`library.${value}` as "library.all")}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              {t("library.tags")}
+
+              <select value={tag} onChange={(event) => filter(setTag, event.target.value)}>
+                <option value="">{t("library.all")}</option>
+
+                {result?.tags?.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              {t("library.linkedTo")}
+
+              <select
+                value={linkedTo}
+                onChange={(event) => filter(setLinkedTo, event.target.value)}
+              >
+                <option value="">{t("library.all")}</option>
+
+                {result?.linked_to?.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <label>
               {t("library.search")}
+
               <input
                 type="search"
                 value={q}
@@ -252,10 +676,13 @@ export function LibraryManager({
                 onChange={(e) => filter(setQuery, e.target.value)}
               />
             </label>
+
             <label>
               {t("library.bridge")}
+
               <select value={bridge} onChange={(e) => filter(setBridge, e.target.value)}>
                 <option value="">{t("library.all")}</option>
+
                 {library?.bridges.map((b) => (
                   <option key={b.bridge_id} value={b.bridge_id}>
                     {b.name}
@@ -263,59 +690,93 @@ export function LibraryManager({
                 ))}
               </select>
             </label>
+
             <label>
               {t("library.folder")}
+
               <input
                 value={folder}
                 maxLength={1024}
                 onChange={(e) => filter(setFolder, e.target.value)}
               />
             </label>
+
             <label>
               {t("library.type")}
+
               <select value={ext} onChange={(e) => filter(setExt, e.target.value)}>
                 <option value="">{t("library.all")}</option>
+
                 {[
                   ".mp3",
+
                   ".flac",
+
                   ".wav",
+
                   ".m4a",
+
                   ".aac",
+
                   ".ogg",
+
                   ".oga",
+
                   ".opus",
+
                   ".aiff",
+
                   ".aif",
+
                   ".wma",
+
                   ".mp4",
+
                   ".mov",
+
                   ".m4v",
+
                   ".3gp",
+
                   ".mkv",
+
                   ".mka",
+
                   ".webm",
+
                   ".avi",
+
                   ".wmv",
+
                   ".asf",
                 ].map((e) => (
                   <option key={e}>{e}</option>
                 ))}
               </select>
             </label>
+
             <label>
               {t("library.availability")}
+
               <select
                 value={availability}
                 onChange={(e) => filter(setAvailability, e.target.value)}
               >
                 {[
                   "all",
+
                   "available",
+
                   "unavailable",
+
                   "online",
+
                   "offline",
+
                   "fresh",
+
                   "used",
+
                   "reserved",
                 ].map((value) => (
                   <option value={value} key={value}>
@@ -325,9 +786,11 @@ export function LibraryManager({
               </select>
             </label>
           </div>
+
           <div className="row wrap">
             <label>
               {t("flow.sort")}
+
               <select value={sort} onChange={(event) => filter(setSort, event.target.value)}>
                 {["title", "artist", "filename", "folder"].map((value) => (
                   <option key={value} value={value}>
@@ -336,164 +799,450 @@ export function LibraryManager({
                 ))}
               </select>
             </label>
+
             <label className="folder-option">
               <input
                 type="checkbox"
                 checked={descending}
                 onChange={(event) => {
-                  setDescending(event.target.checked);
-                  setOffset(0);
+                  const value = event.target.checked;
+
+                  guard(() => {
+                    setDescending(value);
+
+                    setOffset(0);
+                  });
                 }}
               />
+
               {t("flow.descending")}
             </label>
           </div>
+
           {loading && <p role="status">{t("app.loading")}</p>}
+
           {error && (
             <p role="alert" className="error">
-              {error} <Button onClick={() => refresh()}>{t("app.retry")}</Button>
+              {error} <Button onClick={() => guard(() => refresh())}>{t("app.retry")}</Button>
             </p>
           )}
+
           {result && <p role="status">{t("library.results", { count: result.total })}</p>}
+
           {!loading && result?.total === 0 && <p>{t("library.empty")}</p>}
-          <ul className="list library-tracks">
-            {result?.tracks.map((track) => (
-              <li key={`${track.bridge_id}:${track.track_id}`}>
-                <div>
-                  <strong>{track.title || track.filename}</strong>
-                  <p className="muted">
-                    {[
-                      track.artist,
-                      track.folder,
-                      library?.bridges.find((b) => b.bridge_id === track.bridge_id)?.name,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  <p className="muted">
-                    {[
-                      track.title ? track.filename : "",
-                      track.duration_ms
-                        ? `${Math.round(track.duration_ms / 1000)} s`
-                        : t("manual.durationUnknown"),
-                      track.available ? t("manual.available") : t("manual.unavailable"),
-                      track.consumption === "cancelled"
-                        ? t("review.cancelledShort")
-                        : track.played
-                          ? t("manual.played")
-                          : "",
-                      track.reserved ? t("manual.reserved") : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  {manualAllowed && !track.in_pool && (
-                    <p className="muted">{t("manual.outsideSources")}</p>
-                  )}
-                </div>
-                <div className="row wrap">
-                  {manualAllowed && (
-                    <Button
-                      disabled={
-                        !choice ||
-                        choice.locked ||
-                        pendingChoice !== null ||
-                        !track.available ||
-                        !track.in_pool ||
-                        (track.played && !view.host.settings.allow_repeats) ||
-                        (track.reserved &&
-                          !(
-                            choice.bridge_id === track.bridge_id &&
-                            choice.track_id === track.track_id
-                          ))
-                      }
-                      onClick={() => choose(track)}
-                    >
-                      {t("manual.choose", { number: roundNumber })}
+
+          <details className="disclosure library-bulk">
+            <summary>
+              {t("library.bulk")} ({selectedTracks.size})
+            </summary>
+
+            <p className="muted">{t("library.bulkHint")}</p>
+
+            <div className="grid">
+              <label>
+                {t("library.tags")}
+
+                <input
+                  value={bulkTags}
+                  maxLength={2048}
+                  onChange={(event) => setBulkTags(event.target.value)}
+                />
+              </label>
+
+              <label>
+                {t("library.linkedTo")}
+
+                <input
+                  value={bulkLinks}
+                  maxLength={2048}
+                  onChange={(event) => setBulkLinks(event.target.value)}
+                />
+              </label>
+
+              <label>
+                {t("library.activation")}
+
+                <select
+                  value={bulkActivation}
+                  onChange={(event) => setBulkActivation(event.target.value)}
+                >
+                  <option value="">{t("library.keepActivation")}</option>
+
+                  <option value="active">{t("library.active")}</option>
+
+                  <option value="disabled">{t("library.disabled")}</option>
+                </select>
+              </label>
+            </div>
+
+            <Button
+              disabled={
+                mutating ||
+                editorSaving ||
+                !selectedTracks.size ||
+                (!bulkTags.trim() && !bulkLinks.trim() && !bulkActivation)
+              }
+              onClick={applyBulk}
+            >
+              {t("library.bulk")}
+            </Button>
+          </details>
+
+          <div className="library-list-region" ref={listRegion}>
+            <ul className="list library-tracks">
+              {result?.tracks.map((track) => (
+                <li key={`${track.bridge_id}:${track.track_id}`}>
+                  <label className="folder-option">
+                    <input
+                      type="checkbox"
+                      aria-label={t("library.select", { name: track.title || track.filename })}
+                      checked={selectedTracks.has(identity(track))}
+                      disabled={mutating || editorSaving}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+
+                        setSelectedTracks((old) => {
+                          const next = new Set(old);
+
+                          if (checked) next.add(identity(track));
+                          else next.delete(identity(track));
+
+                          return next;
+                        });
+                      }}
+                    />
+
+                    {t("library.selectTrack")}
+                  </label>
+
+                  <div>
+                    <strong>{track.title || track.filename}</strong>
+
+                    <p className="muted">
+                      {[
+                        track.artist,
+
+                        track.folder,
+
+                        library?.bridges.find((b) => b.bridge_id === track.bridge_id)?.name,
+                      ]
+
+                        .filter(Boolean)
+
+                        .join(" · ")}
+                    </p>
+
+                    <p className="muted">
+                      {[
+                        track.title ? track.filename : "",
+
+                        track.duration_ms
+                          ? `${Math.round(track.duration_ms / 1000)} s`
+                          : t("manual.durationUnknown"),
+
+                        track.available ? t("manual.available") : t("manual.unavailable"),
+
+                        track.consumption === "cancelled"
+                          ? t("review.cancelledShort")
+                          : track.played
+                            ? t("manual.played")
+                            : "",
+
+                        track.reserved ? t("manual.reserved") : "",
+                      ]
+
+                        .filter(Boolean)
+
+                        .join(" · ")}
+                    </p>
+
+                    {manualAllowed && !track.in_pool && (
+                      <p className="muted">{t("manual.outsideSources")}</p>
+                    )}
+
+                    {!!track.missing_references?.length && (
+                      <p className="notice">
+                        {t("library.missingFields", {
+                          fields: track.missing_references
+                            .map((key) => t(`review.${key}` as "review.title"))
+                            .join(" · "),
+                        })}
+                      </p>
+                    )}
+
+                    {track.enabled === false && (
+                      <p className="notice">{t("library.disabledHint")}</p>
+                    )}
+
+                    {!!track.tags?.length && (
+                      <p className="track-labels">
+                        {t("library.tags")} : {track.tags.join(" · ")}
+                      </p>
+                    )}
+
+                    {!!track.linked_to?.length && (
+                      <p className="track-labels">
+                        {t("library.linkedTo")} : {track.linked_to.join(" · ")}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="row wrap">
+                    {manualAllowed && (
+                      <Button
+                        disabled={
+                          !choice ||
+                          choice.locked ||
+                          pendingChoice !== null ||
+                          !track.available ||
+                          !track.in_pool ||
+                          (track.played && !view.host.settings.allow_repeats) ||
+                          (track.reserved &&
+                            !(
+                              choice.bridge_id === track.bridge_id &&
+                              choice.track_id === track.track_id
+                            ))
+                        }
+                        onClick={() => choose(track)}
+                      >
+                        {t("manual.choose", { number: roundNumber })}
+                      </Button>
+                    )}
+
+                    <Button disabled={mutating} onClick={() => guard(() => setEditing(track))}>
+                      {t("ux.editTrack")}
                     </Button>
-                  )}
-                  <Button onClick={() => setEditing(track)}>{t("ux.editTrack")}</Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="row wrap">
+
+                    <Button
+                      onClick={() => setPreview(track)}
+                      disabled={(!track.available && track.enabled !== false) || !!view.play}
+                    >
+                      {t("library.preview")}
+                    </Button>
+
+                    <Button
+                      disabled={mutating}
+                      onClick={() => {
+                        guard(() => {
+                          setMutating(true);
+
+                          setError(null);
+
+                          void api
+
+                            .editMetadata({
+                              bridge_id: track.bridge_id,
+
+                              track_id: track.track_id,
+
+                              metadata: { enabled: track.enabled === false },
+                            })
+
+                            .then((result) => {
+                              setMutating(false);
+
+                              if (result.ok) {
+                                setNotice(() => (track.reserved ? t("library.reservedHint") : ""));
+
+                                refresh();
+                              } else setError(() => tCode("error", result.error));
+                            });
+                        });
+                      }}
+                    >
+                      {t(track.enabled === false ? "library.enable" : "library.disable")}
+                    </Button>
+                  </div>
+
+                  {open &&
+                    preview?.track_id === track.track_id &&
+                    preview.bridge_id === track.bridge_id && (
+                      <PrivatePreview key={`${track.bridge_id}:${track.track_id}`} track={track} />
+                    )}
+
+                  {open &&
+                    editing?.track_id === track.track_id &&
+                    editing.bridge_id === track.bridge_id && (
+                      <MetadataEditor
+                        key={`${track.bridge_id}:${track.track_id}`}
+                        track={track}
+                        onDirty={setEditorDirty}
+                        onBusy={setEditorSaving}
+                        onCancel={() => guard(() => setEditing(null))}
+                        onSaved={() => {
+                          setEditorDirty(false);
+
+                          setEditing(null);
+
+                          refresh();
+                        }}
+                      />
+                    )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="row wrap library-pagination">
             <Button
               disabled={!offset || loading}
-              onClick={() => setOffset((n) => Math.max(0, n - pageSize))}
+              onClick={() => guard(() => setOffset((n) => Math.max(0, n - pageSize)))}
             >
               {t("library.previous")}
             </Button>
+
             <Button
               disabled={loading || offset + pageSize >= (result?.total ?? 0)}
-              onClick={() => setOffset((n) => n + pageSize)}
+              onClick={() => guard(() => setOffset((n) => n + pageSize))}
             >
               {t("library.next")}
             </Button>
+
             <span role="status">
               {t("flow.page", {
                 page: Math.floor(offset / pageSize) + 1,
+
                 total: Math.max(1, Math.ceil((result?.total ?? 0) / pageSize)),
               })}
             </span>
-            <Button onClick={() => refresh()}>{t("library.refresh")}</Button>
+
+            <label>
+              {t("library.pageJump")}
+
+              <input
+                type="number"
+                min={1}
+                max={Math.max(1, Math.ceil((result?.total ?? 0) / pageSize))}
+                value={Math.floor(offset / pageSize) + 1}
+                onChange={(event) => {
+                  const page = Number(event.target.value);
+
+                  if (
+                    Number.isInteger(page) &&
+                    page >= 1 &&
+                    page <= Math.max(1, Math.ceil((result?.total ?? 0) / pageSize))
+                  )
+                    guard(() => setOffset((page - 1) * pageSize));
+                }}
+              />
+            </label>
+
+            <Button onClick={() => guard(() => refresh())}>{t("library.refresh")}</Button>
           </div>
-          {editing && (
-            <MetadataEditor
-              key={`${editing.bridge_id}:${editing.track_id}`}
-              track={editing}
-              onSaved={() => {
-                setEditing(null);
-                refresh();
-              }}
-            />
-          )}
+
+          <ConfirmDialog
+            open={leaveAction !== null}
+            title={t("ux.editTrack")}
+            message={t("library.discard")}
+            onCancel={() => setLeaveAction(null)}
+            onConfirm={() => {
+              const action = leaveAction;
+
+              setLeaveAction(null);
+
+              setEditorDirty(false);
+
+              setEditing(null);
+
+              setPreview(null);
+
+              action?.();
+            }}
+          />
+
           <label>
             {t("library.import")}
+
             <input
               type="file"
-              accept="application/json,.json"
+              accept="application/json,application/zip,.json,.zip"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
+
                 if (!file) return;
-                if (file.size > 1024 * 1024) {
-                  setError(t("error.payload_too_large"));
+
+                const archive = file.name.toLowerCase().endsWith(".zip");
+
+                if (file.size > (archive ? 8 : 1) * 1024 * 1024) {
+                  setError(() => t("error.payload_too_large"));
+
                   return;
                 }
+
+                let document: unknown;
+
                 try {
-                  const imported = await api.importMetadata(JSON.parse(await file.text()));
-                  if (imported.ok) {
-                    setNotice(
-                      `${t("library.imported", { count: imported.data.accepted })} ${imported.data.issues.map((i) => `${i.row}: ${t(`library.issue.${i.code}` as "library.issue.invalid")}`).join(" · ")}`,
-                    );
-                    refresh();
-                  } else setError(tCode("error", imported.error));
+                  document = archive ? file : JSON.parse(await file.text());
                 } catch {
-                  setError(t("error.invalid_message"));
+                  setError(() => t("error.invalid_message"));
+
+                  return;
                 }
+
+                guard(() => {
+                  setMutating(true);
+
+                  void (
+                    archive ? api.importMetadataArchive(file) : api.importMetadata(document)
+                  ).then((imported) => {
+                    setMutating(false);
+
+                    if (imported.ok) {
+                      setNotice(
+                        () =>
+                          `${t("library.imported", { count: imported.data.accepted })} ${imported.data.issues.map((i) => `${i.row}: ${t(`library.issue.${i.code}` as "library.issue.invalid")}`).join(" · ")}`,
+                      );
+
+                      refresh();
+                    } else setError(() => tCode("error", imported.error));
+                  });
+                });
               }}
             />
           </label>
+
           {notice && <p role="status">{notice}</p>}
+
           <Button
+            disabled={exportBusy}
             onClick={async () => {
-              const data = await api.metadata();
-              if (!data.ok) {
-                setError(tCode("error", data.error));
-                return;
+              setExportBusy(true);
+
+              try {
+                const response = await fetch(`/api/host/metadata/export?offset=${exportOffset}`, {
+                  credentials: "same-origin",
+                  cache: "no-store",
+                });
+
+                if (!response.ok) {
+                  setError(() => t("library.exportFailed"));
+                  return;
+                }
+
+                const url = URL.createObjectURL(await response.blob());
+
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `openblindysir-metadata-${exportOffset + 1}.zip`;
+                link.click();
+
+                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+                const next = response.headers.get("X-Next-Offset");
+
+                setExportOffset(next ? Number(next) : 0);
+
+                setNotice(() => t(next ? "library.exportMore" : "library.exportDone"));
+              } catch {
+                setError(() => t("library.exportFailed"));
+              } finally {
+                setExportBusy(false);
               }
-              const url = URL.createObjectURL(
-                new Blob([JSON.stringify(data.data, null, 2)], { type: "application/json" }),
-              );
-              const link = document.createElement("a");
-              link.href = url;
-              link.download = "openblindysir-metadata.json";
-              link.click();
-              window.setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}
           >
-            {t("library.exportMetadata")}
+            {t(exportOffset ? "library.exportNext" : "library.exportMetadata")}
           </Button>
+
           {view.phase === "IN_GAME" && <p className="muted">{t("review.privateHint")}</p>}
         </div>
       </Modal>
@@ -503,95 +1252,144 @@ export function LibraryManager({
 
 function SourceManager({
   bridge,
+
   refresh,
 }: {
   readonly bridge: LibraryBridge;
+
   readonly refresh: (updated?: LibraryResponse) => void;
 }) {
   const [folder, setFolder] = useState("");
+
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+
+  const [notice, setNotice] = useMessage("");
+
   const generation = useRef(0);
+
   const request = useRef<AbortController | null>(null);
+
   useEffect(
     () => () => {
       generation.current++;
+
       request.current?.abort();
     },
+
     [],
   );
+
   const update = async (folders: string[] | null) => {
     const version = ++generation.current;
+
     setBusy(true);
+
     const result = await api.sources(bridge.bridge_id, folders);
+
     if (version !== generation.current) return;
-    setNotice(result.ok ? t("library.scanRequested") : tCode("error", result.error));
+
+    setNotice(() => (result.ok ? t("library.scanRequested") : tCode("error", result.error)));
+
     if (result.ok) {
       const deadline = Date.now() + 75000;
+
       const controller = new AbortController();
+
       request.current = controller;
+
       const timeout = window.setTimeout(() => controller.abort(), 75000);
+
       let confirmed = false;
+
       let delay = 1000;
+
       try {
         while (Date.now() < deadline && !controller.signal.aborted) {
           await new Promise<void>((resolve) =>
             window.setTimeout(resolve, Math.min(delay, deadline - Date.now())),
           );
+
           delay = Math.min(4000, delay * 2);
+
           if (version !== generation.current) return;
+
           if (Date.now() >= deadline || controller.signal.aborted) break;
+
           const status = await api.library(controller.signal);
+
           if (version !== generation.current) return;
+
           if (!status.ok) {
-            setNotice(
-              controller.signal.aborted ? t("library.scanTimeout") : tCode("error", status.error),
-            );
+            const timedOut = controller.signal.aborted;
+
+            setNotice(() => (timedOut ? t("library.scanTimeout") : tCode("error", status.error)));
+
             confirmed = true;
+
             break;
           }
+
           const current = status.data.bridges.find((b) => b.bridge_id === bridge.bridge_id);
+
           if (!current?.online) {
             refresh(status.data);
-            setNotice(t("error.bridge_offline"));
+
+            setNotice(() => t("error.bridge_offline"));
+
             confirmed = true;
+
             break;
           }
+
           const matches =
             folders === null ||
             JSON.stringify([...current.scanned_folders].sort()) ===
               JSON.stringify([...new Set(folders)].sort());
+
           let revision = 0;
+
           try {
             revision =
               JSON.parse(status.headers?.get("X-Catalog-Revisions") ?? "{}")[bridge.bridge_id] ?? 0;
           } catch {
             /* A proxy without the completion header cannot confirm a scan. */
           }
+
           if (revision > result.data.scan_revision && (matches || current.source_error)) {
             refresh(status.data);
-            setNotice(t(current.source_error ? "library.inaccessible" : "library.scanApplied"));
+
+            setNotice(() =>
+              t(current.source_error ? "library.inaccessible" : "library.scanApplied"),
+            );
+
             confirmed = true;
+
             break;
           }
         }
-        if (!confirmed) setNotice(t("library.scanTimeout"));
+
+        if (!confirmed) setNotice(() => t("library.scanTimeout"));
       } finally {
         window.clearTimeout(timeout);
+
         if (request.current === controller) request.current = null;
       }
     }
+
     setBusy(false);
   };
+
   return (
     <section className="source-card stack">
       <h3>
         {bridge.name} · {bridge.track_count}
       </h3>
+
       <ul className="list">
         {(bridge.scanned_folders ?? [""]).map((f) => (
           <li className="row wrap" key={f}>
             <span>{f || t("library.root")}</span>
+
             <Button
               disabled={busy || !bridge.online}
               aria-label={t("library.remove", { folder: f || t("library.root") })}
@@ -602,8 +1400,10 @@ function SourceManager({
           </li>
         ))}
       </ul>
+
       <label>
         {t("library.addFolder")}
+
         <input
           placeholder={t("library.folderPlaceholder")}
           maxLength={1024}
@@ -611,6 +1411,7 @@ function SourceManager({
           onChange={(e) => setFolder(e.target.value)}
         />
       </label>
+
       <div className="row wrap">
         <Button
           disabled={busy || !bridge.online}
@@ -620,11 +1421,14 @@ function SourceManager({
         >
           {t("library.add")}
         </Button>
+
         <Button disabled={busy || !bridge.online} onClick={() => void update(null)}>
           {t("library.refresh")}
         </Button>
       </div>
+
       {notice && <p role="status">{notice}</p>}
+
       {bridge.source_error && (
         <p className="error" role="alert">
           {t("library.inaccessible")}
@@ -636,62 +1440,179 @@ function SourceManager({
 
 function MetadataEditor({
   track,
+
   onSaved,
+
+  onDirty,
+
+  onBusy,
+
+  onCancel,
 }: {
   readonly track: LibraryTrack;
+
   readonly onSaved: () => void;
+
+  readonly onDirty: (dirty: boolean) => void;
+
+  readonly onBusy: (busy: boolean) => void;
+
+  readonly onCancel: () => void;
 }) {
   const [draft, setDraft] = useState<MusicalMetadata>({
+    cleared_fields: (track.cleared_fields ?? []) as NonNullable<MusicalMetadata["cleared_fields"]>,
+
+    aliases: track.aliases ?? {},
+
     title: track.title,
+
     artist: track.artist,
+
     featuring: track.featuring,
+
     album: track.album,
+
     year: track.year,
+
+    tags: track.tags ?? [],
+
+    linked_to: track.linked_to ?? [],
   });
+
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+
+  const [error, setError] = useMessage("");
+
+  const original = useRef(JSON.stringify(draft));
+
+  const [labels, setLabels] = useState({
+    tags: (draft.tags ?? []).join(", "),
+
+    linked_to: (draft.linked_to ?? []).join(", "),
+  });
+
+  useEffect(() => {
+    onDirty(JSON.stringify(draft) !== original.current || busy);
+
+    onBusy(busy);
+  }, [draft, busy, onDirty, onBusy]);
+
+  useEffect(() => () => onDirty(false), [onDirty]);
+
   return (
     <form
       className="stack metadata-editor"
       onSubmit={async (e) => {
         e.preventDefault();
+
         setBusy(true);
+
         const r = await api.editMetadata({
           bridge_id: track.bridge_id,
+
           track_id: track.track_id,
+
           metadata: draft,
+
+          expected_revision: track.metadata_revision ?? 0,
         });
+
         setBusy(false);
+
         if (r.ok) onSaved();
-        else setError(tCode("error", r.error));
+        else
+          setError(() =>
+            r.error === "stale_command" ? t("library.editConflict") : tCode("error", r.error),
+          );
       }}
     >
       <h3>{track.filename}</h3>
+
+      {(["tags", "linked_to"] as const).map((key) => (
+        <label key={key}>
+          {t(key === "tags" ? "library.tags" : "library.linkedTo")}
+
+          <input
+            value={labels[key]}
+            maxLength={8192}
+            placeholder={t(key === "tags" ? "library.tagExamples" : "library.linkExamples")}
+            onChange={(event) => {
+              const value = event.target.value;
+
+              setLabels((old) => ({ ...old, [key]: value }));
+
+              setDraft((old) => ({
+                ...old,
+
+                [key]: value
+
+                  .split(",")
+
+                  .map((label) => label.trim())
+
+                  .filter(Boolean),
+              }));
+            }}
+          />
+
+          <small>{t("library.labelsHint")}</small>
+        </label>
+      ))}
+
       {(["title", "artist", "featuring", "album"] as const).map((key) => (
         <label key={key}>
           {t(`review.${key}`)}
+
           <input
             maxLength={256}
             value={draft[key] ?? ""}
-            onChange={(e) => setDraft((old) => ({ ...old, [key]: e.target.value }))}
+            aria-label={t(`review.${key}`)}
+            onChange={(e) =>
+              setDraft((old) => ({
+                ...old,
+                [key]: e.target.value,
+                cleared_fields: (old.cleared_fields ?? []).filter((field) => field !== key),
+              }))
+            }
           />
+
+          <MetadataFieldActions field={key} draft={draft} onChange={setDraft} />
         </label>
       ))}
+
       <label>
         {t("review.year")}
+
         <input
           type="number"
           min={1000}
           max={9999}
           value={draft.year ?? ""}
           onChange={(e) =>
-            setDraft((old) => ({ ...old, year: e.target.value ? Number(e.target.value) : null }))
+            setDraft((old) => ({
+              ...old,
+              year: e.target.value ? Number(e.target.value) : null,
+              cleared_fields: (old.cleared_fields ?? []).filter((field) => field !== "year"),
+            }))
           }
         />
       </label>
+
+      <MetadataFieldActions field="year" draft={draft} onChange={setDraft} />
+
+      <AliasEditor
+        value={draft.aliases ?? {}}
+        onChange={(aliases) => setDraft((old) => ({ ...old, aliases }))}
+      />
+
       <Button type="submit" disabled={busy}>
         {t(busy ? "ux.saving" : "hostui.save")}
       </Button>
+
+      <Button disabled={busy} onClick={onCancel}>
+        {t("hostui.cancel")}
+      </Button>
+
       {error && (
         <p className="error" role="alert">
           {error}

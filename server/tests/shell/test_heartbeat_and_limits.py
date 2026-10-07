@@ -5,9 +5,10 @@ import json
 from conftest import BLIND, HOST, ORIGIN, Harness
 from starlette.websockets import WebSocketDisconnect
 
+from openblindysir_protocol.version import PROTOCOL_VERSION
 from openblindysir_server.main import OFFLINE_AFTER_MS, sweep_once
 
-HELLO = json.dumps({"t": "HELLO", "client_version": "0.1.0", "protocol": 6})
+HELLO = json.dumps({"t": "HELLO", "client_version": "0.1.0", "protocol": PROTOCOL_VERSION})
 
 
 def receive_until(ws: object, t: str) -> dict[str, object]:

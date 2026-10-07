@@ -70,6 +70,16 @@ class HostIn:
     msg: HostCommandVariant
 
 
+@dataclass(frozen=True, slots=True)
+class FinaleReplayReady:
+    """The shell has verified and cached the exact original excerpt."""
+
+    player_id: str
+    game_id: str
+    round_id: str
+    revision: int
+
+
 # --- Bridge ------------------------------------------------------------------------------
 
 
@@ -162,6 +172,7 @@ Command = (
     | DraftIn
     | SubmitIn
     | HostIn
+    | FinaleReplayReady
     | BridgeConnected
     | BridgeDisconnected
     | CatalogLoaded

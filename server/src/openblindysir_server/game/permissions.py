@@ -200,6 +200,8 @@ HOST_RULES: dict[str, Predicate] = {
     "final_set": _phase(GamePhase.FINAL_SCORE_REVIEW),
     "final_reset": _phase(GamePhase.FINAL_SCORE_REVIEW),
     "final_validate": _phase(GamePhase.FINAL_SCORE_REVIEW),
+    "finale_reveal": _phase(GamePhase.FINAL_SCORE_REVIEW),
+    "finale_stop": _phase(GamePhase.FINAL_SCORE_REVIEW),
     "kick": _always,
     "rename": _always,
     "participation": _phase(GamePhase.LOBBY),

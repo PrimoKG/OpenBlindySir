@@ -34,7 +34,7 @@ class Table:
             await bot.close()
 
     async def setup(
-        self, rounds: int, *, clip: int = 8, grace: int = 30, prefetch: int = 1
+        self, rounds: int, *, clip: int = 8, grace: int = 30, prefetch: int = 1, folder: str = ""
     ) -> None:
         library = (await self.host.http.get("/api/host/library")).json()
         bridge_id = library["bridges"][0]["bridge_id"]
@@ -45,7 +45,7 @@ class Table:
                 "clip_seconds": clip,
                 "answer_grace_s": grace,
                 "prefetch_depth": prefetch,
-                "sources": [{"bridge_id": bridge_id, "folder_prefix": ""}],
+                "sources": [{"bridge_id": bridge_id, "folder_prefix": folder}],
             },
         )
         await self.host.wait_for(lambda v: v["host"]["settings"]["rounds"] == rounds)

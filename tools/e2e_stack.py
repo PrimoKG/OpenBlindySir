@@ -51,7 +51,19 @@ def main() -> int:
     def stop(*_: object) -> None:
         for child in children:
             if child.poll() is None:
-                child.kill()
+                if os.name == "nt":
+                    # The venv launcher owns another Python process on Windows.
+                    # Killing only that launcher leaves the server and output pipes
+                    # alive, preventing Playwright from completing its teardown.
+                    subprocess.run(
+                        ["taskkill", "/PID", str(child.pid), "/T", "/F"],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                else:
+                    child.kill()
+                child.wait(timeout=10)
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, stop)

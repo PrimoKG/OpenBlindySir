@@ -121,6 +121,9 @@ def lock_answer(s: SessionState, r: Round, player_id: str, text: str, at: Instan
         and answer.elapsed_ms - previous.elapsed_ms < s.config.near_tie_ms
     )
     s.touched = True
+    from openblindysir_server.game.auto_scoring import grade_round  # noqa: PLC0415
+
+    grade_round(s, r, only={player_id})
 
 
 def capture_drafts(r: Round) -> tuple[int, int]:

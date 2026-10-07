@@ -1,5 +1,6 @@
 """Atomic, versioned local snapshots. Audio and cleartext credentials are never stored."""
 
+import base64
 import hashlib
 import json
 import math
@@ -11,6 +12,7 @@ from functools import cache
 from pathlib import Path
 from typing import Any, get_args, get_origin, get_type_hints
 
+from cryptography.fernet import Fernet, InvalidToken
 from pydantic import TypeAdapter
 
 from openblindysir_protocol import enums
@@ -23,7 +25,7 @@ from openblindysir_protocol.enums import (
     ScoreKind,
 )
 from openblindysir_server.auth.sessions import SessionRegistry
-from openblindysir_server.game import GameEngine, Instant, rounds
+from openblindysir_server.game import GameEngine, Instant, auto_scoring, rounds
 from openblindysir_server.game import state as models
 from openblindysir_server.game.answers import capture_drafts
 from openblindysir_server.game.effects import Play
@@ -37,7 +39,7 @@ from openblindysir_server.private_files import (
     unique_json_object,
 )
 
-FORMAT = 5
+FORMAT = 8
 MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 
 
@@ -142,6 +144,18 @@ class SnapshotStore:
         self.directory = directory
         self.fingerprint = hashlib.sha256(json.dumps(secrets[:2]).encode()).hexdigest()
         self.legacy_fingerprint = hashlib.sha256(json.dumps(secrets[:3]).encode()).hexdigest()
+        key = hashlib.pbkdf2_hmac(
+            "sha256", json.dumps(secrets[:2]).encode(), b"OpenBlindySir access v1", 600000
+        )
+        self.access_cipher = Fernet(base64.urlsafe_b64encode(key))
+
+    def decode_access(self, value: Any) -> dict[str, str]:
+        if not isinstance(value, str):
+            raise ValueError("invalid encrypted session access")
+        try:
+            return json.loads(self.access_cipher.decrypt(value.encode()))
+        except (InvalidToken, ValueError, TypeError) as exc:
+            raise ValueError("invalid encrypted session access") from exc
 
     def save(
         self,
@@ -150,8 +164,9 @@ class SnapshotStore:
         at: Instant,
         *,
         purge_previous: bool = False,
+        state: models.SessionState | None = None,
     ) -> None:
-        s = engine.state
+        s = state if state is not None else engine.state
         excluded = {"config", "ids", "rng", "journal", "touched", "last_at"}
         payload = dict(
             format=FORMAT,
@@ -164,6 +179,9 @@ class SnapshotStore:
             frozen=sorted(s.journal.frozen_games()),
             sessions=sessions.snapshot(at.mono_ms),
             recovery=sessions.recovery_snapshot(),
+            access=self.access_cipher.encrypt(
+                json.dumps(sessions.access.snapshot()).encode()
+            ).decode(),
         )
         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         if len(data) > MAX_SNAPSHOT_BYTES:
@@ -196,7 +214,16 @@ class SnapshotStore:
                 row = json.loads(
                     _snapshot_bytes(candidate).decode("utf-8"), object_pairs_hook=unique_json_object
                 )
-                if type(row["format"]) is not int or row["format"] not in {1, 2, 3, 4, FORMAT}:
+                if type(row["format"]) is not int or row["format"] not in {
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    6,
+                    7,
+                    FORMAT,
+                }:
                     raise SnapshotVersionError(
                         "unsupported snapshot format; preserve files and upgrade "
                         "or restore a matching backup"
@@ -237,6 +264,16 @@ class SnapshotStore:
                     game.rounds
                 ):
                     raise ValueError("invalid current round index")
+                played_ids = {r.id for r in game.rounds if r.official_start_at is not None}
+                if (
+                    len(set(game.finale_revealed)) != len(game.finale_revealed)
+                    or not set(game.finale_revealed) <= played_ids
+                    or (
+                        game.finale_round_id is not None
+                        and game.finale_round_id not in game.finale_revealed
+                    )
+                ):
+                    raise ValueError("invalid finale reveal progress")
                 self._validate_recovery(row, decoded, sessions, at)
                 decoded["archives"] = retained(decoded.get("archives", []), at.wall_ms)
                 journal = ScoreJournal()
@@ -297,6 +334,9 @@ class SnapshotStore:
                         r.track_entry = catalog.entries.get(r.slot.track_ref.track_id)
                         r.bridge_name = catalog.bridge_name
         shift = at.mono_ms - payload["at"]["mono_ms"]
+        # Public finale progress survives; audio and a past podium never restart on recovery.
+        s.game.finale_play = None
+        s.game.finalized_at = None
         for r in s.game.rounds:
             r.slot.bridge_wait_since = None
             for name in (
@@ -309,6 +349,7 @@ class SnapshotStore:
                 "published_at",
                 "paused_at",
                 "resume_at",
+                "finale_wave_at",
             ):
                 value = getattr(r, name)
                 if value is not None:
@@ -336,6 +377,7 @@ class SnapshotStore:
                 r.state = RoundState.REVIEW
                 r.recovery_interrupted = True
                 r.closed_at = at.mono_ms
+                auto_scoring.grade_round(s, r)
             elif r.state in {
                 RoundState.QUEUED,
                 RoundState.PREPARING,
@@ -378,14 +420,15 @@ class SnapshotStore:
                 set(s.players),
             )
             sessions.restore_recovery(payload.get("recovery", {}), set(s.players))
+            if "access" in payload:
+                sessions.access.restore(self.decode_access(payload["access"]))
         return True
 
-    @staticmethod
     def _validate_recovery(
-        row: dict, decoded: dict, sessions: SessionRegistry, at: Instant
+        self, row: dict, decoded: dict, sessions: SessionRegistry, at: Instant
     ) -> None:
         required = {"format", "at", "auth", "state", "events", "frozen", "sessions"}
-        if required - set(row) or set(row) - required - {"recovery"}:
+        if required - set(row) or set(row) - required - {"recovery", "access"}:
             raise ValueError("invalid snapshot envelope")
         if (
             not isinstance(row["at"], dict)
@@ -415,3 +458,5 @@ class SnapshotStore:
             row["sessions"], at.mono_ms, max(0, at.wall_ms - row["at"]["wall_ms"]), players
         )
         trial.restore_recovery(row.get("recovery", {}), players)
+        if "access" in row and row["auth"] == self.fingerprint:
+            trial.access.restore(self.decode_access(row["access"]))

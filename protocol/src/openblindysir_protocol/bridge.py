@@ -101,7 +101,7 @@ class Prepare(InboundModel):
     normalize_audio: bool = True
     avoid_silence: bool = True
     exact_start: Annotated[float, Field(ge=0, le=86400)] | None = None
-    review_mode: Literal["excerpt", "full"] | None = None
+    review_mode: Literal["excerpt", "full", "preview"] | None = None
     replay_sha256: Sha256Hex | None = None
     expected_source_revision: Sha256Hex | None = None
 

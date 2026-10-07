@@ -174,15 +174,32 @@ class RevealInfo:
     featuring: str | None = None
     album: str | None = None
     year: int | None = None
+    aliases: dict[str, list[str]] | None = None
+    cleared_fields: list[str] | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Metadata:
+    cleared_fields: list[str] | None = None
+    aliases: dict[str, list[str]] | None = None
     title: str | None = None
     artist: str | None = None
     featuring: str | None = None
     album: str | None = None
     year: int | None = None
+    tags: list[str] | None = None
+    linked_to: list[str] | None = None
+    enabled: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AutoMatch:
+    criterion: str
+    reference: str | None
+    fragment: str | None
+    similarity: float
+    threshold: int
+    status: str
 
 
 @dataclass(slots=True)
@@ -226,6 +243,13 @@ class Round:
     auto_advance_at: int | None = None
     judgements: dict[str, dict[str, bool | None]] = field(default_factory=dict)
     score_revisions: dict[str, int] = field(default_factory=dict)
+    auto_config: "Settings | None" = None
+    auto_reference: Metadata | None = None
+    auto_evidence: dict[str, list[AutoMatch]] = field(default_factory=dict)
+    auto_overrides: set[str] = field(default_factory=set)
+    matcher_version: int = 1
+    finale_awarded: set[str] | None = None
+    finale_wave_at: int | None = None
 
 
 @dataclass(slots=True)
@@ -258,6 +282,12 @@ class AssetRecord:
 
 @dataclass(slots=True)
 class Settings:
+    scoring_mode: str = "manual"
+    acceptance_threshold: int = 90
+    answer_fields: list[str] = field(default_factory=lambda: ["title", "artist"])
+    album_points: int = 1
+    year_points: int = 1
+    featuring_points: int = 1
     auto_advance: bool = True
     intermission_s: int = 2
     custom_points: int = 1
@@ -279,6 +309,12 @@ class Settings:
 
     def copy(self) -> "Settings":
         return Settings(
+            scoring_mode=self.scoring_mode,
+            acceptance_threshold=self.acceptance_threshold,
+            answer_fields=list(self.answer_fields),
+            album_points=self.album_points,
+            year_points=self.year_points,
+            featuring_points=self.featuring_points,
             auto_advance=self.auto_advance,
             intermission_s=self.intermission_s,
             custom_points=self.custom_points,
@@ -315,6 +351,11 @@ class GameState:
     ending: EndGameMode | None = None
     final_draft: dict[str, int] = field(default_factory=dict)
     final_notes: dict[str, str] = field(default_factory=dict)
+    finale_round_id: str | None = None
+    finale_revealed: list[str] = field(default_factory=list)
+    podium_skipped: bool = False
+    finale_play: Play | None = None
+    finale_audio_revision: int = 0
     finalized_at: int | None = None
     finalized_wall_ms: int | None = None
     started_wall_ms: int | None = None
@@ -345,6 +386,7 @@ class SessionState:
     recovered: bool = False
     archives: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[TrackRef, Metadata] = field(default_factory=dict)
+    metadata_revision: int = 0
     imported_metadata: dict[TrackRef, Metadata] = field(default_factory=dict)
     metadata_issues: list[dict[str, Any]] = field(default_factory=list)
     consumed_cancelled: set[TrackRef] = field(default_factory=set)

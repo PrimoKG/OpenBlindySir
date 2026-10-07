@@ -2,7 +2,7 @@
 
 ## Vérification automatisée
 
-Depuis la racine, FFmpeg et ffprobe accessibles dans le PATH :
+Depuis la racine, FFmpeg et ffprobe **9.0.2 ou plus récents** accessibles dans le PATH :
 
 ```powershell
 uv sync --all-packages --dev
@@ -30,6 +30,15 @@ seule pile de test. La production conserve AAC et l'opt-in désactivé. Sans `uv
 Les builds WebKit sans `AudioContext` ignorent explicitement les tests audio ;
 leur réussite graphique ne valide pas Safari/iOS. Comptes et limites de la
 dernière exécution : [DEVLOG](DEVLOG.md).
+
+Les tests natifs et navigateur génèrent des fixtures avec un FFmpeg complet.
+La CI Linux le compile via `tools/install_ci_ffmpeg.sh`, depuis une source fixée
+par SHA-256. Le build Docker de production est limité à l'audio ; ses tests de
+formats doivent générer les fixtures avec un outil séparé, puis extraire avec
+les binaires de l'image finale. Le [rapport de sécurité](audits/2026-10-05-security-hardening.md)
+distingue ces vérifications des jobs GitHub et des recettes physiques restant à
+exécuter. Les tests de version refusent aussi un ancien ffprobe associé à un
+FFmpeg récent et les versions non identifiables.
 
 Régressions : transitions automatiques côté serveur sans hôte connecté, pause de
 l’intermission, mode manuel, consommation des annulations avant écoute et reset de
@@ -91,8 +100,8 @@ mainteneur décrite dans [releasing](releasing.md) ; aucun smoke ne publie.
 
 ## Recette sur les appareils et la bibliothèque réels
 
-Mettre à jour serveur, web et tous les Bridges ensemble : protocole **6** (plage 6 à 6),
-snapshot **5** (lecture 1/2/3/4/5), historique **2** (migration ancien/1). Sauvegarder `STATE_DIR` avant mise à
+Mettre à jour serveur, web et tous les Bridges ensemble : protocole **9** (plage 9 à 9),
+snapshot **7** (lecture 1/2/3/4/5/6/7), historique **2** (migration ancien/1). Sauvegarder `STATE_DIR` avant mise à
 jour et utiliser une soirée de test avec sauvegarde distincte.
 
 1. **Sources** : sélectionner racine et sous-dossier sans doublon. Ajouter/enlever
@@ -124,7 +133,9 @@ jour et utiliser une soirée de test avec sauvegarde distincte.
    nombres à plusieurs chiffres ; attendre l'accusé avant navigation/validation.
    Rafraîchir ou reconnecter, vérifier conservation et totaux joueurs/équipes.
 8. **Réécoute** : aucun transfert avant action. Lire/pause/chercher dans l'extrait
-   exact, régler le volume ; les autres joueurs restent en attente. Activer l'opt-in
+   privé exact, régler le volume sans affecter les autres joueurs. Dévoiler une
+   manche, **Réécouter ensemble**, puis arrêter, y compris pendant la préparation.
+   Vérifier la lecture partagée et qu’aucune annulation ne démarre plus tard. Activer l'opt-in
    local, écouter le morceau complet, chercher plus loin puis revenir à l'extrait.
    Tester Bridge hors ligne, source supprimée/modifiée et erreurs de décodage.
 9. **Résultats** : validation finale explicite et confirmation des réponses non
@@ -199,3 +210,49 @@ Le churn joindre/quitter est testé dans le noyau et par HTTP, ainsi que la lib�
 des identités retirées après archivage. Les snapshots corrompus (types, index, cookies,
 récupération, séquence du journal, Unicode, clés dupliquées) doivent reprendre le
 secours avec le score et le cookie ; sans secours, aucun état partiel n'est appliqué.
+
+## Grand final partagé
+
+Les tests couvrent les manches non dévoilées, les points partiels/zéro/négatifs,
+les équipes/ex æquo, la navigation privée, l’absence de double comptage et l’égalité
+entre totaux partagés et scores publiés. La réécoute commune vérifie Origin/rôle/phase,
+l’extrait original, la régénération bornée et l’arrêt pendant la préparation.
+Les reconnexions conservent la scène ; le redémarrage ne rejoue ni audio ni cérémonie.
+Playwright vérifie le parcours réel hôte/joueurs, les cartes à 1280/390/320 px,
+les accusés serveur, les erreurs audio et les animations sur changements confirmés.
+
+La recette d’interface inclut des mesures avant tout clic ou défilement à
+1920×900, 1366×650, 1280×720, 390×700 et 320×640, pour un joueur et un hôte joueur.
+Le champ garde sa position quand l’extrait s’arrête ; le bouton de validation doit
+rester dans le viewport. La dernière correction reste au-dessus de la barre fixe.
+Un autre test lance Chromium avec sa politique d’autoplay exigeant un geste :
+la réécoute reste bloquée avant activation, utilise un seul AudioContext après
+le geste et conserve le choix des sons du final. Cela vérifie le fonctionnement
+du navigateur, pas la sortie acoustique d’un appareil physique.
+
+
+## Bibliothèque et finale — protocole 9
+
+La recette couvre le retour dernière/avant-dernière/première manche sans double
+comptage, l’arrêt confirmé vers les résultats et le menu de nouvelle partie,
+ainsi que 24 joueurs à 1280×720, 1440×900 et 390×740. Les panneaux de notation
+adaptent leur hauteur localement, avancent après confirmation du dernier joueur
+visible (y compris zéro), et gardent le défilement manuel. Le classement affiche
+au plus cinq joueurs, conserve son ancrage pendant les permutations et propose
+le retour à sa position. Les contrôles restent au-dessus de la barre fixe mobile.
+
+Les tests de bibliothèque vérifient la pagination adaptative, l’éditeur sous
+le morceau, la protection des changements non enregistrés, les tags/œuvres liées,
+les modifications par lot et la conservation des métadonnées non modifiées.
+Une désactivation modifie les capacités et les choix futurs ; les manches déjà
+préparées et les archives restent inchangées. Les essais FFmpeg réels mesurent
+un aperçu de 15 s centré sur un fichier de 90 s et un fichier court de 6 s.
+La préécoute privée ne modifie ni le tirage, ni la consommation, ni l’audio public.
+
+Le parcours HTTP/WS réel vérifie QR sans mot de passe, reprise du cookie après
+rechargement, transfert de pseudo approuvé par l’hôte et révocation de l’ancien
+navigateur, préécoute réelle et arrêt immédiat avec conservation d’une réponse.
+Les tests serveur vérifient aussi la rotation du code/QR, refus/expiration,
+limites des demandes et reprise chiffrée des accès après redémarrage.
+Le format de snapshot 8 reprend les formats 1 à 7 ; les tests de corruption
+restent requis. Aucun de ces tests ne prétend mesurer la sortie acoustique.

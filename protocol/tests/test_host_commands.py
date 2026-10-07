@@ -33,6 +33,8 @@ SPEC_COMMANDS = {
     "final_set",
     "final_reset",
     "final_validate",
+    "finale_reveal",
+    "finale_stop",
     "kick",
     "rename",
     "pause",
@@ -47,8 +49,8 @@ def host(cmd: str, **fields: object) -> object:
     return CLIENT.validate_json(json.dumps({"t": "HOST", "cmd": cmd, **fields}))
 
 
-def test_union_has_exactly_the_29_spec_commands() -> None:
-    assert len(HOST_COMMAND_NAMES) == 29
+def test_union_has_exactly_the_31_spec_commands() -> None:
+    assert len(HOST_COMMAND_NAMES) == 31
     assert set(HOST_COMMAND_NAMES) == SPEC_COMMANDS
 
 

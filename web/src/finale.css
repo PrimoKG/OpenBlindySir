@@ -1,0 +1,738 @@
+/* The finale is a shared stage, with the host's controls beside the same live scores. */
+.app.is-finale {
+  max-width: 1320px;
+}
+.is-finale .player-stage:empty {
+  display: none;
+}
+.is-finale .full-review .player-stage {
+  display: none;
+}
+.is-finale .host-console {
+  gap: 0.75rem;
+}
+.is-finale .game-layout:not(.full-review) > .host-console {
+  order: 1;
+}
+.host-tools > summary,
+.recovery-notice > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.host-tools:not([open]) {
+  align-self: flex-end;
+}
+.recovery-notice {
+  font-size: 0.82rem;
+}
+.finale-scene {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+.finale-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.finale-banner h1 {
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+}
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.75rem;
+  background: #e5eddc;
+  border-radius: 100px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  color: #355333;
+}
+.live-pill > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #496d3e;
+}
+.finale-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  flex-wrap: wrap;
+}
+.finale-progress progress {
+  flex: 1;
+  min-width: 4rem;
+  max-width: 16rem;
+  height: 5px;
+  accent-color: var(--accent);
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.finale-progress progress::-webkit-progress-bar {
+  background: var(--border);
+}
+.finale-progress progress::-webkit-progress-value {
+  background: var(--accent);
+}
+.finale-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 19rem);
+  gap: 1.4rem;
+  align-items: start;
+}
+.finale-track {
+  display: flex;
+  align-items: center;
+  gap: 1.3rem;
+  padding: clamp(1.1rem, 3vw, 2rem);
+  border-radius: 22px;
+  background: var(--text);
+  color: var(--bg);
+  min-height: 13rem;
+}
+.finale-track > .record {
+  flex: 0 0 auto;
+}
+.finale-track .eyebrow {
+  color: #d5b797;
+}
+.finale-track h2 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(1.7rem, 2.5vw, 2.6rem);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  margin: 0.45rem 0;
+  overflow-wrap: anywhere;
+}
+.finale-track .track-artist {
+  color: #dfdfd5;
+  font-size: 1rem;
+}
+.track-original {
+  font-size: 0.78rem;
+  margin-top: 0.5rem;
+}
+.track-original summary,
+.track-options summary,
+.manual-score summary,
+.answer-time summary {
+  cursor: pointer;
+}
+.track-original p {
+  margin-top: 0.4rem;
+  overflow-wrap: anywhere;
+}
+.finale-track .track-original {
+  color: #c1c4b7;
+}
+.finale-scoreboard {
+  position: sticky;
+  top: 1rem;
+  padding: 1.2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+}
+.finale-scoreboard .eyebrow {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+.finale-scoreboard h2 {
+  margin-top: 0.4rem;
+}
+.live-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.live-standings li {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.65rem 0.5rem;
+  border-radius: 9px;
+  font-size: 0.88rem;
+}
+.live-standings li.is-me {
+  background: #f5eee1;
+}
+.live-standings strong {
+  overflow-wrap: anywhere;
+}
+.live-rank {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.live-score {
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: 1.25rem;
+}
+.live-score small {
+  font-weight: 400;
+  font-size: 0.7rem;
+}
+.my-finale-score {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  padding: 1rem;
+  background: var(--surface-alt);
+  border-radius: 13px;
+  font-size: 0.83rem;
+}
+.my-finale-score > strong {
+  font-family: Georgia, serif;
+  font-size: 2.8rem;
+  line-height: 1.3;
+}
+.my-finale-score :where(strong) small {
+  font-family: inherit;
+  font-size: 1rem;
+}
+.my-finale-score > small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.finale-activity {
+  min-height: 2.5rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+.finale-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.finale-answers > h2 {
+  font-size: 1rem;
+  margin: 0.4rem 0;
+}
+.finale-answer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 1.2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 15px;
+}
+.finale-answer.is-me {
+  border-color: var(--accent);
+  background: #fcf8f2;
+}
+.finale-answer p {
+  margin: 0.4rem 0 0.2rem;
+  overflow-wrap: anywhere;
+}
+.finale-answer small {
+  font-size: 0.78rem;
+}
+.award {
+  font-size: 1.4rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.finale-invitation {
+  padding: 1.2rem;
+  color: var(--muted);
+  text-align: center;
+}
+.finale-present-controls {
+  justify-content: space-between;
+}
+.on-stage-label {
+  font-size: 0.8rem;
+  color: #496d3e;
+}
+.finale-host-controls .global-review-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.finale-host-controls .global-review-layout > * {
+  width: 100%;
+}
+.finale-host-controls .review-navigation {
+  position: static;
+}
+.review-search {
+  font-size: 0.82rem;
+}
+.review-search > summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.review-search[open] {
+  padding: 0.7rem;
+  background: var(--surface-alt);
+  border-radius: 12px;
+}
+.review-search label {
+  margin-top: 0.6rem;
+}
+.finale-host-controls .review-navigation ul {
+  display: flex;
+  list-style: none;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+  margin: 0;
+  max-height: none;
+}
+.finale-host-controls :where(.review-navigation) li {
+  flex: 0 0 10rem;
+  margin: 0;
+}
+.finale-host-controls :where(.review-navigation) .btn {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem;
+  width: 100%;
+}
+.round-chip-number {
+  font-family: Georgia, serif;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+.round-chip-label {
+  font-size: 0.78rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+.round-chip-label small {
+  display: block;
+  font-size: 0.66rem;
+  margin-top: 0.4rem;
+}
+.finale-host-controls .review-heading h2 {
+  font-family: Georgia, serif;
+  font-size: 1.7rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.finale-host-controls .track-options {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.track-options[open] {
+  padding: 0.8rem;
+  background: var(--surface-alt);
+  border-radius: 12px;
+}
+.track-options[open] > * + * {
+  margin-top: 0.8rem;
+}
+.finale-host-controls .phase-band {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.82rem;
+}
+.answer-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.answer-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, 17rem);
+  grid-template-areas: "player score" "answer score" "time score";
+  gap: 0.55rem 1.2rem;
+  padding: 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface);
+  align-items: start;
+}
+.answer-card.reviewed {
+  border-inline-start: 4px solid #638453;
+}
+.answer-card .answer-player {
+  grid-area: player;
+}
+.answer-card .answer-text {
+  grid-area: answer;
+  padding: 0;
+  font-size: 1.02rem;
+  overflow-wrap: anywhere;
+}
+.answer-card .answer-time {
+  grid-area: time;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.answer-card .answer-time summary {
+  font-size: 0.72rem;
+}
+.answer-card .score-cell {
+  grid-area: score;
+  min-width: 0;
+  padding: 0;
+}
+.answer-card .review-status {
+  font-size: 0.7rem;
+  display: block;
+  margin-top: 0.25rem;
+}
+.answer-card .criterion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 0.75rem;
+}
+.answer-card .criterion > span {
+  flex: none;
+}
+.answer-card .btn {
+  padding: 0.45rem 0.65rem;
+  font-size: 0.78rem;
+  min-height: 44px;
+}
+.answer-card .manual-score {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.answer-card .manual-score input {
+  margin-top: 0.5rem;
+  max-width: 6rem;
+}
+.answer-card .score-preview {
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+}
+.finale-adjustments {
+  padding: 1rem;
+  background: var(--surface);
+  border-radius: 14px;
+}
+.finale-adjustments .final-table {
+  margin: 1rem 0;
+  table-layout: auto;
+}
+.finale-adjustments .final-table td:first-child {
+  min-width: 7rem;
+}
+.final-review > .row:last-of-type {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  bottom: 0.7rem;
+  box-shadow: 0 5px 22px #292c2610;
+}
+.final-review > .row:last-of-type > span {
+  margin-right: auto;
+}
+.final-podium {
+  text-align: center;
+  border-radius: 24px;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  background: #eeeadf;
+  overflow: hidden;
+}
+.final-podium h1 {
+  margin: 0.75rem 0;
+}
+.podium-announcement {
+  font-family: Georgia, serif;
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  color: var(--accent);
+  min-height: 3rem;
+}
+.ceremony-podium {
+  margin-top: 1.4rem;
+  align-items: end;
+}
+.ceremony-podium li {
+  min-height: 10rem;
+  justify-content: center;
+  transition:
+    opacity 0.4s,
+    transform 0.4s;
+  background: #fffaf2;
+  border: 1px solid #d9cfbb;
+}
+.ceremony-podium li.podium-first {
+  min-height: 13rem;
+  background: var(--text);
+  border-color: var(--text);
+}
+.ceremony-podium .podium-place-2 {
+  order: 0;
+}
+.ceremony-podium .podium-place-1 {
+  order: 1;
+}
+.ceremony-podium .podium-place-3 {
+  order: 2;
+}
+.ceremony-podium .podium-name {
+  font-family: Georgia, serif;
+  font-size: 1.8rem;
+}
+.ceremony-podium strong {
+  font-size: 1.2rem;
+}
+.ceremony-podium .podium-hidden {
+  opacity: 0;
+  transform: translateY(1rem);
+}
+.ceremony-podium .podium-visible {
+  opacity: 1;
+  transform: none;
+}
+.celebration-sparks {
+  color: var(--accent);
+  font-size: 2rem;
+  letter-spacing: 0.45rem;
+  margin-top: 1.2rem;
+  animation: finale-spark 1s ease-out both;
+}
+.final-podium.has-winner {
+  background: radial-gradient(ellipse at top, #f6e0b8, var(--surface-alt) 75%);
+}
+@keyframes finale-spark {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.score-changed {
+  animation: score-pop 0.5s ease-out;
+}
+@keyframes score-pop {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.4;
+  }
+  45% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+@media (max-width: 960px) {
+  .finale-layout {
+    grid-template-columns: minmax(0, 1fr) 14rem;
+    gap: 0.8rem;
+  }
+  .answer-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "player" "answer" "score" "time";
+  }
+}
+@media (max-width: 700px) {
+  .finale-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  .finale-layout > * {
+    width: 100%;
+  }
+  .finale-layout > .finale-main {
+    display: contents;
+  }
+  .finale-main > * {
+    width: 100%;
+    order: 2;
+  }
+  :where(.finale-main) > .finale-track {
+    order: 0;
+  }
+  .finale-scoreboard {
+    position: static;
+    order: 1;
+    gap: 0.65rem;
+    padding: 0.85rem;
+  }
+  :where(.finale-scoreboard) .live-standings li {
+    padding: 0.4rem;
+  }
+  .finale-scoreboard .my-finale-score {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    text-align: left;
+    align-items: center;
+    padding: 0.6rem 0.8rem;
+  }
+  .finale-scoreboard .my-finale-score > strong {
+    font-size: 2rem;
+  }
+  .finale-scoreboard .my-finale-score > small {
+    grid-column: 1 / -1;
+  }
+  .finale-scoreboard .finale-activity {
+    min-height: 1rem;
+    margin: 0;
+  }
+  .finale-track {
+    min-height: 10rem;
+    padding: 1rem;
+    gap: 0.8rem;
+  }
+  .finale-track > .record {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+  .finale-progress {
+    gap: 0.5rem;
+  }
+  .finale-banner {
+    align-items: start;
+  }
+  .finale-banner .live-pill {
+    margin-top: 0.3rem;
+  }
+  .final-review > .row:last-of-type {
+    position: static;
+  }
+  .final-review > .row:last-of-type .btn {
+    width: 100%;
+  }
+  .finale-track h2 {
+    font-size: 1.55rem;
+  }
+  .finale-answer {
+    padding: 0.9rem;
+  }
+  .award {
+    font-size: 1.15rem;
+  }
+  .ceremony-podium {
+    grid-template-columns: 1fr;
+  }
+  .ceremony-podium li,
+  .ceremony-podium li.podium-first {
+    min-height: 8rem;
+  }
+  .ceremony-podium .podium-place-1 {
+    order: 0;
+  }
+  .ceremony-podium .podium-place-2 {
+    order: 1;
+  }
+  .ceremony-podium .podium-hidden {
+    display: none;
+  }
+  .celebration-sparks {
+    letter-spacing: 0.1rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ceremony-podium li {
+    transition: none;
+  }
+  .celebration-sparks {
+    animation: none;
+  }
+  .score-changed {
+    animation: none;
+  }
+}
+
+/* Automatic awards share the server's reveal timeline. */
+.award-wave-banner {
+  padding: 0.8rem 1rem;
+  border-radius: 0.8rem;
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
+  text-align: center;
+  animation: award-wave-in 0.35s ease-out both;
+}
+.matched-criteria {
+  display: block;
+  color: var(--muted);
+  margin-block: 0.3rem;
+}
+.auto-assessment {
+  margin-block-end: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.auto-match {
+  display: grid;
+  gap: 0.25rem;
+  padding-block: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.auto-match strong,
+.auto-match small {
+  font-size: 0.8rem;
+}
+.metadata-editor > .alias-editor {
+  grid-column: 1 / -1;
+}
+.alias-editor > label {
+  display: grid;
+  gap: 0.3rem;
+  margin-block: 0.7rem;
+}
+.https-help p {
+  overflow-wrap: anywhere;
+}
+@keyframes award-wave-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .award-wave-banner {
+    animation: none;
+  }
+}
+
+.metadata-editor,
+.review-heading .metadata-editor > *,
+.alias-editor > label {
+  min-width: 0;
+}
+.metadata-editor > .auto-regrade {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  overflow-wrap: anywhere;
+}
+.auto-regrade small {
+  grid-column: 2;
+  white-space: normal;
+}
+.alias-editor textarea {
+  width: 100%;
+  min-width: 0;
+}

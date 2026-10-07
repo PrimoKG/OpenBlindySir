@@ -8,7 +8,9 @@ import pytest
 from conftest import FAKE_M4A, SECRET, Harness, bridge_hello, catalog, put_asset, put_catalog
 from starlette.websockets import WebSocketDisconnect
 
-HELLO = json.dumps({"t": "HELLO", "client_version": "0.1.0", "protocol": 6})
+from openblindysir_protocol.version import PROTOCOL_VERSION
+
+HELLO = json.dumps({"t": "HELLO", "client_version": "0.1.0", "protocol": PROTOCOL_VERSION})
 
 
 def receive(ws: object, t: str) -> dict[str, object]:

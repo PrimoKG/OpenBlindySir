@@ -8,7 +8,16 @@ from contextlib import ExitStack
 from typing import Any
 
 import pytest
-from conftest import BRIDGE_ID, FAKE_M4A, Harness, bridge_hello, catalog, put_asset, put_catalog
+from conftest import (
+    BRIDGE_ID,
+    FAKE_M4A,
+    ORIGIN,
+    Harness,
+    bridge_hello,
+    catalog,
+    put_asset,
+    put_catalog,
+)
 from pydantic import TypeAdapter
 
 from openblindysir_protocol.client import ClientMessage
@@ -162,6 +171,96 @@ def test_replay_rejects_wrong_excerpt_hash_and_releases_jobs(harness: Harness) -
         assert not harness.runtime.reviews.jobs
 
 
+def test_shared_finale_replay_is_host_only_and_requires_a_public_reveal(harness: Harness):
+    with harness.bridge_ws() as ws:
+        pid, token, player_token, rid = enter_review(harness, ws)
+        url = f"/api/host/finale/{rid}/listen"
+        headers = {"origin": ORIGIN, **harness.cookie(token)}
+        assert harness.client.post(url, headers=harness.cookie(token)).status_code == 403
+        assert (
+            harness.client.post(
+                url, headers={"origin": ORIGIN, **harness.cookie(player_token)}
+            ).status_code
+            == 403
+        )
+        assert harness.client.post(url, headers=headers).status_code == 409
+        host(harness, pid, "finale_reveal", {"round_id": rid})
+        asset_id = next(
+            r.slot.asset_id for r in harness.runtime.engine.state.game.rounds if r.id == rid
+        )
+        # Simulate an already verified excerpt in RAM; no new Bridge job is needed.
+        harness.runtime.cache.put_pending(asset_id, FAKE_M4A, "audio/mp4", frozenset())
+        assert harness.client.post(url, headers=headers).status_code == 204
+        player = next(p.id for p in harness.runtime.engine.state.players.values() if p.id != pid)
+        host_view = harness.runtime.engine.view_for(pid)
+        view = harness.runtime.engine.view_for(player)
+        assert view.play == host_view.play
+        assert view.audio == host_view.audio
+        assert view.play.start_at > harness.clock.now().mono_ms
+        assert (
+            harness.client.get(view.audio.current.url, headers=harness.cookie(player_token)).content
+            == FAKE_M4A
+        )
+        host(harness, pid, "finale_stop")
+        assert harness.runtime.engine.view_for(player).play is None
+        assert (
+            harness.client.get(
+                view.audio.current.url, headers=harness.cookie(player_token)
+            ).status_code
+            == 404
+        )
+
+
+def test_shared_finale_regenerates_once_and_serves_the_original_verified_excerpt(harness: Harness):
+    with harness.bridge_ws() as ws, ThreadPoolExecutor(max_workers=1) as executor:
+        pid, token, player_token, rid = enter_review(harness, ws)
+        host(harness, pid, "finale_reveal", {"round_id": rid})
+        harness.runtime.cache.clear()
+        future = executor.submit(
+            harness.client.post,
+            f"/api/host/finale/{rid}/listen",
+            headers={"origin": ORIGIN, **harness.cookie(token)},
+        )
+        preparation = receive(ws, "PREPARE")
+        assert preparation["review_mode"] == "excerpt"
+        assert preparation["replay_sha256"] == DIGEST
+        assert (
+            put_asset(harness, preparation["upload_url"], preparation["upload_token"]).status_code
+            == 204
+        )
+        done(ws, preparation)
+        assert future.result(5).status_code == 204
+        view = harness.runtime.engine.view_for(pid)
+        assert (
+            harness.client.get(view.audio.current.url, headers=harness.cookie(player_token)).content
+            == FAKE_M4A
+        )
+        assert not harness.runtime.reviews.jobs
+
+
+def test_stopping_shared_preparation_cannot_start_audio_later(harness: Harness) -> None:
+    with harness.bridge_ws() as ws, ThreadPoolExecutor(max_workers=1) as executor:
+        pid, token, _, rid = enter_review(harness, ws)
+        host(harness, pid, "finale_reveal", {"round_id": rid})
+        harness.runtime.cache.clear()
+        future = executor.submit(
+            harness.client.post,
+            f"/api/host/finale/{rid}/listen",
+            headers={"origin": ORIGIN, **harness.cookie(token)},
+        )
+        preparation = receive(ws, "PREPARE")
+        host(harness, pid, "finale_stop")
+        assert (
+            put_asset(harness, preparation["upload_url"], preparation["upload_token"]).status_code
+            == 204
+        )
+        done(ws, preparation)
+        assert future.result(5).status_code == 409
+        assert harness.runtime.engine.view_for(pid).play is None
+        player_id = next(p.id for p in harness.runtime.engine.state.players.values() if p.id != pid)
+        assert harness.runtime.engine.view_for(player_id).audio.current is None
+
+
 def test_phase_change_cancels_pending_replay_without_waiting_for_bridge(harness: Harness) -> None:
     with harness.bridge_ws() as ws, ThreadPoolExecutor(max_workers=1) as executor:
         pid, token, _, rid = enter_review(harness, ws)
@@ -280,3 +379,85 @@ def test_rejected_private_upload_finishes_replay_without_a_bridge_failure_report
             assert harness.client.portal is not None
             harness.client.portal.call(harness.runtime.reviews.clear)
         assert not harness.runtime.reviews.jobs
+
+
+def test_library_midpoint_preview_is_private_and_never_consumes_a_track(harness: Harness):
+    with harness.bridge_ws() as ws, ThreadPoolExecutor(max_workers=1) as executor:
+        pid, token = harness.join("Host")
+        harness.elevate(token)
+        _, player_token = harness.join("Player")
+        body = catalog()
+        ws.send_text(bridge_hello(body["catalog_hash"], 6))
+        grant = receive(ws, "WELCOME")["catalog_upload_token"]
+        assert put_catalog(harness, body, grant).status_code == 204
+        track = body["entries"][0]["track_id"]
+        url = f"/api/host/library/{BRIDGE_ID}/{track}/preview"
+        assert harness.client.get(url).status_code == 401
+        assert harness.client.get(url, headers=harness.cookie(player_token)).status_code == 403
+        s = harness.runtime.engine.state
+        consumed = set(s.played)
+        rng_state = s.rng.getstate()
+        shared_assets = set(s.assets)
+        cache = harness.runtime.cache.items()
+        future = executor.submit(harness.client.get, url, headers=harness.cookie(token))
+        preparation = receive(ws, "PREPARE")
+        assert preparation["review_mode"] == "preview"
+        assert preparation["duration"] == 15
+        assert preparation["start_fraction"] == 0.5
+        assert preparation["exact_start"] is None
+        assert not preparation["avoid_silence"]
+        assert (
+            put_asset(harness, preparation["upload_url"], preparation["upload_token"]).status_code
+            == 204
+        )
+        done(ws, preparation)
+        response = future.result(5)
+        assert response.status_code == 200
+        assert response.content == FAKE_M4A
+        assert response.headers["cache-control"] == "no-store, private"
+        assert not harness.runtime.reviews.jobs
+        assert set(s.played) == consumed
+        assert s.rng.getstate() == rng_state
+        assert set(s.assets) == shared_assets
+        assert harness.runtime.cache.items() == cache
+        assert harness.runtime.engine.view_for(pid).play is None
+
+
+def test_finish_game_reaches_replay_menu_and_keeps_confirmed_drafts(harness: Harness):
+    with harness.bridge_ws() as ws:
+        pid, token, player_token, rid = enter_review(harness, ws)
+        player = harness.runtime.sessions.resolve(player_token, harness.clock.now().mono_ms)
+        host(harness, pid, "score_draft", {"player_id": player, "points": 2}, rid)
+        url = "/api/host/game/finish"
+        payload = {
+            "game_id": harness.runtime.engine.state.game.game_id,
+            "phase": "FINAL_SCORE_REVIEW",
+            "confirm_unreviewed": True,
+        }
+        assert (
+            harness.client.post(
+                url, json=payload, headers={"origin": ORIGIN, **harness.cookie(player_token)}
+            ).status_code
+            == 403
+        )
+        assert (
+            harness.client.post(url, json=payload, headers=harness.cookie(token)).status_code == 403
+        )
+        response = harness.client.post(
+            url, json=payload, headers={"origin": ORIGIN, **harness.cookie(token)}
+        )
+        assert response.status_code == 200
+        view = harness.runtime.engine.view_for(pid)
+        assert view.phase is GamePhase.FINAL_RESULTS
+        assert view.final_results.podium_started_at is None
+        assert (
+            next(row.score for row in view.final_results.standings if row.player_id == player) == 2
+        )
+        journal = harness.runtime.engine.state.journal.events()
+        assert (
+            harness.client.post(
+                url, json=payload, headers={"origin": ORIGIN, **harness.cookie(token)}
+            ).status_code
+            == 409
+        )
+        assert harness.runtime.engine.state.journal.events() == journal

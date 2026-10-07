@@ -1,7 +1,7 @@
 // "/" → player, "/host" → host (elevation form first). No router (spec §3).
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { HostApp } from "../host/HostApp";
-import { t, tCode } from "../i18n";
+import { t, tCode, useLanguage, useMessage } from "../i18n";
 import { api } from "../net/api";
 import { PlayerApp } from "../player/PlayerApp";
 import type { Compatibility } from "../protocol";
@@ -13,32 +13,40 @@ import { HostGate, JoinScreen } from "./JoinScreen";
 type Stage = "checking" | "join" | "play";
 
 export function App() {
+  useLanguage();
   const [stage, setStage] = useState<Stage>("checking");
   const [isHost, setIsHost] = useState(false);
-  const [checkError, setCheckError] = useState<string | null>(null);
-  const [joinNotice, setJoinNotice] = useState<string | null>(null);
+  const [checkError, setCheckError] = useMessage(null);
+  const [joinNotice, setJoinNotice] = useMessage(null);
   const wantsHost = location.pathname.startsWith("/host");
 
   const check = useCallback(() => {
     setCheckError(null);
     void api.session().then((result) => {
       if (result.ok) {
+        if (new URLSearchParams(location.hash.slice(1)).has("join"))
+          history.replaceState(null, "", location.pathname + location.search);
         setIsHost(result.data.role === "host");
         setStage("play");
       } else if (result.error === "unauthenticated") {
         setStage("join");
       } else {
-        setCheckError(tCode("error", result.error));
+        setCheckError(() => tCode("error", result.error));
       }
     });
-  }, []);
+  }, [setCheckError]);
   useEffect(check, [check]);
 
-  const rejoin = useCallback((reason: "rejoin" | "session_ended") => {
-    setIsHost(false);
-    setJoinNotice(reason === "session_ended" ? t("closed.ended") : t("error.unauthenticated"));
-    setStage("join");
-  }, []);
+  const rejoin = useCallback(
+    (reason: "rejoin" | "session_ended") => {
+      setIsHost(false);
+      setJoinNotice(() =>
+        reason === "session_ended" ? t("closed.ended") : t("error.unauthenticated"),
+      );
+      setStage("join");
+    },
+    [setJoinNotice],
+  );
 
   if (stage === "checking") {
     return (
@@ -59,6 +67,8 @@ export function App() {
       <JoinScreen
         notice={joinNotice}
         onJoined={() => {
+          if (new URLSearchParams(location.hash.slice(1)).has("join"))
+            history.replaceState(null, "", location.pathname + location.search);
           setIsHost(false);
           setStage("play");
         }}
@@ -75,7 +85,7 @@ function Game(props: { readonly onRejoin: (reason: "rejoin" | "session_ended") =
   const game = useMemo(() => new GameController(), []);
   useEffect(() => {
     game.start();
-    return () => game.socket.close();
+    return () => game.dispose();
   }, [game]);
   return (
     <GameContext.Provider value={game}>

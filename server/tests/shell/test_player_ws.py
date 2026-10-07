@@ -6,7 +6,9 @@ import pytest
 from conftest import ORIGIN, Harness
 from starlette.websockets import WebSocketDisconnect
 
-HELLO = json.dumps({"t": "HELLO", "client_version": "0.1.0", "protocol": 6})
+from openblindysir_protocol.version import PROTOCOL_VERSION
+
+HELLO = json.dumps({"t": "HELLO", "client_version": "0.1.0", "protocol": PROTOCOL_VERSION})
 
 
 def receive_until(ws: object, t: str) -> dict[str, object]:

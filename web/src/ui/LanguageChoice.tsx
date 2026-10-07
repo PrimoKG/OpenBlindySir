@@ -1,23 +1,28 @@
-import { getLanguage, setLanguage, t } from "../i18n";
+import { setLanguage, t, useLanguage } from "../i18n";
 
 export function LanguageChoice() {
+  const language = useLanguage();
   return (
-    <label className="language-choice">
-      <span className="sr-only">{t("settings.language")}</span>
-      <select
-        aria-label={t("settings.language")}
-        value={getLanguage()}
-        onChange={(e) => {
-          const lang = e.target.value === "en" ? "en" : "fr";
-          setLanguage(lang);
-          const url = new URL(location.href);
-          url.searchParams.set("lang", lang);
-          location.assign(url.href);
-        }}
+    <fieldset className="language-choice" aria-label={t("settings.language")}>
+      <legend className="sr-only">{t("settings.language")}</legend>
+      <button
+        type="button"
+        lang="fr"
+        aria-label="Français"
+        aria-pressed={language === "fr"}
+        onClick={() => setLanguage("fr")}
       >
-        <option value="fr">Français</option>
-        <option value="en">English</option>
-      </select>
-    </label>
+        FR
+      </button>
+      <button
+        type="button"
+        lang="en"
+        aria-label="English"
+        aria-pressed={language === "en"}
+        onClick={() => setLanguage("en")}
+      >
+        EN
+      </button>
+    </fieldset>
   );
 }

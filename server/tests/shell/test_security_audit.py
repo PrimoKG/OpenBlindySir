@@ -17,6 +17,7 @@ from test_library_v02 import private_library
 
 from openblindysir_protocol.bridge import BridgePing
 from openblindysir_protocol.enums import BrowserFamily, Role
+from openblindysir_protocol.version import PROTOCOL_VERSION
 from openblindysir_server import security
 from openblindysir_server.auth import routes as auth
 from openblindysir_server.library import management
@@ -329,7 +330,9 @@ def test_revoked_cookie_cannot_register_after_delayed_hello(harness: Harness) ->
     pid, token = harness.join("Player")
     with harness.player_ws(token) as ws:
         harness.runtime.sessions.revoke((pid,))
-        ws.send_text(json.dumps({"t": "HELLO", "client_version": "0.3.0", "protocol": 6}))
+        ws.send_text(
+            json.dumps({"t": "HELLO", "client_version": "0.3.0", "protocol": PROTOCOL_VERSION})
+        )
         with pytest.raises(WebSocketDisconnect):
             drain(ws)
     assert harness.runtime.hub.current(pid) is None
@@ -392,3 +395,30 @@ def test_successful_join_leave_churn_is_limited_before_more_bodies_are_read(harn
     assert len(harness.runtime.engine.state.players) == 60
     harness.clock.advance(60000)
     harness.join("Synthetic after window")
+
+
+def test_finish_game_rejects_deep_json_without_server_error(harness: Harness):
+    _, token, _ = private_library(harness)
+    before = harness.runtime.engine.state.game.game_id
+    response = harness.client.post(
+        "/api/host/game/finish",
+        content="[" * 1200 + "0" + "]" * 1200,
+        headers={"origin": ORIGIN, "content-type": "application/json", **harness.cookie(token)},
+    )
+    assert response.status_code == 400
+    assert harness.runtime.engine.state.game.game_id == before
+    assert harness.runtime.engine.state.game.phase.value == "LOBBY"
+
+
+@pytest.mark.parametrize("origin", [ORIGIN, "https://untrusted.example"])
+def test_finish_game_does_not_read_unauthorized_body(harness: Harness, monkeypatch, origin):
+    async def forbidden(*args, **kwargs):
+        raise AssertionError("unauthorized body must not be read")
+
+    monkeypatch.setattr(management, "read_json_body", forbidden)
+    response = harness.client.post(
+        "/api/host/game/finish",
+        content="{}",
+        headers={"origin": origin, "content-type": "application/json"},
+    )
+    assert response.status_code == 401

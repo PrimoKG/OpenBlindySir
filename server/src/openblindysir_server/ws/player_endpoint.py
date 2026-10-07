@@ -104,6 +104,11 @@ async def player_ws(ws: WebSocket) -> None:
         log_refused("too_many_connections", truncate_ip(ip))
         await ws.close(POLICY)
         return
+    if not state.player_ws_counter.acquire(player_id):
+        state.ws_counter.release(ip)
+        log_refused("too_many_identity_connections", truncate_ip(ip))
+        await ws.close(POLICY)
+        return
     try:
         await ws.accept()
         if not await _await_hello(ws):
@@ -140,6 +145,7 @@ async def player_ws(ws: WebSocket) -> None:
                 await asyncio.wait_for(writer, timeout=1)
     finally:
         state.ws_counter.release(ip)
+        state.player_ws_counter.release(player_id)
 
 
 async def _read_loop(state: AppState, conn: PlayerConnection) -> None:

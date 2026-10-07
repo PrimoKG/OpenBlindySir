@@ -1,0 +1,1246 @@
+{
+  "date": "2026-10-05",
+  "images": {
+    "app": {
+      "reference": "openblindysir-server:security-audio-20261005",
+      "image_id": "sha256:5f85500230c8e6a064706e43f6b00950e23d82149c26918e68e0e54201441c2d",
+      "config_id": "sha256:e8f82e5eb72932ce608953fd3a5fc0b72809e8451ab3e342d1b8ac4ba3b5e754",
+      "scan_sha256": "5171c2f55f654cc24dc7567a4b7ff958c8fa2106622b9327d4e13c765e105610",
+      "counts": {
+        "High": 55,
+        "Medium": 51,
+        "Negligible": 46,
+        "Low": 10
+      },
+      "db": {
+        "schemaVersion": "v6.1.10",
+        "from": "https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-10-05T00:36:45Z_1791182738.tar.zst?checksum=sha256%3A97459838f3b53ba97e4562fb3d5d2fd92422cd44c179f59268f0c0d404c00e7a",
+        "built": "2026-10-05T06:45:38Z",
+        "path": "/cache/6/vulnerability.db",
+        "valid": true
+      }
+    },
+    "bridge": {
+      "reference": "openblindysir-bridge:security-audio-20261005",
+      "image_id": "sha256:dea4f464907e21074a3a94f9fe76e85a3bdb29351181a269bb158a572b9f69be",
+      "config_id": "sha256:aa36e55d85ff90249cdcd8d27ac04855de10cadcc2a1c2d22a48660bce781d6f",
+      "scan_sha256": "3bf90ad58d071158284ab8c8b2aff739c03df0c4c3e29bd1eb05e190a4b6d3c2",
+      "counts": {
+        "High": 55,
+        "Medium": 51,
+        "Negligible": 46,
+        "Low": 10
+      },
+      "db": {
+        "schemaVersion": "v6.1.10",
+        "from": "https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-10-05T00:36:45Z_1791182738.tar.zst?checksum=sha256%3A97459838f3b53ba97e4562fb3d5d2fd92422cd44c179f59268f0c0d404c00e7a",
+        "built": "2026-10-05T06:45:38Z",
+        "path": "/cache/6/vulnerability.db",
+        "valid": true
+      }
+    },
+    "caddy": {
+      "reference": "caddy@sha256:d44355d3c2149dc580ce2cac735955d1c08d3d00882c30489c241aa51a5c10d9",
+      "image_id": "sha256:d44355d3c2149dc580ce2cac735955d1c08d3d00882c30489c241aa51a5c10d9",
+      "config_id": "sha256:5e0a314e87ee77965b977aca1699c2888aac0847287a7c0400d2bcbddde9e526",
+      "scan_sha256": "830b26cdbc3816d4e7cac3316d823c6f53a9290b0947e4b9e04b7a4dc739473a",
+      "counts": {
+        "High": 1,
+        "Medium": 4
+      },
+      "db": {
+        "schemaVersion": "v6.1.10",
+        "from": "https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-10-05T00:36:45Z_1791182738.tar.zst?checksum=sha256%3A97459838f3b53ba97e4562fb3d5d2fd92422cd44c179f59268f0c0d404c00e7a",
+        "built": "2026-10-05T06:45:38Z",
+        "path": "/cache/6/vulnerability.db",
+        "valid": true
+      }
+    }
+  },
+  "compiled_ffmpeg": {
+    "image_id": "sha256:dea4f464907e21074a3a94f9fe76e85a3bdb29351181a269bb158a572b9f69be",
+    "verified_component": {
+      "version": "9.0.2",
+      "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
+    },
+    "sbom_sha256": "f908fc12e1f3b218a7dd6527369bba5bb7bc89ee8146f9103ac27ab5054ebe87",
+    "counts": {}
+  },
+  "public_release_risk_acceptance": false,
+  "advisories": [
+    {
+      "id": "CVE-2026-82560",
+      "severity": "High",
+      "packages": [
+        "perl-base 5.40.1-6+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-82560",
+      "group": "Perl",
+      "reason": "Le produit ne lance pas Perl et ne traite ni POD, ni archives Tar Perl, ni expressions régulières Perl.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-85091",
+      "severity": "High",
+      "packages": [
+        "zlib 1.3.2-r0",
+        "zlib1g 1:1.3.dfsg+really1.3.1-1+b1"
+      ],
+      "images": [
+        "app",
+        "bridge",
+        "caddy"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-85091",
+      "group": "zlib / gzwrite",
+      "reason": "L’app/Bridge ont zlib 1.3.1, hors de la plage 1.3.1.2–1.3.2 décrite ; gzprintf/gzvprintf/gzwrite ne sont pas importées. Caddy est statique et son healthcheck ne fait pas ces écritures gzip.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2025-69720",
+      "severity": "High",
+      "packages": [
+        "libncursesw6 6.5+20250216-2",
+        "libtinfo6 6.5+20250216-2",
+        "ncurses-base 6.5+20250216-2",
+        "ncurses-bin 6.5+20250216-2"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2025-69720",
+      "group": "ncurses",
+      "reason": "Aucun appel produit à infocmp, tic, curses ou au parseur termcap ; les services ne sont pas des terminaux interactifs curses.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-9538",
+      "severity": "High",
+      "packages": [
+        "perl-base 5.40.1-6+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-9538",
+      "group": "Perl",
+      "reason": "Le produit ne lance pas Perl et ne traite ni POD, ni archives Tar Perl, ni expressions régulières Perl.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-3184",
+      "severity": "Medium",
+      "packages": [
+        "bsdutils 1:2.41.5-0+deb13u1",
+        "libblkid1 2.41.5-0+deb13u1",
+        "liblastlog2-2 2.41.5-0+deb13u1",
+        "libmount1 2.41.5-0+deb13u1",
+        "libsmartcols1 2.41.5-0+deb13u1",
+        "libuuid1 2.41.5-0+deb13u1",
+        "login 1:4.16.0-2+really2.41.5-0+deb13u1",
+        "mount 2.41.5-0+deb13u1",
+        "util-linux 2.41.5-0+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-3184",
+      "group": "util-linux",
+      "reason": "Les programmes mount/nsenter/login visés ne sont pas lancés par le produit ; aucune API ne fournit fstab, un montage privilégié ou une session PAM.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-54411",
+      "severity": "Medium",
+      "packages": [
+        "libpam-modules 1.7.0-5",
+        "libpam-modules-bin 1.7.0-5",
+        "libpam-runtime 1.7.0-5",
+        "libpam0g 1.7.0-5"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-54411",
+      "group": "PAM",
+      "reason": "L’authentification HTTP/WS ne passe pas par PAM ni pam_userdb.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-5435",
+      "severity": "High",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-5435",
+      "group": "glibc / impression DNS",
+      "reason": "Les fonctions dépréciées d’impression DNS ne sont pas importées par les objets runtime inspectés ; la résolution getaddrinfo est distincte.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2018-20796",
+      "severity": "Negligible",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2018-20796",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-95619",
+      "severity": "High",
+      "packages": [
+        "gcc-14-base 14.2.0-19",
+        "libgcc-s1 14.2.0-19",
+        "libstdc++6 14.2.0-19"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-95619",
+      "group": "libstdc++",
+      "reason": "Aucun objet de la fermeture des dépendances Python/FFmpeg inspectées ne charge libstdc++ ; ces opérations de conteneurs C++ ne sont pas exposées.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-6238",
+      "severity": "Medium",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-6238",
+      "group": "glibc / impression DNS",
+      "reason": "Les fonctions dépréciées d’impression DNS ne sont pas importées par les objets runtime inspectés ; la résolution getaddrinfo est distincte.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-19499",
+      "severity": "High",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-19499",
+      "group": "glibc / monnaie",
+      "reason": "strfmon n’est pas importée ; la présentation des nombres n’appelle pas ce formateur natif.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-80489",
+      "severity": "Medium",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-80489",
+      "group": "glibc / iconv",
+      "reason": "FFmpeg est compilé sans iconv ; les autres objets runtime n’importent pas iconv. Les conversions Python ne passent pas par cette API native.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-77117",
+      "severity": "Medium",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-77117",
+      "group": "glibc / iconv",
+      "reason": "FFmpeg est compilé sans iconv ; les autres objets runtime n’importent pas iconv. Les conversions Python ne passent pas par cette API native.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-19487",
+      "severity": "Medium",
+      "packages": [
+        "perl-base 5.40.1-6+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-19487",
+      "group": "Perl",
+      "reason": "Le produit ne lance pas Perl et ne traite ni POD, ni archives Tar Perl, ni expressions régulières Perl.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-5704",
+      "severity": "Medium",
+      "packages": [
+        "tar 1.35+dfsg-3.1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-5704",
+      "group": "GNU tar",
+      "reason": "Aucune extraction d’archive Tar fournie par un joueur, hôte ou Bridge et aucun processus GNU tar dans le runtime produit. Les sources vérifiées sont extraites au build seulement.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2025-15367",
+      "severity": "Medium",
+      "packages": [
+        "python 3.13.16"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://nvd.nist.gov/vuln/detail/CVE-2025-15367",
+      "group": "Python / POP3",
+      "reason": "Aucun import ni service POP3/poplib dans l’application ; ces commandes ne sont pas fournies par le protocole.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2005-2541",
+      "severity": "Negligible",
+      "packages": [
+        "tar 1.35+dfsg-3.1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2005-2541",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-6791",
+      "severity": "Medium",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-6791",
+      "group": "glibc / wordexp",
+      "reason": "wordexp n’est pas importée ; les commandes FFmpeg sont des listes d’arguments sans shell.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-102010",
+      "severity": "High",
+      "packages": [
+        "gcc-14-base 14.2.0-19",
+        "libgcc-s1 14.2.0-19",
+        "libstdc++6 14.2.0-19"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-102010",
+      "group": "libstdc++",
+      "reason": "Aucun objet de la fermeture des dépendances Python/FFmpeg inspectées ne charge libstdc++ ; ces opérations de conteneurs C++ ne sont pas exposées.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-8674",
+      "severity": "Medium",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-8674",
+      "group": "glibc / domaine DNS",
+      "reason": "LOCALDOMAIN=. fixe la liste de recherche dans app/Bridge ; le test hors réseau avec un domaine de 218 caractères passe sans abort. Un override de cet environnement annule la qualification.",
+      "status": "atténuée par configuration"
+    },
+    {
+      "id": "CVE-2026-76642",
+      "severity": "High",
+      "packages": [
+        "bsdutils 1:2.41.5-0+deb13u1",
+        "libblkid1 2.41.5-0+deb13u1",
+        "liblastlog2-2 2.41.5-0+deb13u1",
+        "libmount1 2.41.5-0+deb13u1",
+        "libsmartcols1 2.41.5-0+deb13u1",
+        "libuuid1 2.41.5-0+deb13u1",
+        "login 1:4.16.0-2+really2.41.5-0+deb13u1",
+        "mount 2.41.5-0+deb13u1",
+        "util-linux 2.41.5-0+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-76642",
+      "group": "util-linux",
+      "reason": "Les programmes mount/nsenter/login visés ne sont pas lancés par le produit ; aucune API ne fournit fstab, un montage privilégié ou une session PAM.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2019-1010022",
+      "severity": "Negligible",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2019-1010022",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2019-1010024",
+      "severity": "Negligible",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2019-1010024",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2019-1010023",
+      "severity": "Negligible",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2019-1010023",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-78408",
+      "severity": "High",
+      "packages": [
+        "bsdutils 1:2.41.5-0+deb13u1",
+        "libblkid1 2.41.5-0+deb13u1",
+        "liblastlog2-2 2.41.5-0+deb13u1",
+        "libmount1 2.41.5-0+deb13u1",
+        "libsmartcols1 2.41.5-0+deb13u1",
+        "libuuid1 2.41.5-0+deb13u1",
+        "login 1:4.16.0-2+really2.41.5-0+deb13u1",
+        "mount 2.41.5-0+deb13u1",
+        "util-linux 2.41.5-0+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-78408",
+      "group": "util-linux",
+      "reason": "Les programmes mount/nsenter/login visés ne sont pas lancés par le produit ; aucune API ne fournit fstab, un montage privilégié ou une session PAM.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2024-56433",
+      "severity": "Low",
+      "packages": [
+        "login.defs 1:4.17.4-2",
+        "passwd 1:4.17.4-2"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2024-56433",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-15534",
+      "severity": "Medium",
+      "packages": [
+        "perl-base 5.40.1-6+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-15534",
+      "group": "Perl",
+      "reason": "Le produit ne lance pas Perl et ne traite ni POD, ni archives Tar Perl, ni expressions régulières Perl.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2010-4756",
+      "severity": "Negligible",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2010-4756",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2019-9192",
+      "severity": "Negligible",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2019-9192",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-89092",
+      "severity": "Medium",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-89092",
+      "group": "glibc / nscd",
+      "reason": "nscd est absent de l’image et aucun socket/service nscd n’est monté.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-19542",
+      "severity": "Medium",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-19542",
+      "group": "glibc / arbres",
+      "reason": "tdelete n’apparaît que dans ncurses, dont les modules ne sont pas utilisés par le produit ; aucune construction d’un arbre libc de la profondeur requise n’est exposée.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-78410",
+      "severity": "High",
+      "packages": [
+        "bsdutils 1:2.41.5-0+deb13u1",
+        "libblkid1 2.41.5-0+deb13u1",
+        "liblastlog2-2 2.41.5-0+deb13u1",
+        "libmount1 2.41.5-0+deb13u1",
+        "libsmartcols1 2.41.5-0+deb13u1",
+        "libuuid1 2.41.5-0+deb13u1",
+        "login 1:4.16.0-2+really2.41.5-0+deb13u1",
+        "mount 2.41.5-0+deb13u1",
+        "util-linux 2.41.5-0+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-78410",
+      "group": "util-linux",
+      "reason": "Les programmes mount/nsenter/login visés ne sont pas lancés par le produit ; aucune API ne fournit fstab, un montage privilégié ou une session PAM.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2019-1010025",
+      "severity": "Negligible",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2019-1010025",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-54369",
+      "severity": "High",
+      "packages": [
+        "libacl1 2.3.2-2+b1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-54369",
+      "group": "ACL / attributs",
+      "reason": "La protection POSIX utilise chmod et les contrôles de liens ; aucune commande getfattr/setfattr ni API libacl visée n’est utilisée.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-78409",
+      "severity": "High",
+      "packages": [
+        "bsdutils 1:2.41.5-0+deb13u1",
+        "libblkid1 2.41.5-0+deb13u1",
+        "liblastlog2-2 2.41.5-0+deb13u1",
+        "libmount1 2.41.5-0+deb13u1",
+        "libsmartcols1 2.41.5-0+deb13u1",
+        "libuuid1 2.41.5-0+deb13u1",
+        "login 1:4.16.0-2+really2.41.5-0+deb13u1",
+        "mount 2.41.5-0+deb13u1",
+        "util-linux 2.41.5-0+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-78409",
+      "group": "util-linux",
+      "reason": "Les programmes mount/nsenter/login visés ne sont pas lancés par le produit ; aucune API ne fournit fstab, un montage privilégié ou une session PAM.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-54371",
+      "severity": "Medium",
+      "packages": [
+        "libattr1 1:2.5.2-3"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-54371",
+      "group": "ACL / attributs",
+      "reason": "La protection POSIX utilise chmod et les contrôles de liens ; aucune commande getfattr/setfattr ni API libacl visée n’est utilisée.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-27171",
+      "severity": "Medium",
+      "packages": [
+        "zlib1g 1:1.3.dfsg+really1.3.1-1+b1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-27171",
+      "group": "zlib / combinaison CRC",
+      "reason": "crc32_combine64 et crc32_combine_gen64 ne sont pas importées par les objets runtime inspectés.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-12345",
+      "severity": "Medium",
+      "packages": [
+        "python 3.13.16"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-12345",
+      "group": "Python / nettoyage",
+      "reason": "Analyse limitée à ces images Linux : Python 3.13.16, rmtree.avoids_symlink_attacks vrai, répertoires privés et absence de TemporaryDirectory dans le produit. Aucun constat de sûreté universelle sur les autres OS.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-97399",
+      "severity": "Low",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-97399",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2025-6141",
+      "severity": "Medium",
+      "packages": [
+        "libncursesw6 6.5+20250216-2",
+        "libtinfo6 6.5+20250216-2",
+        "ncurses-base 6.5+20250216-2",
+        "ncurses-bin 6.5+20250216-2"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2025-6141",
+      "group": "ncurses",
+      "reason": "Aucun appel produit à infocmp, tic, curses ou au parseur termcap ; les services ne sont pas des terminaux interactifs curses.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-42250",
+      "severity": "Medium",
+      "packages": [
+        "libbz2-1.0 1.0.8-6"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-42250",
+      "group": "bzip2recover",
+      "reason": "L’avis concerne l’utilitaire bzip2recover, qui n’est pas lancé par le produit ; ce n’est pas l’API de décompression bz2 utilisée par Python.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-50812",
+      "severity": "Medium",
+      "packages": [
+        "libsqlite3-0 3.46.1-7+deb13u2"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-50812",
+      "group": "SQLite / extensions",
+      "reason": "La persistance du produit est JSON, sans SQLite ni chargement d’extensions ; les fonctions changeset visées ne sont pas importées. Le zipfile SQLite n’est pas utilisé.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-15059",
+      "severity": "Medium",
+      "packages": [
+        "libsystemd0 257.13-1~deb13u1",
+        "libudev1 257.13-1~deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-15059",
+      "group": "systemd",
+      "reason": "Aucun daemon systemd-homed/oomd/journald, bus système ou API correspondante dans le déploiement.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-50813",
+      "severity": "Medium",
+      "packages": [
+        "libsqlite3-0 3.46.1-7+deb13u2"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-50813",
+      "group": "SQLite / extensions",
+      "reason": "La persistance du produit est JSON, sans SQLite ni chargement d’extensions ; les fonctions changeset visées ne sont pas importées. Le zipfile SQLite n’est pas utilisé.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-54370",
+      "severity": "High",
+      "packages": [
+        "libacl1 2.3.2-2+b1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-54370",
+      "group": "ACL / attributs",
+      "reason": "La protection POSIX utilise chmod et les contrôles de liens ; aucune commande getfattr/setfattr ni API libacl visée n’est utilisée.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2021-45346",
+      "severity": "Negligible",
+      "packages": [
+        "libsqlite3-0 3.46.1-7+deb13u2"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2021-45346",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-18374",
+      "severity": "Medium",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-18374",
+      "group": "glibc / fopen",
+      "reason": "Le produit ne transmet aucun mode fopen contrôlé par l’utilisateur ni syntaxe ccs ; les modes d’ouverture sont fixes.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-86805",
+      "severity": "Medium",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-86805",
+      "group": "glibc / chargeur privilégié",
+      "reason": "Les conditions setuid/setgid et chemin RPATH contrôlable ne sont pas offertes par les exécutables produit, exécutés sous UID 10001 avec no-new-privileges dans Compose.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-18508",
+      "severity": "Medium",
+      "packages": [
+        "tar 1.35+dfsg-3.1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-18508",
+      "group": "GNU tar",
+      "reason": "Aucune extraction d’archive Tar fournie par un joueur, hôte ou Bridge et aucun processus GNU tar dans le runtime produit. Les sources vérifiées sont extraites au build seulement.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2011-3374",
+      "severity": "Negligible",
+      "packages": [
+        "apt 3.0.3",
+        "libapt-pkg7.0 3.0.3"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2011-3374",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2007-5686",
+      "severity": "Negligible",
+      "packages": [
+        "login.defs 1:4.17.4-2",
+        "passwd 1:4.17.4-2"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2007-5686",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-40228",
+      "severity": "Low",
+      "packages": [
+        "libsystemd0 257.13-1~deb13u1",
+        "libudev1 257.13-1~deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-40228",
+      "group": "systemd",
+      "reason": "Aucun daemon systemd-homed/oomd/journald, bus système ou API correspondante dans le déploiement.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-95818",
+      "severity": "Low",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-95818",
+      "group": "glibc / chargeur privilégié",
+      "reason": "Les conditions setuid/setgid et chemin RPATH contrôlable ne sont pas offertes par les exécutables produit, exécutés sous UID 10001 avec no-new-privileges dans Compose.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-18477",
+      "severity": "Medium",
+      "packages": [
+        "tar 1.35+dfsg-3.1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-18477",
+      "group": "GNU tar",
+      "reason": "Aucune extraction d’archive Tar fournie par un joueur, hôte ou Bridge et aucun processus GNU tar dans le runtime produit. Les sources vérifiées sont extraites au build seulement.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-6368",
+      "severity": "Low",
+      "packages": [
+        "libc-bin 2.41-12+deb13u4",
+        "libc6 2.41-12+deb13u4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-6368",
+      "group": "glibc / wordexp",
+      "reason": "wordexp n’est pas importée ; les commandes FFmpeg sont des listes d’arguments sans shell.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2026-16742",
+      "severity": "Medium",
+      "packages": [
+        "libsystemd0 257.13-1~deb13u1",
+        "libudev1 257.13-1~deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-16742",
+      "group": "systemd",
+      "reason": "Aucun daemon systemd-homed/oomd/journald, bus système ou API correspondante dans le déploiement.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2011-4116",
+      "severity": "Negligible",
+      "packages": [
+        "perl-base 5.40.1-6+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2011-4116",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2013-4392",
+      "severity": "Negligible",
+      "packages": [
+        "libsystemd0 257.13-1~deb13u1",
+        "libudev1 257.13-1~deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2013-4392",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2022-0563",
+      "severity": "Negligible",
+      "packages": [
+        "bsdutils 1:2.41.5-0+deb13u1",
+        "libblkid1 2.41.5-0+deb13u1",
+        "liblastlog2-2 2.41.5-0+deb13u1",
+        "libmount1 2.41.5-0+deb13u1",
+        "libsmartcols1 2.41.5-0+deb13u1",
+        "libuuid1 2.41.5-0+deb13u1",
+        "login 1:4.16.0-2+really2.41.5-0+deb13u1",
+        "mount 2.41.5-0+deb13u1",
+        "util-linux 2.41.5-0+deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2022-0563",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2023-31439",
+      "severity": "Negligible",
+      "packages": [
+        "libsystemd0 257.13-1~deb13u1",
+        "libudev1 257.13-1~deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2023-31439",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2017-18018",
+      "severity": "Negligible",
+      "packages": [
+        "coreutils 9.7-3"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2017-18018",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2023-31437",
+      "severity": "Negligible",
+      "packages": [
+        "libsystemd0 257.13-1~deb13u1",
+        "libudev1 257.13-1~deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2023-31437",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-53910",
+      "severity": "Negligible",
+      "packages": [
+        "diffutils 1:3.10-4"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-53910",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2023-31438",
+      "severity": "Negligible",
+      "packages": [
+        "libsystemd0 257.13-1~deb13u1",
+        "libudev1 257.13-1~deb13u1"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2023-31438",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2025-70873",
+      "severity": "Negligible",
+      "packages": [
+        "libsqlite3-0 3.46.1-7+deb13u2"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2025-70873",
+      "group": "SQLite / extensions",
+      "reason": "La persistance du produit est JSON, sans SQLite ni chargement d’extensions ; les fonctions changeset visées ne sont pas importées. Le zipfile SQLite n’est pas utilisé.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2025-5278",
+      "severity": "Negligible",
+      "packages": [
+        "coreutils 9.7-3"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2025-5278",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-56392",
+      "severity": "Negligible",
+      "packages": [
+        "coreutils 9.7-3"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-56392",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-56391",
+      "severity": "Negligible",
+      "packages": [
+        "coreutils 9.7-3"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-56391",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-102474",
+      "severity": "Negligible",
+      "packages": [
+        "dash 0.5.12-12"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-102474",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-102473",
+      "severity": "Negligible",
+      "packages": [
+        "dash 0.5.12-12"
+      ],
+      "images": [
+        "app",
+        "bridge"
+      ],
+      "source": "https://security-tracker.debian.org/tracker/CVE-2026-102473",
+      "group": "Composant système",
+      "reason": "Alerte faible/négligeable conservée ; aucune clôture exhaustive de ce constat dans ce chantier.",
+      "status": "suivi secondaire"
+    },
+    {
+      "id": "CVE-2026-58055",
+      "severity": "Medium",
+      "packages": [
+        "nghttp2-libs 1.69.0-r0"
+      ],
+      "images": [
+        "caddy"
+      ],
+      "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-58055",
+      "group": "nghttp2 / nghttpx",
+      "reason": "L’avis vise le proxy nghttpx, absent ; Caddy ne charge pas nghttp2 et utilise son serveur HTTP Go.",
+      "status": "fonction hors parcours"
+    },
+    {
+      "id": "CVE-2025-60876",
+      "severity": "Medium",
+      "packages": [
+        "busybox 1.37.0-r30",
+        "busybox-binsh 1.37.0-r30",
+        "ssl_client 1.37.0-r30"
+      ],
+      "images": [
+        "caddy"
+      ],
+      "source": "https://nvd.nist.gov/vuln/detail/CVE-2025-60876",
+      "group": "BusyBox wget",
+      "reason": "Le seul wget prévu par Compose utilise une URL loopback constante sans données de requête utilisateur.",
+      "status": "fonction hors parcours"
+    }
+  ]
+}

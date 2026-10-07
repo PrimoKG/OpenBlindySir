@@ -1,7 +1,7 @@
 // Phase screens only display the server's filtered view, including for a playing host.
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useEngine, useGame, useServerNow, useUi } from "../app/hooks";
-import { t, tCode } from "../i18n";
+import { t, tCode, useMessage } from "../i18n";
 import { formatDelta, formatRank, formatSeconds } from "../i18n/format";
 import { api } from "../net/api";
 import type { AnyView, RoundOpen, StandingRow } from "../protocol";
@@ -16,6 +16,9 @@ import {
   Toast,
 } from "../ui/components";
 import { LanguageChoice } from "../ui/LanguageChoice";
+import { criteriaFor, criterionLabel, criterionPoints } from "../ui/ScoringCriteria";
+import { FinaleStage, FinalPodium } from "./Finale";
+import { FinaleSoundControls } from "./FinaleSounds";
 import { clipPresentation } from "./presentation";
 import { ExportResults, Recap } from "./Recap";
 
@@ -24,6 +27,13 @@ export function PlayerApp(props: { readonly view: AnyView; readonly children?: R
   const stage = useRef<HTMLDivElement>(null);
   const phaseKey = `${view.phase}:${view.round?.round_id ?? ""}:${view.round?.state ?? ""}`;
   const focusedPhase = useRef("");
+  const previousScreen = useRef(view.phase);
+  useEffect(() => {
+    if (previousScreen.current === view.phase) return;
+    previousScreen.current = view.phase;
+    // Only a change of screen resets the scene; never steal scrolling during typing or review.
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [view.phase]);
   useEffect(() => {
     if (focusedPhase.current === phaseKey) return;
     focusedPhase.current = phaseKey;
@@ -38,8 +48,10 @@ export function PlayerApp(props: { readonly view: AnyView; readonly children?: R
   }, [phaseKey]);
   const fullReview = view.kind !== "player" && view.phase === "FINAL_SCORE_REVIEW";
   return (
-    <div className={`app ${view.kind === "player" ? "" : "with-host"}`}>
-      <a className="skip-link" href="#stage-content">
+    <div
+      className={`app ${view.kind === "player" ? "" : "with-host"} ${view.phase.startsWith("FINAL_") ? "is-finale" : ""} phase-${view.phase.toLowerCase()}`}
+    >
+      <a className="skip-link" href={fullReview ? "#host-controls" : "#stage-content"}>
         {t("a11y.skip")}
       </a>
       {view.kind !== "player" && (
@@ -71,6 +83,7 @@ function Header(props: { readonly view: AnyView }) {
   const [soundOpen, setSoundOpen] = useState(false);
   const { view } = props;
   const ui = useUi();
+  const engine = useEngine();
   return (
     <>
       <header className="header">
@@ -83,6 +96,9 @@ function Header(props: { readonly view: AnyView }) {
             </span>
           )}
           <span className="identity">{view.me.nickname}</span>
+          {view.phase.startsWith("FINAL_") &&
+            (view.kind !== "player" ||
+              (engine.contextState === "running" && engine.state !== "ERROR")) && <AudioTest />}
           {view.phase !== "LOBBY" && (
             <>
               <Button
@@ -99,8 +115,10 @@ function Header(props: { readonly view: AnyView }) {
                 onClose={() => setSoundOpen(false)}
               >
                 <div className="stack">
+                  <AudioTest />
                   <Volume />
                   <Latency />
+                  <FinaleSoundControls />
                 </div>
               </Modal>
             </>
@@ -131,7 +149,7 @@ function AudioTest() {
     setError(false);
     setBusy(true);
     try {
-      if (engine.contextState !== "running") await game.engine.unlock();
+      await game.engine.unlock();
       if (game.engine.unlocked) game.engine.testBeep();
       else setError(true);
     } catch {
@@ -161,11 +179,11 @@ function AudioTest() {
 }
 
 /** Inline audio recovery leaves the current game and host controls reachable. */
-function AudioGate(props: { readonly view: AnyView }) {
+export function AudioGate(props: { readonly view: AnyView }) {
   const game = useGame();
   const engine = useEngine();
   if (
-    props.view.phase !== "IN_GAME" ||
+    (props.view.phase !== "IN_GAME" && !props.view.phase.startsWith("FINAL_")) ||
     (engine.contextState === "running" && engine.state !== "ERROR")
   )
     return null;
@@ -202,21 +220,11 @@ function PhaseScreen(props: { readonly view: AnyView }) {
     case "IN_GAME":
       return <RoundScreen view={view} />;
     case "FINAL_SCORE_REVIEW":
-      if (view.kind !== "player")
-        return (
-          <div className="phase-band">
-            <strong>{t("hostui.toFinal")}</strong>
-            <span>{t("final.hostHint")}</span>
-          </div>
-        );
-      return (
-        <main className="stack">
-          <StageMessage
-            title={view.kind === "player" ? t("final.waiting") : t("hostui.toFinal")}
-            description={view.kind === "player" ? t("final.waitingHint") : t("final.hostHint")}
-          />
+      return view.kind === "player" ? (
+        <main>
+          <FinaleStage view={view} />
         </main>
-      );
+      ) : null;
     case "FINAL_RESULTS":
       return <Results view={view} />;
   }
@@ -231,9 +239,32 @@ function Lobby(props: { readonly view: AnyView }) {
       <div className="page-heading">
         <p className="eyebrow">{t("lobby.eyebrow")}</p>
         <h1>{t("lobby.title")}</h1>
-        <p className="muted">{t("lobby.description")}</p>
+        <p className="muted">
+          {t(view.kind === "player" ? "lobby.description" : "experience.hostLobby")}
+        </p>
       </div>
       <Rules view={view} />
+      <section className="participants" aria-labelledby="players-title">
+        <h2 id="players-title">{t("lobby.players", { count: view.players.length })}</h2>
+        <p className="muted roster-hint">{t("experience.rosterHint")}</p>
+        <ul className="player-list">
+          {view.players.map((p) => (
+            <li key={p.id} className={p.online ? "" : "is-offline"}>
+              <span className="avatar" aria-hidden="true">
+                {p.nickname.slice(0, 1).toLocaleUpperCase()}
+              </span>
+              <span className="player-name">
+                {p.nickname}
+                {p.id === view.me.player_id && <small>{t("app.you")}</small>}
+                {p.is_host && <small>{t("app.host")}</small>}
+                {!p.online && <small>{t("status.offline")}</small>}
+                {p.spectator && <small>{t("ux.spectator")}</small>}
+                {p.team && <small>{p.team}</small>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
       <section className="audio-setup" aria-labelledby="audio-title">
         <div className="section-heading">
           <RecordMark />
@@ -257,29 +288,13 @@ function Lobby(props: { readonly view: AnyView }) {
             </Button>
           )}
         </div>
-        <Volume />
-        <Latency />
-        <RecoveryCode />
-      </section>
-      <section className="participants" aria-labelledby="players-title">
-        <h2 id="players-title">{t("lobby.players", { count: view.players.length })}</h2>
-        <ul className="player-list">
-          {view.players.map((p) => (
-            <li key={p.id} className={p.online ? "" : "is-offline"}>
-              <span className="avatar" aria-hidden="true">
-                {p.nickname.slice(0, 1).toLocaleUpperCase()}
-              </span>
-              <span className="player-name">
-                {p.nickname}
-                {p.id === view.me.player_id && <small>{t("app.you")}</small>}
-                {p.is_host && <small>{t("app.host")}</small>}
-                {!p.online && <small>{t("status.offline")}</small>}
-                {p.spectator && <small>{t("ux.spectator")}</small>}
-                {p.team && <small>{p.team}</small>}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <details className="disclosure lobby-audio-options">
+          <summary>{t("experience.soundOptions")}</summary>
+          <Volume />
+          <Latency />
+          <RecoveryCode />
+          <FinaleSoundControls />
+        </details>
       </section>
       <LiveRegion>
         <p className="waiting-line">
@@ -340,19 +355,19 @@ function Latency() {
 
 function RecoveryCode() {
   const [code, setCode] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useMessage("");
   return (
     <details className="disclosure">
-      <summary>{t("session.recoveryCode")}</summary>
-      <p>{t("session.codeHint")}</p>
+      <summary>{t("session.commonCode")}</summary>
+      <p>{t("session.commonHint")}</p>
       <Button
         onClick={async () => {
-          const r = await api.recoveryCode();
+          const r = await api.sharedCode();
           if (r.ok) setCode(r.data.code);
-          else setError(tCode("error", r.error));
+          else setError(() => tCode("error", r.error));
         }}
       >
-        {t("session.createCode")}
+        {t("session.commonCode")}
       </Button>
       {code && (
         <p role="status">
@@ -408,7 +423,7 @@ function RoundScreen(props: { readonly view: AnyView }) {
         </main>
       );
     case "COUNTDOWN":
-      return <Countdown startAt={round.official_start_at} />;
+      return <Countdown startAt={round.official_start_at} view={view} />;
     case "OPEN":
       if (!view.me.participant && view.kind !== "host_mc") return <SpectatorRound view={view} />;
       return "my_answer" in round ? (
@@ -417,38 +432,7 @@ function RoundScreen(props: { readonly view: AnyView }) {
         <McOpenNotice view={view} />
       );
     case "REVIEW":
-      if (view.kind !== "player")
-        return (
-          <div className="phase-band">
-            <strong>{t("round.reviewEyebrow")}</strong>
-            <span>{t(round.auto_advance_at != null ? "flow.nextRound" : "flow.waitManual")}</span>
-            {view.me.participant && "my_answer" in round && round.my_answer.text && (
-              <p className="own-answer">
-                {t("round.yourAnswer", { text: round.my_answer.text })}
-                {round.my_answer.status === "CAPTURED" && (
-                  <span className="muted"> {t("round.notValidated")}</span>
-                )}
-              </p>
-            )}
-          </div>
-        );
-      return (
-        <main className="stack">
-          <p className="eyebrow">{t("round.reviewEyebrow")}</p>
-          <StageMessage
-            title={t("round.review")}
-            description={t(round.auto_advance_at != null ? "flow.nextRound" : "flow.waitManual")}
-          />
-          {"my_answer" in round && round.my_answer.text && (
-            <p className="own-answer">
-              {t("round.yourAnswer", { text: round.my_answer.text })}
-              {round.my_answer.status === "CAPTURED" && (
-                <span className="muted"> {t("round.notValidated")}</span>
-              )}
-            </p>
-          )}
-        </main>
-      );
+      return <ClosedRound view={view} />;
     case "REVEALED":
       return <Reveal view={view} />;
   }
@@ -459,7 +443,7 @@ function McOpenNotice(props: { readonly view: AnyView }) {
   const now = useServerNow(true);
   if (round?.state !== "OPEN" || !("per_player" in round)) return null;
   return (
-    <main className="stack">
+    <main className="stack mc-open-round">
       <Playback view={props.view} now={now} />
       <h1>{t("round.mcTitle")}</h1>
       <p className="muted">{t("round.mcHint")}</p>
@@ -483,12 +467,53 @@ function McOpenNotice(props: { readonly view: AnyView }) {
   );
 }
 
-function Countdown(props: { readonly startAt: number }) {
+function ClosedRound({ view }: { readonly view: AnyView }) {
+  const now = useServerNow(true);
+  const round = view.round;
+  if (round?.state !== "REVIEW") return null;
+  const last = (view.game?.round_number ?? 0) >= (view.game?.rounds_total ?? 1);
+  const seconds =
+    round.auto_advance_at == null
+      ? null
+      : Math.max(0, Math.ceil((round.auto_advance_at - now) / 1000));
+  const mine = "my_answer" in round ? round.my_answer : null;
+  return (
+    <main className="stack closed-round">
+      <p className="eyebrow">
+        {t("round.header", {
+          n: view.game?.round_number ?? 1,
+          total: view.game?.rounds_total ?? 1,
+        })}
+      </p>
+      <RecordMark size="large" />
+      <h1>{t("round.reviewEyebrow")}</h1>
+      {view.me.participant && (
+        <section className="answer-saved">
+          <h2>{t(mine?.text ? "experience.answerClosed" : "round.noAnswer")}</h2>
+          {mine?.text && <p className="own-answer">{mine.text}</p>}
+          {mine?.status === "CAPTURED" && <p className="muted">{t("round.notValidated")}</p>}
+        </section>
+      )}
+      <p role="status" className="round-transition">
+        {seconds == null
+          ? t(last ? "experience.finalNext" : "flow.waitManual")
+          : t(last ? "experience.finaleIn" : "experience.nextIn", { s: seconds })}
+      </p>
+    </main>
+  );
+}
+
+function Countdown(props: { readonly startAt: number; readonly view: AnyView }) {
   const now = useServerNow(true);
   const seconds = Math.max(0, Math.ceil((props.startAt - now) / 1000));
   return (
     <main className="countdown-stage">
-      <p className="eyebrow">{t("lobby.eyebrow")}</p>
+      <p className="eyebrow">
+        {t("round.header", {
+          n: props.view.game?.round_number ?? 1,
+          total: props.view.game?.rounds_total ?? 1,
+        })}
+      </p>
       <p className="countdown" aria-hidden="true">
         {seconds > 0 ? seconds : "♪"}
       </p>
@@ -552,7 +577,7 @@ function OpenRound(props: { readonly view: AnyView; readonly round: RoundOpen })
       initialised.current = round.round_id;
       setText(round.my_answer.text ?? round.my_answer.draft_text ?? "");
       if (window.matchMedia("(pointer: fine)").matches && view.me.participant)
-        input.current?.focus();
+        input.current?.focus({ preventScroll: true });
     }
   }, [round, view.me.participant]);
   useEffect(() => () => window.clearTimeout(draftTimer.current), []);
@@ -575,23 +600,36 @@ function OpenRound(props: { readonly view: AnyView; readonly round: RoundOpen })
       <AnswerDeadline view={view} deadline={round.deadline} now={now} />
       <Playback view={view} now={now} />
       {engine.lateJoinMs !== null && (
-        <p className="notice">{t("round.lateJoin", { time: formatSeconds(engine.lateJoinMs) })}</p>
+        <p className="notice round-late-notice">
+          {t("round.lateJoin", { time: formatSeconds(engine.lateJoinMs) })}
+        </p>
       )}
       <div className="page-heading">
         <h1>
           {t(
             view.rules?.answer_mode === "custom"
               ? "flow.customPrompt"
-              : view.rules?.answer_mode === "title"
-                ? "flow.titlePrompt"
-                : view.rules?.answer_mode === "artist"
-                  ? "flow.artistPrompt"
-                  : "round.openTitle",
+              : view.rules?.answer_mode === "fields"
+                ? "auto.fields"
+                : view.rules?.answer_mode === "title"
+                  ? "flow.titlePrompt"
+                  : view.rules?.answer_mode === "artist"
+                    ? "flow.artistPrompt"
+                    : "round.openTitle",
           )}
         </h1>
-        {clip.kind === "ended" && !locked && <p className="muted">{t("audio.endedHint")}</p>}
+        <p className="round-status muted">
+          {clip.kind === "ended" && !locked
+            ? t("experience.answerNow", {
+                s: Math.max(
+                  0,
+                  Math.ceil((view.paused ? view.paused.remaining_ms : round.deadline - now) / 1000),
+                ),
+              })
+            : t("experience.listening")}
+        </p>
       </div>
-      <Rules view={view} />
+      <Rules view={view} compact />
       {locked ? (
         <section className="answer-saved">
           <LiveRegion>
@@ -607,15 +645,17 @@ function OpenRound(props: { readonly view: AnyView; readonly round: RoundOpen })
             id="answer"
             ref={input}
             value={text}
-            maxLength={200}
+            maxLength={view.rules?.answer_max_chars ?? 1000}
             placeholder={t(
               view.rules?.answer_mode === "custom"
                 ? "flow.customPrompt"
-                : view.rules?.answer_mode === "title"
-                  ? "flow.titlePrompt"
-                  : view.rules?.answer_mode === "artist"
-                    ? "flow.artistPrompt"
-                    : "round.answerPlaceholder",
+                : view.rules?.answer_mode === "fields"
+                  ? "auto.fields"
+                  : view.rules?.answer_mode === "title"
+                    ? "flow.titlePrompt"
+                    : view.rules?.answer_mode === "artist"
+                      ? "flow.artistPrompt"
+                      : "round.answerPlaceholder",
             )}
             aria-describedby="draft-hint"
             onChange={(e) => onChange(e.target.value)}
@@ -710,10 +750,11 @@ function Reveal(props: { readonly view: AnyView }) {
 export function Standings(props: {
   readonly rows: readonly StandingRow[];
   readonly view: AnyView;
+  readonly showTeams?: boolean;
 }) {
   return (
     <section className="standings">
-      {!!props.view.team_standings?.length && (
+      {props.showTeams !== false && !!props.view.team_standings?.length && (
         <>
           <h2>{t("ux.teamStandings")}</h2>
           <ol className="standing-list">
@@ -752,104 +793,94 @@ function Results(props: { readonly view: AnyView }) {
   if (!results) return null;
   return (
     <main className="stack results">
-      <div className="page-heading">
-        <p className="eyebrow">{t("results.eyebrow")}</p>
-        <h1>{t("results.title")}</h1>
-        <p className="muted">{t("results.rounds", { count: results.rounds_played })}</p>
-      </div>
-      {(view.team_standings?.length ?? 0) > 0 ? (
-        <>
-          <h2>{t("flow.teamRanking")}</h2>
-          <ol className="podium">
-            {view.team_standings
-              ?.filter((row) => row.rank <= 3)
-              .map((row) => (
-                <li key={row.team} className={row.rank === 1 ? "podium-first" : ""}>
-                  <span className="podium-rank">{row.rank}.</span>
-                  <span className="podium-name">{row.team}</span>
-                  <strong>{t("standings.points", { score: row.score })}</strong>
+      <FinalPodium view={view}>
+        <div className="page-heading">
+          <h2>{t("results.title")}</h2>
+          <p className="muted">{t("results.rounds", { count: results.rounds_played })}</p>
+        </div>
+        <Standings
+          rows={results.standings}
+          view={view}
+          showTeams={view.team_standings.some((row) => row.rank > 3)}
+        />
+        {results.final_adjustments.length > 0 && (
+          <section className="final-adjustments">
+            <h2>{t("results.corrections")}</h2>
+            <ul className="list">
+              {results.final_adjustments.map((adj) => (
+                <li key={adj.player_id}>
+                  {t("results.adjustment", {
+                    name: nameOf(view, adj.player_id),
+                    delta: formatDelta(adj.delta),
+                  })}
+                  {adj.note && <p className="muted">{adj.note}</p>}
                 </li>
               ))}
-          </ol>
-          <p className="muted">{t("flow.unassigned")}</p>
-        </>
-      ) : (
-        <ol className="podium">
-          {results.podium.map((row) => (
-            <li key={row.player_id} className={row.rank === 1 ? "podium-first" : ""}>
-              <span className="podium-rank">{row.rank}.</span>
-              <span className="podium-name">{nameOf(view, row.player_id)}</span>
-              <strong>{t("standings.points", { score: row.score })}</strong>
-            </li>
-          ))}
-        </ol>
-      )}
-      <Standings rows={results.standings} view={view} />
-      {results.final_adjustments.length > 0 && (
-        <section className="final-adjustments">
-          <h2>{t("results.corrections")}</h2>
-          <ul className="list">
-            {results.final_adjustments.map((adj) => (
-              <li key={adj.player_id}>
-                {t("results.adjustment", {
-                  name: nameOf(view, adj.player_id),
-                  delta: formatDelta(adj.delta),
-                })}
-                {adj.note && <p className="muted">{adj.note}</p>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      <p className="muted">{t("results.hint")}</p>
-      {view.game && (
-        <ExportResults
-          record={{
-            version: 2,
-            started_at: null,
-            settings: null,
-            sources: [],
-            game_id: view.game.game_id,
-            finished_at: results.finished_at ?? Date.now(),
-            players: view.players,
-            results,
-            teams: view.team_standings ?? [],
-          }}
-        />
-      )}
-      <Recap rows={results.recap ?? []} players={view.players} />
+            </ul>
+          </section>
+        )}
+        <p className="muted">{t("results.hint")}</p>
+        {view.game && (
+          <ExportResults
+            record={{
+              version: 2,
+              started_at: null,
+              settings: null,
+              sources: [],
+              game_id: view.game.game_id,
+              finished_at: results.finished_at ?? Date.now(),
+              players: view.players,
+              results,
+              teams: view.team_standings ?? [],
+            }}
+          />
+        )}
+        <Recap rows={results.recap ?? []} players={view.players} />
+      </FinalPodium>
     </main>
   );
 }
 
-function Rules({ view }: { readonly view: AnyView }) {
+function Rules({ view, compact = false }: { readonly view: AnyView; readonly compact?: boolean }) {
   const rules = view.rules;
   if (!rules) return null;
   const mode =
-    rules.answer_mode === "title"
-      ? t("ux.modeTitle")
-      : rules.answer_mode === "artist"
-        ? t("ux.modeArtist")
-        : rules.answer_mode === "custom"
-          ? t("ux.modeCustom")
-          : t("ux.modeBoth");
+    rules.answer_mode === "fields"
+      ? t("auto.fields")
+      : rules.answer_mode === "title"
+        ? t("ux.modeTitle")
+        : rules.answer_mode === "artist"
+          ? t("ux.modeArtist")
+          : rules.answer_mode === "custom"
+            ? t("ux.modeCustom")
+            : t("ux.modeBoth");
   return (
-    <aside className="game-rules" aria-label={t("ux.rules")}>
+    <aside className={`game-rules ${compact ? "rules-compact" : ""}`} aria-label={t("ux.rules")}>
       <strong>{mode}</strong>
-      {rules.answer_mode !== "artist" && rules.answer_mode !== "custom" && (
-        <span>{t("ux.titleWorth", { points: rules.title_points })}</span>
-      )}
-      {rules.answer_mode !== "title" && rules.answer_mode !== "custom" && (
-        <span>{t("ux.artistWorth", { points: rules.artist_points })}</span>
-      )}
+      {criteriaFor(rules)
+        .filter((key) => key !== "custom")
+        .map((key) => (
+          <span key={key}>
+            {t("auto.fieldWorth", {
+              field: criterionLabel(key),
+              points: criterionPoints(key, rules),
+            })}
+          </span>
+        ))}
       {rules.answer_mode === "custom" && (
         <span>
-          {t("flow.customPoints")}: {rules.custom_points ?? 1}
+          {compact
+            ? t("standings.points", { score: rules.custom_points ?? 1 })
+            : `${t("flow.customPoints")}: ${rules.custom_points ?? 1}`}
         </span>
       )}
-      <small>
-        {rules.captured_policy === "zero" ? t("ux.capturedZero") : t("ux.capturedManual")}
-      </small>
+      {rules.scoring_mode === "auto" && <small>{t("auto.hint")}</small>}
+      {(rules.scoring_mode !== "auto" || rules.captured_policy === "zero") &&
+        (!compact || rules.captured_policy === "zero") && (
+          <small>
+            {rules.captured_policy === "zero" ? t("ux.capturedZero") : t("ux.capturedManual")}
+          </small>
+        )}
       {rules.instructions && <p>{rules.instructions}</p>}
     </aside>
   );
@@ -876,7 +907,9 @@ function AnswerDeadline({
       aria-label={t("ux.answerDeadline")}
     >
       <strong>{view.paused ? t("ux.paused") : t("round.timeLeft", { s: remaining })}</strong>
-      {urgent && <span aria-hidden="true">⚠</span>}
+      <span className="deadline-number" aria-hidden="true">
+        {t("experience.seconds", { s: remaining })}
+      </span>
       {view.paused && <span>{view.paused.resume_at ? t("ux.resuming") : t("ux.timerFrozen")}</span>}
       <span className="sr-only" role="status">
         {urgent ? t("ux.lastSeconds") : ""}

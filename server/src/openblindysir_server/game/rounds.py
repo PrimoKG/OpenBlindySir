@@ -1,5 +1,8 @@
 """Round machine (spec §7.2), ready check (§9.4), scoring of a round (§6.4–6.5)."""
 
+from copy import deepcopy
+from dataclasses import asdict
+
 from openblindysir_protocol.enums import (
     AnswerStatus,
     AssetFailureCode,
@@ -27,7 +30,7 @@ from openblindysir_protocol.host_commands import (
     HostTrackMetadata,
     HostUndoPublish,
 )
-from openblindysir_server.game import assets, library, selection
+from openblindysir_server.game import assets, auto_scoring, library, selection
 from openblindysir_server.game.answers import capture_drafts
 from openblindysir_server.game.clock import Instant
 from openblindysir_server.game.effects import EffectSink, Play, SendPlay, SendStop
@@ -147,6 +150,9 @@ def begin_countdown(s: SessionState, r: Round, at: Instant, fx: EffectSink) -> N
     start_at = at.mono_ms + s.config.lead_ms
     play = Play(s.ids.play_id(), asset.asset_id, start_at, 0.0, start_at + duration)
     r.official_start_at = start_at
+    if s.game.settings.scoring_mode == "auto":
+        r.auto_config = s.game.settings.copy()
+        r.auto_reference = build_auto_reference(s, r)
     r.plays.append(play)
     r.deadline = start_at + duration + s.game.settings.answer_grace_s * 1000
     r.state = RoundState.COUNTDOWN
@@ -229,6 +235,7 @@ def close_round(
     stop_play(r, fx)
     r.paused_at = r.resume_at = None
     r.reveal = build_reveal(s, r)
+    auto_scoring.grade_round(s, r)
     s.touched = True
     fx.log("round_closed", round_id=r.id, locked=locked, captured=captured, reason=reason.value)
 
@@ -273,6 +280,30 @@ def decode_failure(s: SessionState, r: Round, fx: EffectSink) -> None:
 # --- reveal ---------------------------------------------------------------------------------
 
 
+def build_auto_reference(s: SessionState, r: Round) -> Metadata:
+    """Only metadata/tags are scoring references, never the display filename fallback."""
+    assert r.slot.track_ref is not None
+    meta = musical_metadata(s, r.slot.track_ref)
+    asset = s.assets.get(r.slot.asset_id or "")
+    title, artist = clean_metadata(
+        None
+        if "title" in (meta.cleared_fields or [])
+        else meta.title or (asset.title if asset else None),
+        None
+        if "artist" in (meta.cleared_fields or [])
+        else meta.artist or (asset.artist if asset else None),
+        "",
+    )
+    return Metadata(
+        title=None if "title" in (meta.cleared_fields or []) else title or None,
+        artist=None if "artist" in (meta.cleared_fields or []) else artist,
+        album=meta.album,
+        year=meta.year,
+        featuring=meta.featuring,
+        aliases=deepcopy(meta.aliases),
+    )
+
+
 def build_reveal(s: SessionState, r: Round) -> RevealInfo:
     """Current track metadata, visible privately at review and publicly after publication."""
     ref = r.slot.track_ref
@@ -294,6 +325,10 @@ def build_reveal(s: SessionState, r: Round) -> RevealInfo:
         display = "?"
     title, artist = clean_metadata(title, artist, display)
     title, artist = metadata.title or title, metadata.artist or artist
+    if "title" in (metadata.cleared_fields or []):
+        title = None
+    if "artist" in (metadata.cleared_fields or []):
+        artist = None
     display = " — ".join(part for part in (artist, title) if part) or display
     folder = bridge_name
     if entry is not None and entry.folder:
@@ -306,6 +341,8 @@ def build_reveal(s: SessionState, r: Round) -> RevealInfo:
         featuring=metadata.featuring if metadata else None,
         album=metadata.album if metadata else None,
         year=metadata.year if metadata else None,
+        aliases=metadata.aliases,
+        cleared_fields=metadata.cleared_fields,
     )
 
 
@@ -436,12 +473,27 @@ def h_track_metadata(
     del at, fx
     r = review_by_key(s, msg.round_id)
     require_rule("track_metadata", s, issuer)
+    require(
+        msg.args.expected_revision is None or msg.args.expected_revision == r.metadata_revision,
+        ErrorCode.STALE_COMMAND,
+    )
     assert r.slot.track_ref is not None
-    s.metadata[r.slot.track_ref] = Metadata(**msg.args.model_dump())
+    s.metadata[r.slot.track_ref] = Metadata(
+        **{
+            **asdict(s.metadata.get(r.slot.track_ref, Metadata())),
+            **msg.args.model_dump(
+                exclude_unset=True, exclude={"regrade_auto", "expected_revision"}
+            ),
+        }
+    )
+    s.metadata_revision += 1
     for played in s.game.rounds:
         if played.slot.track_ref == r.slot.track_ref and played.reveal is not None:
             played.reveal = build_reveal(s, played)
             played.metadata_revision += 1
+    if msg.args.regrade_auto and r.auto_config is not None:
+        r.auto_reference = build_auto_reference(s, r)
+        auto_scoring.grade_round(s, r, regrade=True)
     s.touched = True
 
 
@@ -514,18 +566,11 @@ def h_score_draft(
         ErrorCode.STALE_COMMAND,
     )
     if msg.args.judgement == "criteria":
-        cfg = s.game.settings
-        applicable = {
-            "title": ("title_correct",),
-            "artist": ("artist_correct",),
-            "both": ("title_correct", "artist_correct"),
-            "custom": ("custom_correct",),
-        }[cfg.answer_mode]
+        cfg = r.auto_config or s.game.settings
+        applicable = tuple(f"{key}_correct" for key in auto_scoring.criteria(cfg))
         decisions = {key: getattr(msg.args, key) for key in applicable}
         weights = {
-            "title_correct": cfg.title_points,
-            "artist_correct": cfg.artist_points,
-            "custom_correct": cfg.custom_points,
+            key: getattr(cfg, f"{key.removesuffix('_correct')}_points") for key in applicable
         }
         points = sum(weights[key] for key, correct in decisions.items() if correct is True)
         require(msg.args.points == points, ErrorCode.INVALID_ARGS)
@@ -538,6 +583,7 @@ def h_score_draft(
         r.judgements.pop(pid, None)
         r.score_reviewed.add(pid)
     r.score_revisions[pid] = revision + 1
+    r.auto_overrides.add(pid)
     if msg.args.points == 0:
         r.score_draft.pop(msg.args.player_id, None)
     else:

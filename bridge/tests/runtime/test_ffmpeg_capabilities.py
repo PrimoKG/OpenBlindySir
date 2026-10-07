@@ -48,7 +48,37 @@ def test_missing_output_or_processing_capabilities_rejected(monkeypatch, option)
         ffmpeg.check(ffmpeg.FfmpegTools("ffmpeg", "ffprobe"))
 
 
-def test_old_ffmpeg_rejected(monkeypatch):
-    capabilities(monkeypatch, version="4.3.9")
+@pytest.mark.parametrize("version", ["4.3.9", "4.4", "7.1.5", "8.1.2", "9.0", "9.0.1"])
+def test_old_ffmpeg_rejected(monkeypatch, version):
+    capabilities(monkeypatch, version=version)
     with pytest.raises(ffmpeg.FfmpegMissingError, match="trop ancien"):
         ffmpeg.check(ffmpeg.FfmpegTools("ffmpeg", "ffprobe"))
+
+
+@pytest.mark.parametrize("label", ["encoder", "probe"])
+def test_mixed_versions_are_rejected(monkeypatch, label):
+    responses = capabilities(monkeypatch)
+    monkeypatch.setattr(
+        ffmpeg,
+        "_capabilities",
+        lambda executable, option: (
+            "ffmpeg version 9.0.1"
+            if executable == ("ffmpeg" if label == "encoder" else "ffprobe")
+            and option == "-version"
+            else responses[option]
+        ),
+    )
+    with pytest.raises(ffmpeg.FfmpegMissingError, match=r"9\.0\.2"):
+        ffmpeg.check(ffmpeg.FfmpegTools("ffmpeg", "ffprobe"))
+
+
+def test_unknown_version_is_not_assumed_safe(monkeypatch):
+    capabilities(monkeypatch, version="N-custom")
+    with pytest.raises(ffmpeg.FfmpegMissingError, match="non identifiable"):
+        ffmpeg.check(ffmpeg.FfmpegTools("ffmpeg", "ffprobe"))
+
+
+@pytest.mark.parametrize("version", ["9.0.2", "n9.0.2-1-gabcdef", "9.0.3", "9.1", "10.0"])
+def test_supported_versions_keep_patch_precision(monkeypatch, version):
+    capabilities(monkeypatch, version=version)
+    assert ffmpeg.check(ffmpeg.FfmpegTools("ffmpeg", "ffprobe"))

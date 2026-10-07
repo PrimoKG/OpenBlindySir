@@ -18,6 +18,27 @@ Ouvrez un terminal dans ce dossier. Git n'est pas nécessaire avec une archive Z
 Un accès Internet est nécessaire au premier build pour télécharger les bases,
 les dépendances verrouillées et FFmpeg. La compilation se fait dans Docker.
 
+Les runtimes app/Bridge utilisent Debian 13 avec Python 3.13 ; Caddy et les
+bases sont fixés par digest. Les paquets APT sont mis à jour au build : les
+artefacts produits peuvent évoluer sans modification du digest de base.
+Le proxy est construit via la cible `proxy` et l’image `openblindysir-caddy:local` :
+elle conserve Caddy officiel et applique le correctif zlib 1.3.2-r1.
+Avant une release, relever les digests finaux et rescanner ces images.
+Le [rapport de durcissement et scan local](audits/2026-10-05-security-hardening.md)
+documente les versions testées et l’applicabilité des alertes résiduelles.
+Le Bridge compile FFmpeg 9.0.2 à partir de sources signées : fonctions audio,
+conteneurs locaux autorisés, aucun protocole réseau ni décodeur vidéo. AAC/Opus,
+extraction audio des conteneurs vidéo et mode démo restent disponibles. Les
+sources exactes, licences et recette sont dans `/usr/local/share/licenses/ffmpeg`.
+La première compilation ajoute du temps au build. Les versions natives exigent
+également FFmpeg/ffprobe 9.0.2 ou plus.
+
+Les images app/Bridge fixent `LOCALDOMAIN=.` pour ne pas reprendre une longue
+liste de recherche DNS fournie par DHCP/VPN. Utilisez une IP ou un nom de serveur
+pleinement qualifié ; les noms courts dépendant d’un suffixe implicite ne sont
+pas adaptés à cette configuration. Ne remplacez pas cet environnement sans
+réexaminer la protection documentée dans le rapport.
+
 Choisissez le dossier musical du PC. Il est monté **en lecture seule**, uniquement
 dans le Bridge ; le serveur n'y accède pas. Docker Desktop doit autoriser son accès
 à ce dossier. Sous Linux, le dossier et ses fichiers doivent être lisibles par
@@ -107,14 +128,15 @@ ouverture automatique peut donc afficher une alerte : configurez la confiance et
 rouvrez la page, sans désactiver la vérification TLS. Aucun certificat n'est installé
 automatiquement. En public, cette préparation privée n'est pas nécessaire.
 
-Consultez `hosting.env` dans un éditeur local. Envoyez aux joueurs uniquement
-l'adresse de la partie et **BLIND_PASSWORD**. Gardez **HOST_PASSWORD** pour
-l'hôte et **BRIDGE_SECRET** pour le Bridge. Le fichier entier est privé : ne le
-partagez pas et ne le mettez pas dans Git.
+Consultez `hosting.env` dans un éditeur local. Rejoignez avec **BLIND_PASSWORD**,
+puis ouvrez `/host` et activez l’accès hôte avec **HOST_PASSWORD**. Dans
+**Inviter les joueurs**, partagez le QR/lien : les invités saisissent seulement
+un pseudo. L’adresse simple exige le mot de passe de partie ; le **Code de session**
+est une autre possibilité via **Retrouver ma place**. Gardez **HOST_PASSWORD** et
+**BRIDGE_SECRET** privés. Ne partagez jamais le fichier entier et ne le mettez pas dans Git.
 
-Le Bridge est déjà lancé et connecté automatiquement. Sur `/host`, rejoignez,
-élevez-vous avec le mot de passe hôte, sélectionnez vos dossiers, enregistrez les
-réglages et lancez après le test audio des joueurs. Le
+Le Bridge est déjà lancé et connecté automatiquement. Sélectionnez vos dossiers,
+enregistrez les réglages et lancez après le test audio des joueurs. Le
 [guide utilisateur](guide-utilisateur.md) décrit toutes les étapes.
 
 ## Relancer, arrêter et modifier
@@ -128,7 +150,14 @@ réglages et lancez après le test audio des joueurs. Le
 | Exporter la racine privée | `.\tools\docker-host.ps1 certificate` | `sh tools/docker-host.sh certificate` |
 | Arrêter | `.\tools\docker-host.ps1 stop` | `sh tools/docker-host.sh stop` |
 
-Arrêter ou recréer le serveur restaure la session depuis le volume **app_data**.
+Au prochain démarrage, le serveur restaure la session depuis le volume **app_data**.
+Dans cette pile, Caddy et le Bridge partagent le réseau du conteneur app
+(`network_mode: service:app`). Si une mise à jour recrée l’app, recréez aussi Caddy
+et le Bridge avec les mêmes images et volumes : utilisez le lanceur ou relancez
+la pile complète avec Compose. Recréer uniquement l’app avec `--no-deps` laisse
+les deux autres services dans l’ancien réseau et coupe l’accès. Une simple
+recréation du Bridge pour ajouter un montage reste possible sans recréer l’app.
+
 Une manche ouverte interrompue revient en correction avec ses réponses ; la musique
 est régénérée pour les manches à préparer. Gardez le PC allumé pendant le jeu.
 `stop` conserve la session, les certificats et l'identité du Bridge. Ne faites pas `docker compose down -v` si vous
@@ -144,7 +173,10 @@ port 443, `BIND_IP=0.0.0.0`, `CADDY_PROFILE=public`. Gardez une URL unique pour 
 Pour utiliser votre musique après une démo, renseignez `MUSIC_DIR` avec son chemin
 absolu (`D:/Musique` sous Windows) et mettez `BRIDGE_DEMO=false`, puis arrêtez et
 relancez. Le dossier doit déjà exister ; une faute de chemin ne crée pas un dossier
-vide silencieusement. Après un ajout de pistes, redémarrez le Bridge pour rescanner :
+vide silencieusement. Après un ajout de pistes dans un montage existant, utilisez
+**Sources et recherche de bibliothèque → Actualiser** : un rescan suffit, sans
+redémarrage. Pour redémarrer le Bridge si nécessaire, gardez les mêmes fichiers
+Compose `-f` que lors du lancement (voir ci-dessous). Sans override :
 
 ```powershell
 docker compose --env-file .local/docker/hosting.env restart bridge
@@ -165,6 +197,16 @@ En public, ajoutez `-f compose.yaml -f deploy/compose.public.yaml` **avant** l'a
 `up`, `ps`, `logs` ou `down`. Les lanceurs le font automatiquement et isolent les
 variables de configuration héritées du terminal. Les commandes directes Compose
 peuvent être influencées par ces variables : utilisez un terminal propre.
+
+Si vous avez des montages supplémentaires, incluez aussi
+`-f .local/docker/sources.override.yaml` après le fichier de base et l’éventuel
+profil public, dans **chaque commande**. Le lanceur Windows l’inclut automatiquement.
+Le lanceur Linux/macOS ne le charge pas : utilisez Compose directement pour
+conserver ces montages lors d’une recréation. Exemple privé :
+
+```sh
+docker compose --env-file .local/docker/hosting.env -f compose.yaml -f .local/docker/sources.override.yaml up -d --build --wait
+```
 
 ## Partager le même environnement
 
@@ -294,6 +336,14 @@ supplémentaires du Bridge. `start` les conserve lors d’un rebuild/recréation
 configuration privée, en plus de `hosting.env`. Les montages musicaux supplémentaires doivent rester en lecture seule.
 
 Après une mise à jour, rechargez les onglets et mettez tous les Bridges au protocole
-6. Les snapshots 1 à 4 sont lus puis sauvegardés au format 5 ; un redémarrage ne
+9. Les snapshots 1 à 8 sont lus puis sauvegardés au format 8 ; un redémarrage ne
 relance pas automatiquement une transition interrompue. L’hôte reprend la partie
 explicitement dans ses paramètres.
+
+## Certificat LAN et notation optionnelle
+
+Pour approuver l’autorité HTTPS locale sur Windows/iOS/Android, voir
+[certificat-local.md](certificat-local.md). Partager uniquement le certificat public
+`root.crt`, jamais ses clés. Le mode LAN est conservé.
+La [notation automatique](notation-automatique.md) nécessite de mettre à jour
+serveur, Bridge et interface ensemble (protocole 10, snapshot 8), après sauvegarde privée.

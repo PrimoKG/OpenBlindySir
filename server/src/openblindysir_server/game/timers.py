@@ -4,8 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import IntEnum
 
-from openblindysir_protocol.enums import CloseReason, RoundState
-from openblindysir_server.game import assets, rounds, selection
+from openblindysir_protocol.enums import CloseReason, GamePhase, RoundState
+from openblindysir_server.game import assets, game_flow, rounds, selection
 from openblindysir_server.game.clock import Instant
 from openblindysir_server.game.effects import EffectSink
 from openblindysir_server.game.state import (
@@ -28,6 +28,8 @@ class DueKind(IntEnum):
     PAUSE_START = 6
     BRIDGE_WAIT = 7
     NEXT_ROUND = 8
+    FINALE_WAVE = 9
+    FINALE_PLAY_END = 10
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -39,6 +41,15 @@ class Due:
 
 def pending(s: SessionState) -> list[Due]:
     dues: list[Due] = []
+    if s.game.phase is GamePhase.FINAL_SCORE_REVIEW:
+        play = s.game.finale_play
+        if play is not None:
+            dues.append(Due(play.ends_at, DueKind.FINALE_PLAY_END, play.play_id))
+        dues.extend(
+            Due(r.finale_wave_at, DueKind.FINALE_WAVE, r.id)
+            for r in s.game.rounds
+            if r.finale_wave_at is not None
+        )
     r = current_round(s.game)
     if r is not None:
         if r.state is RoundState.REVIEW and r.auto_advance_at is not None and r.paused_at is None:
@@ -73,6 +84,17 @@ def next_wakeup(s: SessionState) -> int | None:
 
 
 def apply(s: SessionState, due: Due, at: Instant, fx: EffectSink) -> None:
+    if due.kind is DueKind.FINALE_PLAY_END:
+        play = s.game.finale_play
+        if play is not None and play.play_id == due.ref:
+            s.game.finale_play = None
+            s.touched = True
+        return
+    if due.kind is DueKind.FINALE_WAVE:
+        target = next((r for r in s.game.rounds if r.id == due.ref), None)
+        if target is not None:
+            game_flow.advance_finale_awards(s, target, at)
+        return
     r = current_round(s.game)
     if due.kind is DueKind.NEXT_ROUND and r is not None and r.id == due.ref:
         rounds.advance_round(s, r, at, fx)

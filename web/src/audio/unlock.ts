@@ -33,6 +33,15 @@ function silentWavUrl(): string {
 }
 
 let silentLoop: HTMLAudioElement | null = null;
+let silentUrl: string | null = null;
+
+export function releasePlaybackSession(): void {
+  silentLoop?.pause();
+  silentLoop?.removeAttribute("src");
+  silentLoop = null;
+  if (silentUrl) URL.revokeObjectURL(silentUrl);
+  silentUrl = null;
+}
 
 /** iOS: Web Audio is muted by the silent switch unless the audio session is "playback". */
 export function applyPlaybackSession(): void {
@@ -46,7 +55,8 @@ export function applyPlaybackSession(): void {
     }
   }
   if (!silentLoop && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
-    silentLoop = new Audio(silentWavUrl());
+    silentUrl = silentWavUrl();
+    silentLoop = new Audio(silentUrl);
     silentLoop.loop = true;
     void silentLoop.play().catch(() => undefined);
   }

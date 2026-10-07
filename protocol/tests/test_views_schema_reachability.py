@@ -54,10 +54,10 @@ def test_mc_types_reachable_only_from_host_mc_view() -> None:
 
 
 @pytest.mark.parametrize("root", VIEW_ROOTS)
-def test_track_metadata_only_under_reveal_private_review_or_recap(root: str) -> None:
+def test_track_metadata_only_under_reveal_private_review_finale_or_recap(root: str) -> None:
     assert "RevealTrack" in reachable(root)
     without_reveal = reachable(
-        root, avoid=frozenset({"RoundRevealed", "ReviewRound", "HistoryEntry"})
+        root, avoid=frozenset({"RoundRevealed", "ReviewRound", "FinaleRound", "HistoryEntry"})
     )
     assert "RevealTrack" not in without_reveal
     assert "RevealRow" not in without_reveal

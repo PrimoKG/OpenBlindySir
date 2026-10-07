@@ -13,11 +13,49 @@ from pydantic import TypeAdapter
 
 from openblindysir_protocol.client import ClientMessage
 from openblindysir_server.game import commands as c
+from openblindysir_server.game import selection
 from openblindysir_server.game.state import CatalogEntryData, Metadata, TrackRef
 from openblindysir_server.library import routes
 
 CLIENT = TypeAdapter(ClientMessage)
 SECOND = "12345678-1234-1234-1234-123456789abd"
+
+
+def test_metadata_pack_reimport_and_revision_conflict(harness: Harness) -> None:
+    _, token, body = private_library(harness)
+    headers = {**harness.cookie(token), "Origin": ORIGIN}
+    entry = body["entries"][0]
+    edit = {
+        "bridge_id": BRIDGE_ID,
+        "track_id": entry["track_id"],
+        "expected_revision": 0,
+        "metadata": {"title": "Confirmed", "artist": "Artist", "cleared_fields": ["album"]},
+    }
+    assert harness.client.put("/api/host/metadata", headers=headers, json=edit).status_code == 200
+    edit["metadata"]["title"] = "Stale replacement"
+    assert harness.client.put("/api/host/metadata", headers=headers, json=edit).status_code == 409
+    exported = harness.client.get("/api/host/metadata/export", headers=headers)
+    assert exported.status_code == 200
+    assert exported.headers["x-next-offset"] == ""
+    imported = harness.client.post(
+        "/api/host/metadata/import-archive",
+        headers={**headers, "Content-Type": "application/zip"},
+        content=exported.content,
+    )
+    assert imported.status_code == 200
+    assert imported.json()["accepted"] == 1
+    result = harness.client.get("/api/host/library/search?quality=ready", headers=headers).json()
+    assert result["total"] == 1
+    assert result["tracks"][0]["cleared_fields"] == ["album"]
+    assert result["tracks"][0]["title"] == "Confirmed"
+    pid, player_token = harness.join("Player")
+    assert pid
+    assert (
+        harness.client.get(
+            "/api/host/metadata/export", headers=harness.cookie(player_token)
+        ).status_code
+        == 403
+    )
 
 
 def host_command(h: Harness, pid: str, cmd: str, args: dict | None = None) -> None:
@@ -182,7 +220,7 @@ def test_metadata_partial_import_manual_priority_search_and_export(harness: Harn
         found["tracks"][0]["artist"],
     ) == ("Imported", "Album", "Manual")
     exported = harness.client.get("/api/host/metadata", headers=headers).json()
-    assert exported["version"] == 1
+    assert exported["version"] == 2
     assert exported["rows"][0]["featuring"] == "Guest"
     assert (
         harness.client.get("/api/host/library/search?folder=Animes", headers=headers).json()[
@@ -226,7 +264,7 @@ def test_metadata_ambiguous_path_and_whole_document_validation(harness: Harness)
     )
     assert result.json()["issues"] == [{"row": 1, "code": "ambiguous"}]
     for payload in (
-        {"version": 2, "rows": []},
+        {"version": 99, "rows": []},
         {"version": True, "rows": []},
         {"version": 1, "rows": [], "extra": True},
     ):
@@ -335,3 +373,118 @@ def test_mutations_require_origin_and_import_has_a_memory_limit(harness: Harness
         headers={"origin": ORIGIN, "content-type": "application/json", **harness.cookie(token)},
     )
     assert response.status_code == 413
+
+
+def test_labels_activation_and_partial_edits_preserve_library_and_history(harness: Harness):
+    pid, token, body = private_library(harness)
+    headers = {"origin": ORIGIN, **harness.cookie(token)}
+    entry = body["entries"][0]
+    key = {"bridge_id": BRIDGE_ID, "track_id": entry["track_id"]}
+    assert (
+        harness.client.put(
+            "/api/host/metadata",
+            json={
+                **key,
+                "metadata": {
+                    "tags": [" Rock ", "rock", "2000s"],
+                    "linked_to": ["video game - Example"],
+                    "enabled": False,
+                },
+            },
+            headers=headers,
+        ).status_code
+        == 200
+    )
+    # The older round editor sends only title/artist; it must retain newer classification fields.
+    assert (
+        harness.client.put(
+            "/api/host/metadata", json={**key, "metadata": {"title": "Corrected"}}, headers=headers
+        ).status_code
+        == 200
+    )
+    root = "/api/host/library/search"
+    disabled = harness.client.get(
+        root + "?activation=disabled&tag=rock&linked_to=video%20game%20-%20Example", headers=headers
+    ).json()
+    assert disabled["total"] == 1
+    track = disabled["tracks"][0]
+    assert track["tags"] == ["Rock", "2000s"]
+    assert track["linked_to"] == ["video game - Example"]
+    assert track["title"] == "Corrected"
+    assert not track["available"]
+    assert harness.client.get(root + "?activation=active", headers=headers).json()["total"] == 5
+    assert harness.client.get(root + "?q=2000s", headers=headers).json()["total"] == 1
+    host_command(
+        harness, pid, "configure", {"sources": [{"bridge_id": BRIDGE_ID, "folder_prefix": ""}]}
+    )
+    state = harness.runtime.engine.state
+    ref = TrackRef(BRIDGE_ID, entry["track_id"])
+    assert ref not in selection.pool(state)
+    assert (
+        harness.client.put(
+            "/api/host/metadata",
+            json={**key, "metadata": {"enabled": True, "tags": [], "linked_to": []}},
+            headers=headers,
+        ).status_code
+        == 200
+    )
+    assert ref in selection.pool(state)
+    exported = harness.client.get("/api/host/metadata", headers=headers).json()
+    assert exported["version"] == 2
+    assert exported["rows"][0]["enabled"] is True
+    assert exported["rows"][0]["tags"] == []
+    assert state.journal.events() == ()
+    assert len(state.catalogs[BRIDGE_ID].entries) == 6
+
+
+def test_import_v2_labels_can_be_cleared_without_breaking_v1(harness: Harness):
+    _, token, body = private_library(harness)
+    headers = {"origin": ORIGIN, **harness.cookie(token)}
+    base = {"bridge_id": BRIDGE_ID, "relpath": body["entries"][0]["relpath"]}
+    for version, data in [
+        (2, {"tags": ["anime"], "linked_to": ["Naruto"], "enabled": False}),
+        (1, {"title": "Legacy title"}),
+        (2, {"tags": [], "linked_to": [], "enabled": True}),
+    ]:
+        response = harness.client.post(
+            "/api/host/metadata/import",
+            json={"version": version, "rows": [{**base, **data}]},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["accepted"] == 1
+    track = harness.client.get("/api/host/library/search?q=Legacy", headers=headers).json()[
+        "tracks"
+    ][0]
+    assert track["enabled"] is True
+    assert track["tags"] == track["linked_to"] == []
+
+
+def test_alias_export_import_roundtrip_preserves_scoring_variants(harness: Harness):
+    _, token, body = private_library(harness)
+    headers = {"origin": ORIGIN, **harness.cookie(token)}
+    entry = body["entries"][0]
+    ref = TrackRef(BRIDGE_ID, entry["track_id"])
+    aliases = {"artist": ["Stage Name"], "title": ["Alternate Title"]}
+    assert (
+        harness.client.put(
+            "/api/host/metadata",
+            headers=headers,
+            json={
+                "bridge_id": BRIDGE_ID,
+                "track_id": entry["track_id"],
+                "metadata": {"aliases": aliases},
+            },
+        ).status_code
+        == 200
+    )
+    exported = harness.client.get("/api/host/metadata", headers=headers).json()
+    assert exported["rows"][0]["aliases"] == aliases
+    harness.runtime.engine.state.metadata.pop(ref)
+    assert (
+        harness.client.post("/api/host/metadata/import", headers=headers, json=exported).json()[
+            "accepted"
+        ]
+        == 1
+    )
+    assert harness.runtime.engine.state.imported_metadata[ref].aliases == aliases

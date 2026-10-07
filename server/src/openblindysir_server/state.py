@@ -32,6 +32,17 @@ class AppState:
     recovery_limiter: SlidingWindowLimiter = field(
         default_factory=lambda: SlidingWindowLimiter(5, 60)
     )
+    player_ws_counter: ConnectionCounter = field(default_factory=lambda: ConnectionCounter(2))
+    library_search_busy: bool = False
+    library_search_limiter: SlidingWindowLimiter = field(
+        default_factory=lambda: SlidingWindowLimiter(60, 300)
+    )
+    access_read_limiter: SlidingWindowLimiter = field(
+        default_factory=lambda: SlidingWindowLimiter(30, 1000)
+    )
+    access_poll_limiter: SlidingWindowLimiter = field(
+        default_factory=lambda: SlidingWindowLimiter(40, 60)
+    )
     bridge_auth_limiter: SlidingWindowLimiter = field(
         default_factory=lambda: SlidingWindowLimiter(10, 60)
     )

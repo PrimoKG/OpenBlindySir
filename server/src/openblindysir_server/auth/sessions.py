@@ -37,6 +37,9 @@ class SessionRegistry:
         self.idle_ttl_ms = idle_ttl_ms
         self._by_hash: dict[str, SessionRecord] = {}
         self._recovery: dict[str, str] = {}
+        from openblindysir_server.auth.access import SessionAccess  # noqa: PLC0415
+
+        self.access = SessionAccess()
 
     def recovery_code(self, player_id: str) -> str:
         self._recovery = {k: v for k, v in self._recovery.items() if v != player_id}
@@ -96,6 +99,9 @@ class SessionRegistry:
     def revoke_all(self) -> None:
         self._by_hash.clear()
         self._recovery.clear()
+        from openblindysir_server.auth.access import SessionAccess  # noqa: PLC0415
+
+        self.access = SessionAccess()
 
     def expire_idle(self, now_ms: int) -> None:
         stale = [

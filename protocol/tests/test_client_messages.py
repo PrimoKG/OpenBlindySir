@@ -31,10 +31,10 @@ def test_answer_submit_empty_text_is_not_a_schema_error() -> None:
     assert isinstance(parse({"t": "ANSWER_SUBMIT", "round_id": "r_abcd", "text": ""}), AnswerSubmit)
 
 
-def test_answer_text_bounded_to_200_chars() -> None:
-    parse({"t": "ANSWER_DRAFT", "round_id": "r_abcd", "text": "a" * 200})
+def test_answer_text_bounded_to_1500_chars() -> None:
+    parse({"t": "ANSWER_DRAFT", "round_id": "r_abcd", "text": "a" * 1500})
     with pytest.raises(ValidationError):
-        parse({"t": "ANSWER_DRAFT", "round_id": "r_abcd", "text": "a" * 201})
+        parse({"t": "ANSWER_DRAFT", "round_id": "r_abcd", "text": "a" * 1501})
 
 
 def test_strict_mode_refuses_coercion() -> None:

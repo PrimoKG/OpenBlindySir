@@ -5,16 +5,24 @@ Il ouvre une connexion sortante vers votre serveur ; aucun port entrant ni parta
 réseau n'est nécessaire. Les sources complètes restent locales. Le serveur et le
 build web se préparent avec [Docker](docker.md) ou le [lanceur PC](deployment.md).
 
-**État de distribution :** le dépôt prépare les paquets et archives ; aucune
-publication PyPI/GitHub n'est faite par cette modification. Les commandes PyPI
-ci-dessous s'utilisent après publication. Depuis le dépôt, remplacez `uvx` par
-`uv run` après `uv sync --locked`.
+**État de distribution :** cette version de développement n’a pas de release publiée.
+Aujourd’hui, utilisez [Docker](docker.md) ou le dépôt source. Depuis la racine du
+dépôt, après [installation de uv](https://docs.astral.sh/uv/getting-started/installation/) :
+
+```sh
+uv sync --locked
+uv run openblindysir-bridge --version
+```
+
+Les exemples exécutables ci-dessous utilisent `uv run`. Après publication, `uvx`
+permettra d’utiliser une version publiée compatible sans clone ; les archives
+natives constituent l’autre parcours prévu.
 
 ## Choisir une installation
 
 | Parcours | Plateformes prévues | Prérequis |
 |---|---|---|
-| `uvx openblindysir-bridge` | Windows, Linux, macOS ; CPython **3.12, 3.13, 3.14** | uv, Python compatible (uv peut le fournir), FFmpeg/ffprobe |
+| Dépôt source : `uv run openblindysir-bridge` ; après publication : `uvx openblindysir-bridge` | Windows, Linux, macOS ; CPython **3.12, 3.13, 3.14** | uv, Python compatible (uv peut le fournir), FFmpeg/ffprobe |
 | Archive `windows-x86_64` | Windows 10/11 x64 ; runner Windows 2025 | FFmpeg/ffprobe, aucun Python |
 | Archive `linux-x86_64` | Linux glibc ≥2.35 (construction Ubuntu 22.04) | FFmpeg/ffprobe, aucun Python ; Alpine/musl exclu |
 | Archives `macos-arm64`, `macos-x86_64` | macOS 15+ ; Apple Silicon et Intel séparément | FFmpeg/ffprobe, aucun Python |
@@ -53,8 +61,14 @@ Sources : [manifestes WinGet](https://github.com/microsoft/winget-pkgs/tree/mast
 Pour les autres distributions, utilisez leur gestionnaire de paquets officiel.
 Les licences de votre build FFmpeg sont distinctes de celles du Bridge.
 
+**Minimum de sécurité : FFmpeg et ffprobe 9.0.2.** Le paquet d'une distribution
+stable peut être plus ancien malgré `apt update` ; dans ce cas, utilisez le Bridge
+Docker ou un build récent référencé par le projet FFmpeg. Le Bridge refuse les
+versions antérieures et les versions non identifiables. Ce seuil ne remplace pas
+les mises à jour de sécurité ultérieures du fournisseur de votre build.
+
 ```sh
-uvx openblindysir-bridge check-ffmpeg
+uv run openblindysir-bridge check-ffmpeg
 ```
 
 Le contrôle vérifie les deux outils (≥4.4), les démultiplexeurs autorisés pour les
@@ -63,7 +77,7 @@ Opus/WebM est facultatif. La découverte utilise le PATH, puis le ffprobe voisin
 FFmpeg. Indiquez les chemins localement s'ils sont absents du PATH :
 
 ```powershell
-uvx openblindysir-bridge check-ffmpeg --ffmpeg 'C:\Tools\ffmpeg\bin\ffmpeg.exe' --ffprobe 'C:\Tools\ffmpeg\bin\ffprobe.exe'
+uv run openblindysir-bridge check-ffmpeg --ffmpeg 'C:\Tools\ffmpeg\bin\ffmpeg.exe' --ffprobe 'C:\Tools\ffmpeg\bin\ffprobe.exe'
 ```
 
 Conservez ces chemins via `OPENBLINDYSIR_BRIDGE_FFMPEG` et
@@ -72,19 +86,18 @@ Conservez ces chemins via `OPENBLINDYSIR_BRIDGE_FFMPEG` et
 
 ## Première configuration
 
-Installez [uv](https://docs.astral.sh/uv/getting-started/installation/), puis :
+Depuis le dépôt source préparé ci-dessus :
 
 Demandez d'abord à l'hôte un **fichier d'identité privé propre à ce Bridge**
 ([émission côté serveur](#identité-distincte-v05)). Placez-le hors du dépôt partagé
 et du dossier de l'archive, avec accès limité à votre compte. Dans les exemples,
-remplacez `CHEMIN_IDENTITE.toml` par son chemin réel. Depuis le checkout non publié,
-utilisez `uv run` à la place de `uvx`.
+remplacez `CHEMIN_IDENTITE.toml` par son chemin réel.
 
 ```sh
-uvx openblindysir-bridge --help
-uvx openblindysir-bridge --version
-uvx openblindysir-bridge init --credentials CHEMIN_IDENTITE.toml
-uvx openblindysir-bridge run --credentials CHEMIN_IDENTITE.toml
+uv run openblindysir-bridge --help
+uv run openblindysir-bridge --version
+uv run openblindysir-bridge init --credentials CHEMIN_IDENTITE.toml
+uv run openblindysir-bridge run --credentials CHEMIN_IDENTITE.toml
 ```
 
 Sans argument, une première exécution ouvre aussi l'assistant si des réglages
@@ -127,10 +140,10 @@ Gardez ce dossier pour conserver l'UUID et les sous-dossiers scannés. Deux Brid
 doivent avoir des fichiers/UUID distincts ; ne copiez pas leur identité.
 
 ```sh
-uvx openblindysir-bridge check-config --credentials CHEMIN_IDENTITE.toml
-uvx openblindysir-bridge doctor --credentials CHEMIN_IDENTITE.toml
-uvx openblindysir-bridge doctor --connect --credentials CHEMIN_IDENTITE.toml
-uvx openblindysir-bridge doctor --json --credentials CHEMIN_IDENTITE.toml
+uv run openblindysir-bridge check-config --credentials CHEMIN_IDENTITE.toml
+uv run openblindysir-bridge doctor --credentials CHEMIN_IDENTITE.toml
+uv run openblindysir-bridge doctor --connect --credentials CHEMIN_IDENTITE.toml
+uv run openblindysir-bridge doctor --json --credentials CHEMIN_IDENTITE.toml
 ```
 
 `check-config` ne scanne pas, n'écrit pas et ne se connecte pas. `doctor` vérifie
@@ -184,8 +197,8 @@ mainteneur. Ne désactivez pas ces protections ; le parcours uvx est une alterna
 
 ## Versions et mises à jour
 
-V0.5 utilise le **protocole 6**, plage admise 6 à 6. Bridge, serveur et build web doivent annoncer
-exactement ce protocole ; les protocoles 2/3/4/5 sont refusés. Le paquet Bridge dépend
+V0.5 utilise le **protocole 9**, plage admise 9 à 9. Bridge, serveur et build web doivent annoncer
+exactement ce protocole ; les protocoles 2 à 7 sont refusés. Le paquet Bridge dépend
 de la **même version exacte** du paquet protocole. Les versions `.dev` du dépôt ne
 sont pas des releases. Pour garder une release précise, après publication,
 remplacez `VERSION` ci-dessous par la version publiée correspondant au serveur :

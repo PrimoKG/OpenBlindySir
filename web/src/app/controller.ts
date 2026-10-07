@@ -28,6 +28,14 @@ export class GameController {
     compatibility: null,
   };
   private uiListeners = new Set<() => void>();
+  private unsubscribeView: (() => void) | null = null;
+  private readonly foreground = () => {
+    if (document.visibilityState === "visible") {
+      this.engine.refreshContextState();
+      this.socket.burstSync();
+      this.socket.ensureConnected();
+    }
+  };
 
   constructor() {
     this.engine = new AudioEngine(this.clock, () => false);
@@ -40,26 +48,31 @@ export class GameController {
       onPendingChange: (pending) => this.patchUi({ pendingSubmit: pending }),
     });
     this.engine.setSender((msg) => this.socket.send(msg));
-    this.store.subscribe(() => {
-      const snapshot = this.store.getSnapshot();
-      if (snapshot) {
-        this.engine.syncWithView(snapshot.view);
-        const round = snapshot.view.round;
-        if (round && round.state === "LOADING") {
-          this.socket.burstSync();
-        }
-      }
-    });
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-        this.socket.burstSync();
-        this.socket.ensureConnected();
-      }
-    });
   }
 
   start(): void {
+    this.engine.activate();
+    if (!this.unsubscribeView)
+      this.unsubscribeView = this.store.subscribe(() => {
+        const snapshot = this.store.getSnapshot();
+        if (snapshot) {
+          this.engine.syncWithView(snapshot.view);
+          const round = snapshot.view.round;
+          if (round && round.state === "LOADING") {
+            this.socket.burstSync();
+          }
+        }
+      });
+    document.addEventListener("visibilitychange", this.foreground);
     void this.socket.connect();
+  }
+
+  dispose(): void {
+    this.socket.close();
+    this.unsubscribeView?.();
+    this.unsubscribeView = null;
+    document.removeEventListener("visibilitychange", this.foreground);
+    this.engine.dispose();
   }
 
   send(msg: ClientMessage): boolean {

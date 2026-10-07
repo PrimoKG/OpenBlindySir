@@ -36,7 +36,7 @@ def clamp_request(prepare: Prepare, welcome: Welcome) -> ClipRequest:
     hi = min(max(welcome.limits.clip_max_s, lo), BRIDGE_CLIP_MAX_S)
     duration = min(
         max(prepare.duration, 0.1 if prepare.review_mode else lo),
-        30 if prepare.review_mode == "full" else hi,
+        15 if prepare.review_mode == "preview" else 30 if prepare.review_mode == "full" else hi,
     )
     fraction = min(max(prepare.start_fraction, 0.0), MAX_FRACTION)
     eligible = [b for b in ALLOWED_BITRATES if b <= welcome.bitrate]

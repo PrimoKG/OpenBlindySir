@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { getLanguage, t } from "../i18n";
 import { formatDelta, formatRank, formatSeconds } from "../i18n/format";
 import type { FinalReviewRow, GameRecord, ViewPlayer } from "../protocol";
 import { Button } from "../ui/components";
@@ -32,7 +32,7 @@ export function PlayerHistory({ row }: { readonly row: FinalReviewRow }) {
               <span>{entry.elapsed_ms !== null ? formatSeconds(entry.elapsed_ms) : "—"}</span>
               {entry.received_at_wall_ms != null && (
                 <time dateTime={new Date(entry.received_at_wall_ms).toISOString()}>
-                  {new Date(entry.received_at_wall_ms).toLocaleTimeString()}
+                  {new Date(entry.received_at_wall_ms).toLocaleTimeString(getLanguage())}
                 </time>
               )}
               <span>{formatRank(entry.order, entry.near_tie)}</span>

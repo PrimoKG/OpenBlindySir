@@ -1,0 +1,563 @@
+/* Keep the answer and the next shared action in view across the whole evening. */
+.phase-in_game .header {
+  min-height: 64px;
+  gap: 0.5rem;
+}
+.phase-in_game .game-layout {
+  margin-top: 0.65rem;
+  gap: 0.65rem;
+}
+.phase-in_game .host-console,
+.phase-lobby .host-console {
+  gap: 0.5rem;
+}
+.host-tools {
+  align-self: stretch;
+}
+.host-tools .host-toolbar {
+  border: 0;
+  padding: 0;
+  gap: 0.5rem;
+}
+.phase-in_game .host-toolbar {
+  justify-content: flex-end;
+}
+:where(.phase-in_game) .host-toolbar .btn {
+  min-height: 44px;
+  padding: 0.4rem 0.75rem;
+}
+.phase-in_game .player-stage {
+  padding: clamp(1rem, 2.2vw, 1.6rem);
+}
+.phase-in_game .player-stage > main {
+  min-height: min(460px, 65svh);
+}
+.open-round {
+  gap: 0.65rem;
+}
+.open-round .page-heading {
+  gap: 0.35rem;
+  margin: 0;
+}
+.open-round h1 {
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+}
+.round-status {
+  min-height: 1.6em;
+  font-size: 0.9rem;
+}
+.open-round .playback {
+  padding: 0;
+  border: 0;
+  gap: 0.75rem;
+}
+.open-round .playback .record {
+  width: 36px;
+  height: 36px;
+}
+.game-rules.rules-compact {
+  padding: 0.55rem 0.75rem;
+  font-size: 0.8rem;
+  gap: 0.3rem 0.65rem;
+  margin: 0;
+}
+.rules-compact small {
+  font-size: 0.75rem;
+}
+.rules-compact p {
+  margin: 0;
+  max-height: 4.8em;
+  overflow-y: auto;
+  width: 100%;
+}
+.answer-form {
+  gap: 0.45rem;
+}
+.answer-form input {
+  min-height: 52px;
+  font-size: 1.1rem;
+}
+.answer-form .btn {
+  min-height: 48px;
+}
+.answer-form .muted {
+  font-size: 0.8rem;
+}
+.answer-deadline {
+  padding: 0.5rem 0.8rem;
+  min-height: 48px;
+  border: 0;
+  background: var(--surface-alt);
+  gap: 0.6rem;
+}
+.answer-deadline strong {
+  font-size: 0.85rem;
+}
+.deadline-number {
+  margin-left: auto;
+  font-size: 1.35rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.answer-deadline.urgent {
+  border: 0;
+  color: var(--accent-hover);
+  background: #faeadc;
+}
+.answer-deadline.urgent .deadline-number {
+  animation: clock-beat 1s ease-out infinite;
+}
+.closed-round,
+.countdown-stage {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+}
+.closed-round h1 {
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
+}
+.closed-round .answer-saved {
+  padding: 1rem;
+  background: var(--surface-alt);
+  border-radius: 14px;
+  min-width: min(100%, 18rem);
+}
+.round-transition {
+  font-weight: 650;
+  color: var(--accent-hover);
+  font-variant-numeric: tabular-nums;
+}
+.lobby .page-heading {
+  gap: 0.5rem;
+}
+.lobby :where(.page-heading) h1 {
+  font-size: clamp(1.9rem, 3.5vw, 2.8rem);
+}
+.lobby .participants {
+  padding-top: 0;
+}
+.lobby .player-list {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.lobby .player-list li {
+  flex: 1 1 13rem;
+}
+.roster-hint {
+  font-size: 0.8rem;
+  margin-top: 0.35rem;
+}
+.lobby-audio-options > :not(summary) {
+  margin-top: 0.75rem;
+}
+.is-finale .game-layout {
+  margin-top: 1rem;
+}
+.is-finale .header {
+  min-height: 64px;
+}
+.finale-banner h1 {
+  font-size: clamp(1.8rem, 4vw, 2.7rem);
+}
+.finale-scene {
+  gap: 0.85rem;
+}
+.finale-track.host-scene-track {
+  min-height: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 15px;
+  gap: 0.8rem;
+}
+.host-scene-track h2 {
+  font-size: clamp(1.3rem, 2.5vw, 1.8rem);
+}
+.host-scene-track .eyebrow,
+.host-scene-track .track-artist {
+  font-size: 0.78rem;
+}
+.finale-host-controls {
+  gap: 0.7rem;
+}
+.scene-context {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.finale-present-controls {
+  justify-content: flex-start;
+}
+.finale-present-controls .btn {
+  font-size: 0.8rem;
+  padding: 0.45rem 0.75rem;
+  min-height: 44px;
+}
+.round-browser {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.85rem;
+}
+.round-browser > summary {
+  cursor: pointer;
+}
+.round-browser .review-search {
+  margin-top: 0.6rem;
+}
+.finale-host-controls .review-navigation ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  overflow: visible;
+}
+.review-navigation .btn[aria-current="step"],
+.review-navigation .btn[aria-current="step"]:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: var(--accent-text);
+  border-color: var(--accent-hover);
+}
+.preparation-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+.preparation-choice select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.45rem;
+}
+.finale-host-controls .review-heading h2 {
+  font-size: 1.2rem;
+}
+.review-heading .track-artist {
+  font-size: 0.85rem;
+}
+.expected-answer {
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  background: var(--surface-alt);
+}
+.expected-answer .eyebrow {
+  font-size: 0.65rem;
+}
+.expected-answer dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin: 0.4rem 0 0;
+}
+.expected-answer dt {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.expected-answer dd {
+  margin: 0;
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+.metadata-check {
+  margin-top: 0.5rem;
+}
+.metadata-check .notice {
+  font-size: 0.78rem;
+}
+.metadata-check .btn {
+  margin-top: 0.4rem;
+  min-height: 44px;
+  font-size: 0.78rem;
+}
+.eligible-count {
+  font-size: 0.75rem;
+}
+.absent-answer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.absent-answer > div:first-child {
+  flex: 1;
+}
+.absent-answer p,
+.absence-options,
+.absence-award small {
+  font-size: 0.75rem;
+}
+.absent-answer .btn {
+  font-size: 0.8rem;
+  min-height: 44px;
+}
+.absence-options {
+  flex-basis: 100%;
+}
+.absence-options input {
+  max-width: 6rem;
+  margin-top: 0.5rem;
+}
+.absent-answer.reviewed {
+  border-inline-start: 4px solid #638453;
+}
+.finale-scoreboard {
+  padding: 1rem;
+  gap: 0.6rem;
+}
+.finale-activity {
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+  font-size: 0.8rem;
+  min-height: 3rem;
+}
+.shared-replay-status,
+.scoring-not-started {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.final-review {
+  padding-bottom: 7rem;
+}
+html:has(.final-review) {
+  scroll-padding-bottom: 12rem;
+}
+.final-review > .row.finale-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(100% - 2rem), 1252px);
+  z-index: 8;
+  border-radius: 14px 14px 0 0;
+  padding: 0.8rem 1rem max(0.8rem, env(safe-area-inset-bottom));
+}
+.finale-action-bar .btn {
+  min-height: 48px;
+}
+.finale-action-bar span {
+  flex: 1 1 12rem;
+}
+.review-section,
+.answer-card,
+.absent-answer,
+.finale-adjustments {
+  scroll-margin-bottom: 12rem;
+}
+.finale-adjustments {
+  margin-top: 1rem;
+}
+.finale-track.is-revealed {
+  animation: reveal-arrival 500ms ease-out;
+}
+@keyframes clock-beat {
+  0% {
+    transform: scale(1.12);
+  }
+  60%,
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes reveal-arrival {
+  from {
+    opacity: 0.3;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.final-podium {
+  position: relative;
+  min-height: min(520px, 65svh);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1rem;
+  background: radial-gradient(ellipse at 50% 15%, #fff8dc, #eee6d2 70%);
+}
+.final-podium.has-winner {
+  box-shadow: inset 0 0 0 2px #d8aa4533;
+}
+.final-podium h1 {
+  font-size: clamp(2rem, 4.5vw, 3.5rem);
+}
+.podium-announcement {
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  font-weight: 700;
+}
+.ceremony-podium .podium-first {
+  background: linear-gradient(145deg, #3d432f, #292c26);
+  border: 2px solid #d8aa45;
+}
+.zero-game-message {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.celebration-sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.celebration-sparks i {
+  position: absolute;
+  top: -10%;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  animation: finale-confetti 1.7s ease-out both;
+}
+@keyframes finale-confetti {
+  from {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(520px) rotate(280deg);
+    opacity: 0;
+  }
+}
+@media (max-width: 760px) {
+  .phase-in_game .header-meta .round-number {
+    flex-basis: auto;
+  }
+  .phase-in_game .header {
+    min-height: 64px;
+    padding: 0.3rem 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.3rem 0.5rem;
+  }
+  .phase-in_game .header .brand {
+    grid-column: 1 / 3;
+    grid-row: 1;
+    font-size: 0.8rem;
+    gap: 0.4rem;
+  }
+  .phase-in_game .header .record {
+    width: 24px;
+    height: 24px;
+  }
+  .phase-in_game .header-meta {
+    display: contents;
+  }
+  .phase-in_game .header-meta .language-choice {
+    grid-column: 2;
+    grid-row: 2;
+    padding: 0;
+  }
+  .phase-in_game .header-meta .round-number {
+    grid-column: 3;
+    grid-row: 1;
+    font-size: 0.7rem;
+  }
+  .phase-in_game .header-meta .identity {
+    grid-column: 1;
+    grid-row: 2;
+    max-width: none;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 0.75rem;
+  }
+  .phase-in_game .header-meta > .btn {
+    grid-column: 3;
+    grid-row: 2;
+    min-height: 44px;
+    padding: 0.4rem 0.8rem;
+  }
+  .phase-in_game .host-jump {
+    display: none;
+  }
+  .phase-in_game .game-layout {
+    margin-top: 0.5rem;
+  }
+  .phase-in_game .host-toolbar {
+    justify-content: flex-start;
+  }
+  .phase-in_game .player-stage {
+    padding: 0.85rem;
+  }
+  .phase-in_game .open-round {
+    min-height: 0;
+  }
+  .open-round .rules-compact {
+    font-size: 0.72rem;
+  }
+  .open-round .rules-compact p {
+    max-height: 3.2em;
+  }
+  .open-round h1 {
+    font-size: 1.5rem;
+  }
+  .answer-deadline strong {
+    font-size: 0.78rem;
+  }
+  .deadline-number {
+    font-size: 1.15rem;
+  }
+  .round-status {
+    font-size: 0.78rem;
+  }
+  .preparation-choice {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+  .finale-layout {
+    gap: 0.85rem;
+  }
+  .finale-scoreboard .eyebrow {
+    display: none;
+  }
+  .finale-scoreboard {
+    position: static;
+    padding: 0.75rem;
+  }
+  .live-standings {
+    gap: 0.1rem;
+  }
+  .live-standings li {
+    padding: 0.4rem 0.5rem;
+  }
+  .my-finale-score {
+    padding: 0.6rem;
+  }
+  .my-finale-score > strong {
+    font-size: 1.8rem;
+  }
+  .finale-activity {
+    min-height: 0;
+  }
+  .final-review {
+    padding-bottom: 11rem;
+  }
+  .final-review > .row.finale-action-bar {
+    width: 100%;
+    gap: 0.5rem;
+    padding: 0.65rem max(0.65rem, env(safe-area-inset-left))
+      max(0.65rem, env(safe-area-inset-bottom));
+  }
+  .finale-action-bar > span {
+    flex-basis: 100%;
+    font-size: 0.75rem;
+  }
+  .final-review > .row.finale-action-bar .btn {
+    flex: 1 1 8rem;
+    font-size: 0.8rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .answer-deadline.urgent .deadline-number,
+  .finale-track.is-revealed,
+  .celebration-sparks i {
+    animation: none;
+  }
+  .celebration-sparks {
+    display: none;
+  }
+}

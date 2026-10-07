@@ -8,9 +8,10 @@ Commands produced while executing effects are dispatched FIFO in the same call.
 import asyncio
 import contextlib
 from collections import deque
-from dataclasses import dataclass, field
+from copy import deepcopy
+from dataclasses import dataclass, field, replace
 
-from openblindysir_protocol.enums import AnswerAckStatus, JobFailureCode
+from openblindysir_protocol.enums import AnswerAckStatus, JobFailureCode, Role
 from openblindysir_protocol.errors import CloseCode
 from openblindysir_protocol.server import AnswerAck, ErrorMsg, PlayMsg, StopMsg
 from openblindysir_protocol.views import AnyView
@@ -23,6 +24,7 @@ from openblindysir_server.game import Clock, GameEngine, Instant
 from openblindysir_server.game import commands as c
 from openblindysir_server.game import effects as e
 from openblindysir_server.game.history import RETENTION_DAYS, retained
+from openblindysir_server.game.state import Player, is_participant
 from openblindysir_server.logging import get, log_event
 from openblindysir_server.persistence import SnapshotStore
 from openblindysir_server.ws.bridge_link import ActiveBridge, BridgeLink
@@ -120,6 +122,54 @@ class Runtime:
             log_event(LOG_GAME, "snapshot_failed")
         if previous != self.engine.state.persistence_status:
             self.hub.mark_dirty()
+
+    def commit_sessions(self, candidate: SessionRegistry, *, player: Player | None = None) -> bool:
+        """Persist candidate credentials before changing live identities or closing sockets.
+
+        Synchronous and without effects/awaits: a failed write leaves old tokens,
+        pending approvals and participation intact. No full game/catalogue deepcopy.
+        """
+        self.prune_history()
+        state = self.engine.state
+        players = state.players if player is None else {**state.players, player.id: player}
+        proposed = replace(state, players=players, version=state.version + 1)
+        if self.snapshots is not None:
+            proposed.persistence_status = "ready"
+            try:
+                self.snapshots.save(
+                    self.engine,
+                    candidate,
+                    self.clock.now(),
+                    purge_previous=self._history_purge_pending,
+                    state=proposed,
+                )
+            except (OSError, ValueError):
+                state.persistence_status = "failed"
+                self.hub.mark_dirty()
+                log_event(LOG_GAME, "snapshot_failed")
+                return False
+            self._history_purge_pending = False
+        self.sessions = candidate
+        state.players = players
+        state.version = proposed.version
+        state.persistence_status = proposed.persistence_status
+        self.hub.mark_dirty()
+        return True
+
+    def transfer_identity(self, pid: str, candidate: SessionRegistry, now: int) -> str | None:
+        player = replace(self.engine.state.players[pid])
+        player.spectator = not is_participant(player)
+        player.role = Role.PLAYER  # Shared access never grants host privileges.
+        candidate.revoke((pid,))
+        token = candidate.issue(pid, now)
+        if not self.commit_sessions(candidate, player=player):
+            return None
+        self.hub.close(pid, int(CloseCode.SUPERSEDED))
+        self.dispatch(c.Disconnected(pid))
+        return token
+
+    def session_candidate(self) -> SessionRegistry:
+        return deepcopy(self.sessions)
 
     def bridge_credentials_current(self, bridge: ActiveBridge) -> bool:
         try:

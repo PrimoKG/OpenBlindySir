@@ -5,7 +5,7 @@ import unicodedata
 
 NICKNAME_MIN = 1
 NICKNAME_MAX = 24
-ANSWER_HARD_MAX = 200
+ANSWER_HARD_MAX = 1500
 
 # Control, format (zero-width, bidi overrides), surrogate, private-use and unassigned
 # characters, and line/paragraph separators, are refused in nicknames.

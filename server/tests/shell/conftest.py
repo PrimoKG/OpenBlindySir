@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from openblindysir_protocol.catalog_rules import compute_catalog_hash, compute_track_id
+from openblindysir_protocol.version import PROTOCOL_VERSION
 from openblindysir_server.config import Settings
 from openblindysir_server.game import FakeClock, SequentialIds
 from openblindysir_server.main import create_app
@@ -107,7 +108,7 @@ def bridge_hello(catalog_hash: str, track_count: int) -> str:
             "bridge_id": BRIDGE_ID,
             "name": "PC",
             "version": "0.1.0",
-            "protocol": 6,
+            "protocol": PROTOCOL_VERSION,
             "catalog_hash": catalog_hash,
             "track_count": track_count,
             "formats": ["aac"],

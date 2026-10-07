@@ -1,6 +1,6 @@
 # OpenBlindySir — Bridge : fonctionnement et sécurité
 
-Référence V0.5 développement, protocole 6 (plage 6 à 6). [Architecture](architecture.md),
+Référence V0.5 développement, protocole 9 (plage 9 à 9). [Architecture](architecture.md),
 [formats et métadonnées](media-and-metadata.md), [ADR 0011](adr/0011-global-review-and-private-replay.md)
 et [ADR 0012](adr/0012-dynamic-sources-and-metadata.md).
 
@@ -95,6 +95,14 @@ L'hôte joueur en jeu n'accède ni aux noms de sources, ni aux archives, ni à l
 bibliothèque HTTP ; le MC conserve ses permissions. Voir [V0.5](v0.5.md).
 
 ## Extraction bornée, audio uniquement
+
+FFmpeg et ffprobe doivent désormais être identifiables et au moins en version
+9.0.2, chacun vérifié séparément. L’image Docker utilise les sources officielles
+signées et un build limité à l’audio/fichiers locaux ; les bibliothèques TIFF/XML,
+protocoles réseau et décodeurs vidéo n’y sont pas inclus. Les dépendances natives
+installées sur le PC demandent leurs propres mises à jour. Le
+[rapport de durcissement](audits/2026-10-05-security-hardening.md) donne les preuves
+et limites de l’analyse système.
 
 Un job actif, file de quatre. ffprobe : 10 s ; ffmpeg : 30 s ; upload : 60 s.
 Les processus sont tués et récoltés lors d'une annulation ou d'un dépassement.

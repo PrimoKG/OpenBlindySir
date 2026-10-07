@@ -4,6 +4,7 @@ There is no path from IN_GAME to FINAL_RESULTS: every end goes through FINAL_SCO
 """
 
 from openblindysir_protocol.enums import (
+    AssetState,
     BridgeState,
     CancelReason,
     CloseReason,
@@ -20,6 +21,8 @@ from openblindysir_protocol.host_commands import (
     HostConfigure,
     HostEndGame,
     HostEndSession,
+    HostFinaleReveal,
+    HostFinaleStop,
     HostFinalReset,
     HostFinalSet,
     HostFinalValidate,
@@ -28,15 +31,17 @@ from openblindysir_protocol.host_commands import (
     HostStartGame,
     HostToFinalReview,
 )
-from openblindysir_server.game import assets, rounds, selection
+from openblindysir_server.game import assets, auto_scoring, rounds, selection
 from openblindysir_server.game import commands as c
 from openblindysir_server.game.clock import Instant
 from openblindysir_server.game.effects import (
     CancelJob,
     CloseConnection,
     EffectSink,
+    Play,
     ResetSession,
     RevokeTokens,
+    SendPlay,
 )
 from openblindysir_server.game.permissions import rule_ok, start_blockers
 from openblindysir_server.game.rejections import require
@@ -94,12 +99,7 @@ def h_start_game(
 
 
 def _maximum_points(settings: Settings) -> int:
-    return {
-        "title": settings.title_points,
-        "artist": settings.artist_points,
-        "both": settings.title_points + settings.artist_points,
-        "custom": settings.custom_points,
-    }[settings.answer_mode]
+    return sum(getattr(settings, f"{key}_points") for key in auto_scoring.criteria(settings))
 
 
 def h_configure(
@@ -128,6 +128,9 @@ def h_configure(
     if patch.sources is not None:
         settings.sources = sorted({(src.bridge_id, src.folder_prefix) for src in patch.sources})
     require(_maximum_points(settings) <= 1000, ErrorCode.INVALID_ARGS)
+    require(
+        settings.scoring_mode != "auto" or settings.answer_mode != "custom", ErrorCode.INVALID_ARGS
+    )
     g.settings = settings
     r = current_round(g)
     if (
@@ -170,10 +173,98 @@ def h_configure(
 # --- end of game ----------------------------------------------------------------------------
 
 
+def h_finale_reveal(
+    s: SessionState, issuer: Player, msg: HostFinaleReveal, at: Instant, fx: EffectSink
+) -> None:
+    del issuer, fx
+    require_phase(s, msg.expected_phase)
+    r = next((r for r in s.game.rounds if r.id == msg.args.round_id), None)
+    require(r is not None and r.official_start_at is not None, ErrorCode.INVALID_ARGS)
+    assert r is not None
+    if msg.args.fast_forward:
+        require(s.game.finale_round_id == msg.args.round_id, ErrorCode.STALE_COMMAND)
+        r.finale_awarded = set(rounds.review_player_ids(s, r))
+        r.finale_wave_at = None
+        s.touched = True
+        return
+    if s.game.finale_round_id == msg.args.round_id:
+        return
+    # Finish a previous wave before changing stage; revisiting never repeats awards.
+    for previous in s.game.rounds:
+        if previous.finale_wave_at is not None:
+            previous.finale_awarded = set(rounds.review_player_ids(s, previous))
+            previous.finale_wave_at = None
+    if r.auto_evidence and msg.args.round_id not in s.game.finale_revealed:
+        r.finale_awarded = set()
+        r.finale_wave_at = at.mono_ms + 1500
+    s.game.finale_round_id = msg.args.round_id
+    if msg.args.round_id not in s.game.finale_revealed:
+        s.game.finale_revealed.append(msg.args.round_id)
+    s.game.finale_play = None
+    s.game.finale_audio_revision += 1
+    s.touched = True
+
+
+def advance_finale_awards(s: SessionState, r: object, at: Instant) -> None:
+    from openblindysir_server.game.state import Round  # noqa: PLC0415
+
+    assert isinstance(r, Round)
+    awarded = r.finale_awarded
+    if awarded is None:
+        r.finale_wave_at = None
+        return
+    remaining = [pid for pid in rounds.review_player_ids(s, r) if pid not in awarded]
+    awarded.update(remaining[:3])
+    r.finale_wave_at = at.mono_ms + 1000 if len(remaining) > 3 else None
+    s.touched = True
+
+
+def h_finale_stop(
+    s: SessionState, issuer: Player, msg: HostFinaleStop, at: Instant, fx: EffectSink
+) -> None:
+    del issuer, at, fx
+    require_phase(s, msg.expected_phase)
+    s.game.finale_play = None
+    s.game.finale_audio_revision += 1
+    s.touched = True
+
+
+def handle_finale_replay(
+    s: SessionState, cmd: c.FinaleReplayReady, at: Instant, fx: EffectSink
+) -> None:
+    issuer = s.players.get(cmd.player_id)
+    require(
+        issuer is not None
+        and issuer.connection is not ConnectionState.REMOVED
+        and issuer.role.value == "host",
+        ErrorCode.NOT_HOST,
+    )
+    require(
+        s.game.phase is GamePhase.FINAL_SCORE_REVIEW
+        and s.game.game_id == cmd.game_id
+        and s.game.finale_round_id == cmd.round_id,
+        ErrorCode.STALE_COMMAND,
+    )
+    require(s.game.finale_audio_revision == cmd.revision, ErrorCode.STALE_COMMAND)
+    r = next(r for r in s.game.rounds if r.id == cmd.round_id)
+    asset = s.assets.get(r.slot.asset_id or "")
+    require(asset is not None and asset.upload is not None, ErrorCode.REVIEW_UNAVAILABLE)
+    assert asset is not None
+    asset.state = AssetState.STORED
+    start = at.mono_ms + s.config.lead_ms
+    play = Play(s.ids.play_id(), asset.asset_id, start, 0.0, start + (asset.clip_duration_ms or 0))
+    s.game.finale_play = play
+    s.game.finale_audio_revision += 1
+    s.touched = True
+    fx.add(SendPlay(play))
+
+
 def enter_final_review(s: SessionState, fx: EffectSink) -> None:
     g = s.game
     if g.phase is GamePhase.FINAL_SCORE_REVIEW:
         return
+    for r in g.rounds:
+        r.finale_wave_at = None
     r = current_round(g)
     if r is not None:
         rounds.stop_play(r, fx)
@@ -276,6 +367,7 @@ def h_final_validate(
         ErrorCode.UNREVIEWED_SCORES,
     )
     for r in eligible:
+        r.finale_wave_at = None
         events = []
         for pid in rounds.review_player_ids(s, r):
             points = r.score_draft.get(pid, 0)
@@ -314,6 +406,7 @@ def h_final_validate(
     g.finalized_at = at.mono_ms
     g.finalized_wall_ms = at.wall_ms
     g.phase = GamePhase.FINAL_RESULTS
+    g.finale_play = None
     from openblindysir_server.game import views  # noqa: PLC0415 - build the final snapshot
 
     s.archives.append(views.game_record(s, at.wall_ms).model_dump(mode="json"))

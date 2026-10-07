@@ -28,9 +28,12 @@ export function formatRank(order: number | null, nearTie: boolean): string {
   return nearTie ? `${order}≈` : `${order}.`;
 }
 
-/** 5273 → "5 273" with a narrow no-break space. */
+/** 5273 → "5 273" in French, "5,273" in English. */
 export function formatCount(n: number): string {
-  return String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, NARROW_NBSP);
+  return String(Math.trunc(n)).replace(
+    /\B(?=(\d{3})+(?!\d))/g,
+    getLanguage() === "fr" ? NARROW_NBSP : ",",
+  );
 }
 
 /** Audio delay badge: "⚠ audio +2,3 s" from 300 ms, "⚠ audio ?" without READY, else null. */

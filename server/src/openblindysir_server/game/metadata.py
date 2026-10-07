@@ -11,14 +11,25 @@ DECORATION = re.compile(
 
 
 def musical_metadata(s: SessionState, ref: TrackRef) -> Metadata:
-    """A manual non-empty field overrides import; absent fields retain imported values."""
+    """Inherit absent values; an explicit clear also blocks tag/filename fallbacks."""
     manual = s.metadata.get(ref, Metadata())
     imported = s.imported_metadata.get(ref, Metadata())
+    cleared = set(manual.cleared_fields or []) | {
+        key for key in imported.cleared_fields or [] if not getattr(manual, key, None)
+    }
+    aliases = manual.aliases if manual.aliases is not None else imported.aliases
     return Metadata(
+        cleared_fields=sorted(cleared),
+        aliases={key: values for key, values in aliases.items() if key not in cleared}
+        if aliases is not None
+        else None,
+        tags=manual.tags if manual.tags is not None else imported.tags,
+        linked_to=manual.linked_to if manual.linked_to is not None else imported.linked_to,
+        enabled=manual.enabled if manual.enabled is not None else imported.enabled,
         **{
-            field: getattr(manual, field) or getattr(imported, field)
+            field: None if field in cleared else getattr(manual, field) or getattr(imported, field)
             for field in ("title", "artist", "featuring", "album", "year")
-        }
+        },
     )
 
 

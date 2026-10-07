@@ -50,6 +50,7 @@ IGNORED_KEYS = frozenset(
         "exclusiveMaximum",
         "minItems",
         "maxItems",
+        "maxProperties",
         "format",
         "readOnly",
         "description",
@@ -57,7 +58,7 @@ IGNORED_KEYS = frozenset(
 )
 HANDLED_KEYS = frozenset(
     {"$ref", "const", "enum", "type", "anyOf", "oneOf", "items", "properties", "required"}
-    | {"additionalProperties"}
+    | {"additionalProperties", "propertyNames"}
 )
 
 
@@ -122,6 +123,9 @@ def type_expr(schema: Mapping[str, Any]) -> str:
             return inline_object(schema)
         extra = schema.get("additionalProperties")
         if isinstance(extra, dict):
+            if "propertyNames" in schema:
+                keys = type_expr(schema["propertyNames"])
+                return f"Readonly<Partial<Record<{keys}, {type_expr(extra)}>>>"
             return f"Readonly<Record<string, {type_expr(extra)}>>"
         if extra is None or extra is True:
             return "Readonly<Record<string, never>>"

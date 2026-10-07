@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useId, useState } from "react";
 import * as cmd from "../app/commands";
 import { useGame, useUi } from "../app/hooks";
-import { t, tCode } from "../i18n";
+import { t, tCode, useMessage } from "../i18n";
 import { api } from "../net/api";
 import type {
   FolderNode,
@@ -12,6 +12,12 @@ import type {
 } from "../protocol";
 import { readLocal, writeLocal } from "../storage";
 import { Button, Tabs } from "../ui/components";
+import {
+  criteriaFor,
+  criterionLabel,
+  criterionPoints,
+  musicalCriteria,
+} from "../ui/ScoringCriteria";
 
 export function selectedCapacity(
   library: LibraryResponse | null,
@@ -91,7 +97,7 @@ export function SetupPanel({
   const saved = view.host.settings;
   const [draft, setDraft] = useState<GameSettings>(saved);
   const [library, setLibrary] = useState<LibraryResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useMessage(null);
   const [retry, setRetry] = useState(0);
   const [pending, setPending] = useState(false);
   const [presets, setPresets] = useState<Preset[]>(loadPresets);
@@ -111,12 +117,12 @@ export function SetupPanel({
         if (result.ok) {
           setLibrary(result.data);
           setError(null);
-        } else setError(tCode("error", result.error));
+        } else setError(() => tCode("error", result.error));
       });
     return () => {
       active = false;
     };
-  }, [key]);
+  }, [key, setError]);
   const dirty = settingsKey(draft) !== settingsKey(saved);
   useEffect(() => {
     onDirtyChange?.(dirty || pending);
@@ -131,10 +137,10 @@ export function SetupPanel({
     if (!pending) return;
     const timeout = window.setTimeout(() => {
       setPending(false);
-      setError(t("ux.saveTimeout"));
+      setError(() => t("ux.saveTimeout"));
     }, 10000);
     return () => window.clearTimeout(timeout);
-  }, [pending]);
+  }, [pending, setError]);
   const set = <K extends keyof GameSettings>(field: K, value: GameSettings[K]) =>
     setDraft((old) => ({ ...old, [field]: value }));
   const selected = new Set(draft.sources.map((s) => `${s.bridge_id}|${s.folder_prefix}`));
@@ -155,11 +161,15 @@ export function SetupPanel({
     Number.isInteger(draft.intermission_s ?? 2) &&
     (draft.intermission_s ?? 2) >= 0 &&
     (draft.intermission_s ?? 2) <= 10 &&
-    (draft.answer_mode !== "both" ||
-      (draft.title_points ?? 1) + (draft.artist_points ?? 1) <= 1000) &&
-    [draft.title_points ?? 1, draft.artist_points ?? 1, draft.custom_points ?? 1].every(
-      (p) => Number.isInteger(p) && p >= 0 && p <= 1000,
-    );
+    criteriaFor(draft).length > 0 &&
+    criteriaFor(draft).reduce((sum, key) => sum + criterionPoints(key, draft), 0) <= 1000 &&
+    !(draft.scoring_mode === "auto" && draft.answer_mode === "custom") &&
+    Number.isInteger(draft.acceptance_threshold ?? 90) &&
+    (draft.acceptance_threshold ?? 90) >= 80 &&
+    (draft.acceptance_threshold ?? 90) <= 100 &&
+    criteriaFor(draft)
+      .map((key) => criterionPoints(key, draft))
+      .every((p) => Number.isInteger(p) && p >= 0 && p <= 1000);
   const save = (start: boolean) => {
     if (valid && game.send(cmd.configure(view, draft as SettingsPatch, start))) setPending(true);
   };
@@ -267,16 +277,23 @@ export function SetupPanel({
           {t("ux.answerMode")}
           <select
             value={draft.answer_mode ?? "both"}
-            onChange={(e) => set("answer_mode", e.target.value)}
+            onChange={(e) =>
+              setDraft((old) => ({
+                ...old,
+                answer_mode: e.target.value,
+                scoring_mode: e.target.value === "custom" ? "manual" : old.scoring_mode,
+              }))
+            }
           >
             <option value="both">{t("ux.modeBoth")}</option>
             <option value="title">{t("ux.modeTitle")}</option>
             <option value="artist">{t("ux.modeArtist")}</option>
             <option value="custom">{t("ux.modeCustom")}</option>
+            <option value="fields">{t("auto.fields")}</option>
           </select>
         </label>
         <div className="setup-fields">
-          <label hidden={draft.answer_mode === "artist" || draft.answer_mode === "custom"}>
+          <label hidden={!criteriaFor(draft).includes("title")}>
             {t("ux.titlePoints")}
             <input
               type="number"
@@ -286,7 +303,7 @@ export function SetupPanel({
               onChange={(e) => set("title_points", Number(e.target.value))}
             />
           </label>
-          <label hidden={draft.answer_mode === "title" || draft.answer_mode === "custom"}>
+          <label hidden={!criteriaFor(draft).includes("artist")}>
             {t("ux.artistPoints")}
             <input
               type="number"
@@ -297,6 +314,81 @@ export function SetupPanel({
             />
           </label>
         </div>
+        {draft.answer_mode === "fields" && (
+          <fieldset className="stack">
+            <legend>{t("auto.fields")}</legend>
+            <div className="row wrap">
+              {musicalCriteria.map((key) => (
+                <label key={key} className="folder-option">
+                  <input
+                    type="checkbox"
+                    checked={
+                      draft.answer_fields?.includes(key) ?? ["title", "artist"].includes(key)
+                    }
+                    onChange={(event) =>
+                      set(
+                        "answer_fields",
+                        event.target.checked
+                          ? [...(draft.answer_fields ?? ["title", "artist"]), key]
+                          : (draft.answer_fields ?? ["title", "artist"]).filter(
+                              (field) => field !== key,
+                            ),
+                      )
+                    }
+                  />
+                  {criterionLabel(key)}
+                </label>
+              ))}
+            </div>
+            <div className="setup-fields">
+              {(["album", "year", "featuring"] as const)
+                .filter((key) => criteriaFor(draft).includes(key))
+                .map((key) => (
+                  <label key={key}>
+                    {t("auto.points", { field: criterionLabel(key) })}
+                    <input
+                      type="number"
+                      min={0}
+                      max={1000}
+                      value={criterionPoints(key, draft)}
+                      onChange={(event) => set(`${key}_points`, Number(event.target.value))}
+                    />
+                  </label>
+                ))}
+            </div>
+          </fieldset>
+        )}
+        <label>
+          {t("auto.mode")}
+          <select
+            value={draft.scoring_mode ?? "manual"}
+            disabled={draft.answer_mode === "custom"}
+            onChange={(event) => set("scoring_mode", event.target.value as "manual" | "auto")}
+          >
+            <option value="manual">{t("auto.manual")}</option>
+            <option value="auto">{t("auto.enabled")}</option>
+          </select>
+        </label>
+        {draft.scoring_mode === "auto" && (
+          <>
+            <label>
+              {t("auto.threshold")}
+              <input
+                type="number"
+                min={80}
+                max={100}
+                value={draft.acceptance_threshold ?? 90}
+                onChange={(event) => set("acceptance_threshold", Number(event.target.value))}
+              />
+            </label>
+            <p className="muted">{t("auto.hint")}</p>
+            {!dirty && !!view.host.auto_missing_references && (
+              <p className="notice">
+                {t("auto.preflight", { count: view.host.auto_missing_references })}
+              </p>
+            )}
+          </>
+        )}
         <label>
           {t("ux.instructions")}
           <textarea

@@ -1,25 +1,50 @@
 import { useEffect, useRef, useState } from "react";
-import { t } from "../i18n";
+import { useEngine, useGame } from "../app/hooks";
+import { type MessageKey, t, useMessage } from "../i18n";
 import type { ReviewRound } from "../protocol";
 import { Button } from "../ui/components";
 
+class PlaybackError extends Error {
+  constructor(readonly messageKey: MessageKey) {
+    super(messageKey);
+  }
+}
+
 /** An independent host player. Only one short reencoded segment is held in the browser. */
 export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
+  const game = useGame();
+  const engine = useEngine();
   const audio = useRef<HTMLAudioElement>(null);
   const objectUrl = useRef<string | null>(null);
   const request = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const seeking = useRef(false);
-  const latestVolume = useRef(0.8);
+  const latestVolume = useRef(engine.volume);
   const [mode, setMode] = useState<"excerpt" | "full">("excerpt");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useMessage(null);
   const [loaded, setLoaded] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [base, setBase] = useState(0);
   const [position, setPosition] = useState(0);
-  const [volume, setVolume] = useState(0.8);
+  const volume = engine.volume;
+  useEffect(() => {
+    latestVolume.current = volume;
+    if (audio.current) audio.current.volume = volume;
+  }, [volume]);
   const duration = (mode === "full" ? round.track_duration_ms : round.excerpt_duration_ms) ?? 0;
+  useEffect(() => {
+    const stopOther = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === round.round_id) return;
+      generation.current++;
+      request.current?.abort();
+      audio.current?.pause();
+      setLoading(false);
+      setPlaying(false);
+    };
+    window.addEventListener("openblindysir:private-audio", stopOther);
+    return () => window.removeEventListener("openblindysir:private-audio", stopOther);
+  }, [round.round_id]);
   useEffect(
     () => () => {
       generation.current++;
@@ -30,6 +55,9 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
     [],
   );
   const load = async (selected: "excerpt" | "full", offset = 0, autoplay = true) => {
+    window.dispatchEvent(
+      new CustomEvent("openblindysir:private-audio", { detail: round.round_id }),
+    );
     const version = ++generation.current;
     request.current?.abort();
     const controller = new AbortController();
@@ -62,15 +90,15 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
         } catch {
           /* A gateway may return a non-JSON error. */
         }
-        const message =
+        const messageKey =
           response.status === 401 || response.status === 403
-            ? t("flow.audioForbidden")
+            ? "flow.audioForbidden"
             : code.toLowerCase().includes("bridge_offline")
-              ? t("flow.audioOffline")
+              ? "flow.audioOffline"
               : response.status === 404 || code.toLowerCase().includes("source")
-                ? t("flow.audioChanged")
-                : t("flow.audioGeneration");
-        throw new Error(message);
+                ? "flow.audioChanged"
+                : "flow.audioGeneration";
+        throw new PlaybackError(messageKey);
       }
       const data = await response.blob();
       if (version !== generation.current) return;
@@ -89,11 +117,11 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
     } catch (failure) {
       if (version === generation.current) {
         setLoading(false);
-        setError(
+        setError(() =>
           failure instanceof DOMException && failure.name === "NotAllowedError"
             ? t("flow.audioBlocked")
-            : failure instanceof Error
-              ? failure.message
+            : failure instanceof PlaybackError
+              ? t(failure.messageKey)
               : t("flow.audioGeneration"),
         );
       }
@@ -109,8 +137,11 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
   const clock = (seconds: number) =>
     `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
   const play = () => {
+    window.dispatchEvent(
+      new CustomEvent("openblindysir:private-audio", { detail: round.round_id }),
+    );
     setError(null);
-    void audio.current?.play().catch(() => setError(t("flow.audioBlocked")));
+    void audio.current?.play().catch(() => setError(() => t("flow.audioBlocked")));
   };
   return (
     <section className="review-audio stack" aria-label={t("review.listen")}>
@@ -148,7 +179,7 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
           if (objectUrl.current) {
             setLoaded(false);
             setPlaying(false);
-            setError(t("flow.audioGeneration"));
+            setError(() => t("flow.audioGeneration"));
           }
         }}
         onEnded={() => {
@@ -201,7 +232,7 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
           onChange={(e) => {
             const value = Number(e.target.value);
             latestVolume.current = value;
-            setVolume(value);
+            game.engine.setVolume(value);
             if (audio.current) audio.current.volume = value;
           }}
         />

@@ -13,7 +13,7 @@ class CoreConfig:
     clip_format: ClipFormat = ClipFormat.AAC
     bitrate_kbps: int = 128
     max_clip_bytes: int = 2 * 1024 * 1024
-    answer_max_chars: int = 200
+    answer_max_chars: int = 1000
     near_tie_ms: int = 300
     ready_timeout_ms: int = 10_000
     lead_ms: int = 3_000  # countdown before the first play (spec §9.5)

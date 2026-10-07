@@ -1,6 +1,6 @@
 # Construire et publier une release
 
-Le checkout courant est **0.5.0.dev0**, protocole 6, en développement. La V0.5
+Le checkout courant est **0.5.0.dev0**, protocole 10, en développement. La V0.5
 n'est ni publiée ni stabilisée et ne fige pas le protocole. Les commandes de
 publication ci-dessous décrivent une procédure future ; les numéros 0.3.0 sont
 des exemples historiques, pas une release annoncée ou une version compatible V0.5.
@@ -10,6 +10,22 @@ distribution sur push main/PR, **sans publication**. `release.yml` est déclench
 uniquement par push d'un tag `v*`, puis refuse toute forme autre que **vX.Y.Z**
 ou **vX.Y.Z-rc.N**, ou incohérente avec VERSION/HEAD/CHANGELOG. Ni branche ni
 workflow_dispatch ne publie. Les tags `.dev` sont refusés.
+
+## Audit avant publication officielle
+
+La [livraison du 7 octobre](audits/2026-10-07-implementation.md) actualise les résultats,
+les images exactes et les réserves. Le candidat précompilé est non signé et local :
+le triage des alertes élevées, les appareils physiques et les essais d’installation/
+restauration restent des conditions de publication. Un push de branche ne publie pas ce pack.
+
+Les neuf constats de l'[audit du 5 octobre 2026](audits/2026-10-05-prepublication.md)
+sont corrigés. Le [durcissement ultérieur](audits/2026-10-05-security-hardening.md)
+retire les composants critiques du Bridge et vérifie les images finales, avec une
+[matrice d’applicabilité](audits/2026-10-05-security-applicability.md) des alertes
+restantes. L’acceptation explicite des risques système conservés, la recette sur
+appareils réels, les mesures acoustiques/VPS et les checks de la révision propre
+de release restent nécessaires. Les tests verts du worktree de développement ne
+valident pas une release future.
 
 ## Dépendances à préparer par le mainteneur
 

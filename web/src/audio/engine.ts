@@ -1,4 +1,4 @@
-// AudioEngine: ONE AudioContext per page, created at the first gesture and never re-created.
+// One live AudioContext, created by a gesture; only a permanently closed context is replaced.
 // Downloads and decodes clips, schedules PLAY at the server's start_at (spec §9.5) and
 // reports its state. No resynchronisation during playback (§9.6).
 import type {
@@ -15,7 +15,7 @@ import { type ClockEstimator, serverToLocal } from "./clock";
 import { assetsToFetch } from "./prefetch";
 import { buildAudioStatus, buildPlaybackReport } from "./report";
 import { contextTimeForLocal, planStart, type StartPlan } from "./schedule";
-import { applyPlaybackSession } from "./unlock";
+import { applyPlaybackSession, releasePlaybackSession } from "./unlock";
 
 const RETRIES_MS = [500, 1000, 2000];
 const LATE_NOTICE_MS = 250;
@@ -36,6 +36,8 @@ export class AudioEngine {
   private gain: GainNode | null = null;
   private buffers = new Map<string, AudioBuffer>();
   private loading = new Set<string>();
+  private requests = new Map<string, AbortController>();
+  private active = true;
   private source: AudioBufferSourceNode | null = null;
   private scheduledPlayId: string | null = null;
   private playing = false;
@@ -56,7 +58,10 @@ export class AudioEngine {
     private send: Send,
   ) {
     const stored = Number(readLocal("volume"));
-    this.volume = Number.isFinite(stored) && readLocal("volume") !== null ? stored : 0.8;
+    this.volume =
+      Number.isFinite(stored) && readLocal("volume") !== null
+        ? Math.min(1, Math.max(0, stored))
+        : 0.8;
     const latency = Number(readLocal("manualLatencyMs"));
     this.manualLatencyMs = Number.isFinite(latency) ? Math.min(500, Math.max(-500, latency)) : 0;
     this.snapshot = this.makeSnapshot();
@@ -109,6 +114,12 @@ export class AudioEngine {
 
   /** Must be called inside a user gesture (spec §9.7). */
   async unlock(): Promise<void> {
+    if (!this.active) return;
+    if (this.ctx?.state === "closed") {
+      this.ctx.onstatechange = null;
+      this.ctx = null;
+      this.gain = null;
+    }
     if (!this.ctx) {
       this.ctx = new AudioContext({ latencyHint: "interactive" });
       this.gain = this.ctx.createGain();
@@ -117,6 +128,7 @@ export class AudioEngine {
       this.ctx.onstatechange = () => this.onContextState();
     }
     applyPlaybackSession();
+    if (this.ctx.state !== "running") this.onContextState();
     try {
       await this.ctx.resume();
     } catch {
@@ -130,6 +142,16 @@ export class AudioEngine {
       return;
     }
     if (this.ctx.state !== "running") {
+      if (this.ctx.state === "closed") {
+        for (const request of this.requests.values()) request.abort();
+        this.requests.clear();
+        this.loading.clear();
+      }
+      // A suspended context freezes its old source. Discard it so recovery joins
+      // the server's current position instead of continuing delayed audio.
+      this.stopSource();
+      this.playing = false;
+      this.scheduledPlayId = null;
       if (this.state !== "LOCKED") {
         this.setState("LOCKED", null);
       }
@@ -140,6 +162,11 @@ export class AudioEngine {
       }
     }
     this.changed();
+  }
+
+  /** Refresh after returning from background, even if a mobile state event was missed. */
+  refreshContextState(): void {
+    this.onContextState();
   }
 
   get unlocked(): boolean {
@@ -166,12 +193,59 @@ export class AudioEngine {
   }
 
   setVolume(value: number): void {
+    if (!Number.isFinite(value)) return;
     this.volume = Math.min(1, Math.max(0, value));
     if (this.gain) {
       this.gain.gain.value = this.volume;
     }
     writeLocal("volume", String(this.volume));
     this.changed();
+  }
+
+  private finaleCues = new Set<string>();
+
+  /** Small original musical cues, scheduled on the same clock and context as playback. */
+  playFinaleCue(id: string, kind: "award" | "reveal" | "win", at?: number): void {
+    if (this.finaleCues.has(id)) return;
+    this.finaleCues.add(id);
+    if (this.finaleCues.size > 64)
+      this.finaleCues.delete(this.finaleCues.values().next().value ?? "");
+    if (
+      readLocal("finaleSounds") === "off" ||
+      !this.ctx ||
+      !this.gain ||
+      !this.unlocked ||
+      this.playing
+    )
+      return;
+    const estimate = this.clock.estimate();
+    const local = at == null ? performance.now() : at - (estimate?.offset ?? 0);
+    // A reconnect, restored ceremony, or background tab must not replay stale applause.
+    if (performance.now() - local > 600 || local - performance.now() > 1500) return;
+    const start = this.ctx.currentTime + Math.max(0, (local - performance.now()) / 1000);
+    const notes =
+      kind === "win"
+        ? [523.25, 659.25, 783.99, 1046.5]
+        : kind === "reveal"
+          ? [392, 523.25]
+          : [659.25, 783.99];
+    for (const [index, frequency] of notes.entries()) {
+      const osc = this.ctx.createOscillator();
+      const envelope = this.ctx.createGain();
+      const time = start + index * 0.09;
+      osc.type = "sine";
+      osc.frequency.value = frequency;
+      envelope.gain.setValueAtTime(0, time);
+      envelope.gain.linearRampToValueAtTime(0.08, time + 0.015);
+      envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.28);
+      osc.connect(envelope).connect(this.gain);
+      osc.onended = () => {
+        osc.disconnect();
+        envelope.disconnect();
+      };
+      osc.start(time);
+      osc.stop(time + 0.3);
+    }
   }
 
   setManualLatency(value: number): void {
@@ -185,22 +259,24 @@ export class AudioEngine {
 
   /** Download what the view offers (never N+1 during our own playback) and late-start. */
   syncWithView(view: AnyView): void {
+    if (!this.active) return;
     this.lastView = view;
-    if (!this.unlocked) {
-      return;
+    const keep = new Set([view.audio.current?.asset_id, view.audio.next?.asset_id]);
+    for (const [id, request] of this.requests) {
+      if (!keep.has(id)) {
+        request.abort();
+        this.requests.delete(id);
+        this.loading.delete(id);
+      }
     }
+    if (!this.unlocked) return;
     if (view.paused && !view.paused.resume_at && this.scheduledPlayId) {
       this.stop(this.scheduledPlayId, view.paused.paused_at);
     }
     if (!view.play && !view.paused && this.playing) {
       this.stopSource();
       this.playing = false;
-    }
-    const keep = new Set<string>();
-    for (const ref of [view.audio.current, view.audio.next]) {
-      if (ref) {
-        keep.add(ref.asset_id);
-      }
+      this.setState("IDLE", null);
     }
     for (const id of [...this.buffers.keys()]) {
       if (!keep.has(id)) {
@@ -227,23 +303,40 @@ export class AudioEngine {
     if (!this.ctx) {
       return;
     }
+    const context = this.ctx;
+    const controller = new AbortController();
+    this.requests.set(assetId, controller);
+    const current = () =>
+      this.active &&
+      this.ctx === context &&
+      !controller.signal.aborted &&
+      this.requests.get(assetId) === controller;
+    const foreground = () => this.lastView?.audio.current?.asset_id === assetId;
     this.loading.add(assetId);
-    if (!this.playing) {
+    if (!this.playing && foreground()) {
       this.setState("LOADING", assetId);
     }
     let lastError: AudioErrorCode = "FETCH_FAILED";
     for (let attempt = 0; attempt <= RETRIES_MS.length; attempt += 1) {
       try {
-        const response = await fetch(url, { credentials: "same-origin", cache: "no-store" });
+        const response = await fetch(url, {
+          credentials: "same-origin",
+          cache: "no-store",
+          signal: controller.signal,
+        });
         if (!response.ok) {
           throw new Error("fetch");
         }
         const data = await response.arrayBuffer();
         lastError = "DECODE_FAILED";
-        const buffer = await this.ctx.decodeAudioData(data);
+        if (!current()) return;
+        const buffer = await context.decodeAudioData(data);
+        if (!current()) return;
         this.buffers.set(assetId, buffer);
         this.loading.delete(assetId);
-        if (!this.playing) {
+        this.requests.delete(assetId);
+        if (!this.unlocked) return;
+        if (!this.playing && foreground()) {
           this.setState("READY", assetId);
         } else {
           this.send(buildAudioStatus("READY", assetId, null, this.clock.estimate()));
@@ -253,20 +346,33 @@ export class AudioEngine {
         }
         return;
       } catch {
+        if (!current()) return;
         const wait = RETRIES_MS[attempt];
         if (wait === undefined) {
           break;
         }
-        await new Promise((resolve) => setTimeout(resolve, wait));
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            clearTimeout(timer);
+            controller.signal.removeEventListener("abort", done);
+            resolve();
+          };
+          const timer = setTimeout(done, wait);
+          controller.signal.addEventListener("abort", done, { once: true });
+        });
+        if (!current()) return;
       }
     }
+    if (!current()) return;
     this.loading.delete(assetId);
-    this.setState("ERROR", assetId, lastError);
+    this.requests.delete(assetId);
+    if (this.unlocked && !this.playing && foreground()) this.setState("ERROR", assetId, lastError);
   }
 
   // --- playback ---------------------------------------------------------------------------
 
   play(msg: PlayMsg | PlayInfo): StartPlan | null {
+    if (!this.active || !this.unlocked) return null;
     const ctx = this.ctx;
     const buffer = this.buffers.get(msg.asset_id);
     if (!ctx || !this.gain || !buffer || msg.play_id === this.scheduledPlayId) {
@@ -357,12 +463,40 @@ export class AudioEngine {
     if (this.source) {
       const source = this.source;
       this.source = null;
+      source.onended = null;
       try {
         source.stop();
       } catch {
         // already stopped
       }
+      source.disconnect?.();
     }
+  }
+
+  activate(): void {
+    this.active = true;
+  }
+
+  dispose(): void {
+    this.active = false;
+    this.lastView = null;
+    for (const request of this.requests.values()) request.abort();
+    this.requests.clear();
+    this.loading.clear();
+    this.buffers.clear();
+    this.stopSource();
+    this.playing = false;
+    this.scheduledPlayId = null;
+    this.finaleCues.clear();
+    const context = this.ctx;
+    this.ctx = null;
+    this.gain = null;
+    if (context) {
+      context.onstatechange = null;
+      if (context.state !== "closed") void context.close().catch(() => undefined);
+    }
+    releasePlaybackSession();
+    this.setState("LOCKED", null);
   }
 
   debugInfo(): Record<string, unknown> {

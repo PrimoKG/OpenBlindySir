@@ -1,4 +1,4 @@
-# Sources audio, vidéo et métadonnées — V0.2
+# Sources audio, vidéo et métadonnées
 
 ## Formats
 
@@ -39,11 +39,11 @@ sur vrais appareils avant une release.
 ## Métadonnées facultatives
 
 Dans **Sources et recherche de bibliothèque**, exportez d'abord le modèle pour retrouver UUID et
-chemins exacts. Importez ensuite un fichier UTF-8 JSON, version 1 :
+chemins exacts. Importez ensuite un fichier UTF-8 JSON, version 2 (les imports version 1 restent acceptés) :
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "rows": [
     {
       "bridge_id": "12345678-1234-1234-1234-123456789abc",
@@ -52,7 +52,10 @@ chemins exacts. Importez ensuite un fichier UTF-8 JSON, version 1 :
       "artist": "Example artist",
       "featuring": "Example guest",
       "album": "Example soundtrack",
-      "year": 2026
+      "year": 2026,
+      "tags": ["Jeux vidéo", "Années 2020"],
+      "linked_to": ["Example game"],
+      "enabled": false
     }
   ]
 }
@@ -62,6 +65,12 @@ Les cinq champs musicaux peuvent manquer ou valoir `null`. Les chaînes font au
 plus 256 caractères, sans contrôles ; année entière de 1000 à 9999. Chemins POSIX
 NFC, sans `..`, `:`, chemin absolu, antislash ou segment vide. Le chemin inclut
 l'extension. Deux Bridges portant les mêmes chemins ont des clés différentes.
+
+Les catégories `tags` et les œuvres `linked_to` acceptent chacune 32 libellés
+de 256 caractères, sans contrôles. Les doublons sont regroupés sans distinction
+de casse. Une liste vide efface ces catégories ; un champ omis conserve sa valeur.
+`enabled: false` exclut le morceau des prochaines sélections, sans supprimer le
+fichier ni changer une manche déjà préparée ou les archives.
 
 Un import accepte au plus 10 000 lignes et 1 Mio. Un document/version invalide
 est refusé ; une mauvaise ligne est signalée avec son numéro et les autres passent :
@@ -75,9 +84,20 @@ son repli actif. Les données persistent dans le snapshot privé de session ;
 **Fin de session** les conserve avec les archives ; les joueurs et la partie sont réinitialisés. L'export fusionne import et corrections pour les
 entrées encore connues, sans exporter les pistes, tags binaires ou pochettes.
 
-La recherche utilise nom de fichier, titre et artiste importés/corrigés. Le scan
+La recherche utilise nom de fichier, titre et artiste importés/corrigés, tags
+et œuvres liées. Les filtres combinent ces catégories, les sources et l’activation. Le scan
 ne sonde pas tous les tags de la bibliothèque. Les joueurs reçoivent les
-métadonnées uniquement à la publication finale des résultats.
+métadonnées des morceaux à mesure que l’hôte les dévoile au grand final.
+
+## Préécoute privée de la bibliothèque
+
+Le bouton **Écouter 15 s** prépare un extrait privé centré sur le milieu :
+`début = (durée totale − min(15 s, durée totale)) / 2`. Un fichier plus court
+est joué en entier. La préécoute ne consomme pas le morceau, ne change pas
+la sélection des manches et n’envoie aucun son aux joueurs. Une seule écoute
+privée peut jouer à la fois ; changer de page, fermer la bibliothèque ou lancer
+une écoute collective l’arrête. Les aperçus courts peuvent lire un fichier de
+moins de 8 s, même si ce fichier reste trop court pour une manche normale.
 
 ## Références techniques
 

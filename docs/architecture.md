@@ -8,8 +8,8 @@
 >
 > Licence : MIT.
 
-État courant : **V0.5 développement**, logiciel `0.5.0.dev0`, protocole 6
-(plage 6 à 6), snapshot 5, historique 2. Identités/secrets Bridge distincts,
+État courant : **V0.5 développement**, logiciel `0.5.0.dev0`, protocole 10
+(plage 9 à 9), snapshot 8, historique 2. Identités/secrets Bridge distincts,
 archives privées bornées et passe clavier/focus sont implémentés. Les décisions
 et limites opératoires sont détaillées en [V0.5](v0.5.md) / [English](v0.5.en.md)
 et [ADR 0015](adr/0015-v05-private-bridges-history-compatibility.md).
@@ -48,7 +48,7 @@ Le système a trois composants :
 2. **OpenBlindySir Bridge** tourne sur le PC qui contient la musique. Il scanne un seul dossier autorisé, envoie un catalogue léger au serveur et produit à la demande un **extrait** (20 à 30 s par défaut, 60 s au plus selon `CLIP_MAX_S`) avec FFmpeg. Il ouvre lui-même une connexion **sortante** vers le serveur. Les fichiers complets ne quittent jamais le PC.
 3. **L'interface web OpenBlindySir**, dans le navigateur (joueur ou hôte). Elle télécharge l'extrait entier, le décode, se déclare prête, puis le joue à un instant `startAt` fixé par le serveur, grâce à une horloge synchronisée. La réponse est un texte libre.
 
-**La notation est entièrement humaine.** Le serveur ne sait pas quelle est la bonne réponse et n'évalue jamais le contenu d'une réponse. Il **mesure** le moment de chaque validation et le transmet à l'hôte, qui attribue lui-même les points (+N, 0, −N) avec le barème qu'il veut. **La rapidité est mesurée et affichée, mais elle n'attribue jamais de points automatiquement.**
+**La notation est manuelle par défaut, automatique en option.** Le serveur peut comparer titre, artiste, album, année et featuring aux références figées de la manche. L’hôte garde la correction finale (+N, 0, −N) et reçoit les cas incertains à vérifier. Le serveur **mesure** aussi le moment de chaque validation. **La rapidité est mesurée et affichée, mais elle n'attribue jamais de points automatiquement.**
 
 **Ce qu'OpenBlindySir n'est pas** : une plateforme SaaS, un clone de Kahoot, un système de rooms ou de comptes, un lecteur Spotify/YouTube/Deezer, ni un outil de téléchargement de musique.
 
@@ -244,7 +244,7 @@ notation ni reveal ; `next` lance la manche suivante. La dernière fermeture
 ouvre automatiquement FINAL_SCORE_REVIEW. Pause/reprise, replay et délai restent disponibles.
 
 ### 6.2 Réponses
-Texte libre ≤200 caractères, brouillon synchronisé et validation définitive.
+Texte libre ≤1 000 caractères par défaut (limite configurable, plafond 1 500), brouillon synchronisé et validation définitive.
 Après fermeture, le dernier brouillon non vide devient CAPTURED. Il garde son
 heure de réception serveur, sans rang ni temps de validation. Absence : NONE.
 Une soumission tardive est refusée, une seconde validation est ignorée.
@@ -479,7 +479,7 @@ Voir [bridge-security](bridge-security.md) et [ADR 0012](adr/0012-dynamic-source
 | Joueur qui découvre le morceau à l'avance (DevTools) | Spoiler | URL aléatoire de 128 bits sans lien avec `track_id`, extrait **sans métadonnées**, `no-store`, préchargement client seulement pendant REVIEW, `view_for()` sans métadonnées pour les joueurs avant le reveal et pour l'hôte joueur pendant OPEN. Écouter le morceau suivant quelques secondes plus tôt reste possible : risque accepté. | V0.1 |
 | Token de session volé | Usurpation d'identité | Cookie `__Host-openblindysir`, HttpOnly, Secure, SameSite=Strict ; token de 256 bits **stocké haché** ; expiration avec la session (fin, kick, 24 h d'inactivité). La reconnexion du vrai joueur expulse l'autre. Kick possible. | V0.1 |
 | Force brute sur les mots de passe | Accès au jeu, puis aux droits hôte | Limitation par IP des tentatives **échouées** (join 5/min, host 3/min), plafond global, `hmac.compare_digest` ; les connexions réussies ne sont pas comptées, pour ne pas bloquer des amis derrière la même box. **Démarrage refusé** si un secret manque, est faible (< 12 caractères, `BRIDGE_SECRET` < 32), vaut « changeme », ou si `HOST_PASSWORD == BLIND_PASSWORD`. IP réelle via `--proxy-headers`, uniquement depuis le proxy de confiance. | V0.1 |
-| XSS par pseudo ou réponse | Vol de session | Échappement React, `dangerouslySetInnerHTML` interdit par le lint, CSP stricte (`default-src 'self'`, pas d'inline, `media-src 'self' blob:`, `frame-ancestors 'none'`). Pseudo : NFKC, 1 à 24 caractères, sans caractères de contrôle, zero-width ni **bidi override**. Réponse ≤ 200 caractères. | V0.1 |
+| XSS par pseudo ou réponse | Vol de session | Échappement React, `dangerouslySetInnerHTML` interdit par le lint, CSP stricte (`default-src 'self'`, pas d'inline, `media-src 'self' blob:`, `frame-ancestors 'none'`). Pseudo : NFKC, 1 à 24 caractères, sans caractères de contrôle, zero-width ni **bidi override**. Réponse ≤ 1 000 caractères par défaut, plafond protocole 1 500. | V0.1 |
 | CSRF / détournement de WebSocket inter-site | Actions faites au nom d'un joueur | SameSite=Strict, **vérification de l'`Origin`** sur les POST et le WebSocket, corps JSON obligatoire, aucun CORS. | V0.1 |
 | Path traversal depuis le serveur | Lecture de fichiers hors du dossier | `track_id` sert de **clé de dictionnaire, jamais de chemin**. ID inconnu : erreur. | V0.1 |
 | Évasion par symlink ou junction | Idem | Liens ignorés au scan, `realpath` et confinement vérifiés au scan **et** à l'ouverture, tests sur un runner Windows. | V0.1 |
@@ -620,7 +620,7 @@ morceaux entendus ; les archives et corrections de métadonnées restent disponi
 | Secrets | `.env` | `BLIND_PASSWORD`, `HOST_PASSWORD`, `BRIDGE_SECRETS` facultatif (UUID → secret), `BRIDGE_SECRET` bootstrap facultatif si map fournie |
 | Déploiement | `.env` | `DOMAIN` (ex. `openblindysir.example.com`), `TRUSTED_PROXIES`, `LOG_LEVEL`, `LOG_FORMAT=text\|json`, `LOG_TRACK_NAMES=false` |
 | Sauvegarde de soirée | `.env` / Compose | `STATE_DIR=.local/state` en natif, `/data/state` sur le volume `app_data` dans Compose. Fichiers privés, sans audio ni secrets en clair ; voir ADR 0009. |
-| Limites serveur (valeurs par défaut raisonnables) | `.env` | `MAX_PLAYERS=20`, `CLIP_MIN_S=5`, `CLIP_MAX_S=60`, `CLIP_FORMAT=aac`, `CLIP_BITRATE=128`, `AUDIO_CACHE_MB=32`, `MAX_CLIP_MB=2`, `READY_TIMEOUT_S=10`, `ANSWER_MAX_CHARS=200`, `NEAR_TIE_MS=300`, `SESSION_IDLE_TTL_H=24` |
+| Limites serveur (valeurs par défaut raisonnables) | `.env` | `MAX_PLAYERS=20`, `CLIP_MIN_S=5`, `CLIP_MAX_S=60`, `CLIP_FORMAT=aac`, `CLIP_BITRATE=128`, `AUDIO_CACHE_MB=32`, `MAX_CLIP_MB=2`, `READY_TIMEOUT_S=10`, `ANSWER_MAX_CHARS=1000`, `NEAR_TIE_MS=300`, `SESSION_IDLE_TTL_H=24` |
 | Développement | `.env` | `DEV_MODE=1` : cookie non Secure, mots de passe faibles tolérés, logs verbeux. **Jamais en production.** |
 | Réglages de partie | Interface hôte, dans les bornes de l'environnement | Manches, extrait, délai après extrait, sources, rôle, départ automatique, répétitions, consigne/barème, brouillons capturés, loudnorm et silence |
 | Bridge | CLI > env > `config.toml` pour choix locaux ; `--credentials` prioritaire pour identité | URL, racine et outils locaux ; fichier privé UUID/nom/secret |
@@ -1249,7 +1249,7 @@ font autorité pour V0.2 : aucune publication de points ou de morceau entre les 
 
 ## 24. Exclusions et reports après V0.2
 
-- **Calcul automatique de points ou de bonus de vitesse**, y compris les boutons « appliquer 3/2/1 ». Le barème partagé titre/artiste et les boutons de notation restent des décisions manuelles de l'hôte. *La mesure du temps, l'ordre et leur affichage font partie du MVP ; seule l'attribution automatique est exclue, et elle l'est définitivement.*
+- **Bonus automatiques de vitesse**, y compris « appliquer 3/2/1 », restent exclus. La notation textuelle optionnelle demandée pour V0.5 est décrite dans [notation-automatique](notation-automatique.md) ; le mode manuel reste disponible et l’hôte garde la correction finale.
 - Compensation de latence sur les temps de réponse.
 - Affichage du temps au joueur pendant le round (il est montré au reveal).
 - Affichage de `draft_last_changed_at` dans l'interface principale.
@@ -1329,3 +1329,11 @@ Le format audio n'est pas fixé à l'avance : il est choisi à partir des mesure
 - Normalisation Unicode NFC/NFD sur macOS.
 - Dérive d'horloge pendant un extrait.
 - Collisions de `track_id`.
+
+## Notation textuelle optionnelle — protocole 10
+
+`auto_scoring.py` utilise RapidFuzz localement avec des entrées bornées et des
+références/configurations figées par manche. Le snapshot 8 persiste preuves privées,
+priorité des corrections manuelles et progression des vagues. Les vues publiques
+masquent points/critères jusqu’à la révélation effective ; les acquittements de
+réponse n’exposent aucune décision. Voir [le guide](notation-automatique.md).

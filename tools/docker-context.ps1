@@ -1,4 +1,4 @@
-# BuildKit can traverse inaccessible ignored folders when an allowlist uses ! rules.
+﻿# BuildKit can traverse inaccessible ignored folders when an allowlist uses ! rules.
 # Copy only build inputs to a fresh context; never enumerate the whole checkout.
 function New-DockerBuildContext([string]$Root, [string]$Parent) {
     $context = Join-Path $Parent ('build-context-' + [Guid]::NewGuid().ToString('N'))
@@ -7,7 +7,8 @@ function New-DockerBuildContext([string]$Root, [string]$Parent) {
         $files = @('Dockerfile', '.dockerignore', 'pyproject.toml', 'uv.lock', 'VERSION', 'LICENSE',
             'protocol/pyproject.toml', 'server/pyproject.toml', 'bridge/pyproject.toml',
             'protocol/LICENSE', 'server/LICENSE', 'bridge/LICENSE', 'bridge/README.md',
-            'tools/host_pc.py', 'tools/docker_config.py', 'tools/docker_bridge.py',
+            'tools/host_pc.py', 'tools/docker_config.py', 'tools/docker_bridge.py', 'tools/build_audio_ffmpeg.sh',
+            'tools/check_audio_runtime.py',
             'web/package.json', 'web/package-lock.json', 'web/index.html', 'web/vite.config.ts')
         $files += @(Get-ChildItem -LiteralPath (Join-Path $Root 'web') -Filter 'tsconfig*.json' -File |
             ForEach-Object { 'web/' + $_.Name })

@@ -27,10 +27,10 @@ ENCODE_TIMEOUT_S = 30.0
 STDERR_LIMIT = 8192
 STDOUT_LIMIT = 128 * 1024
 TAG_MAX = 200
-MIN_VERSION = (4, 4)
+MIN_VERSION = (9, 0, 2)
 INSTALL_HINT = (
-    "FFmpeg est introuvable. Installez-le : winget install Gyan.FFmpeg (Windows), "
-    "brew install ffmpeg (macOS) ou sudo apt install ffmpeg (Linux), "
+    "FFmpeg et ffprobe 9.0.2 ou plus sont requis. Installez un build à jour "
+    "depuis https://ffmpeg.org/download.html, "
     "ou indiquez son chemin avec --ffmpeg."
 )
 CREATE_NO_WINDOW = 0x08000000
@@ -126,8 +126,13 @@ def check(tools: FfmpegTools, extensions: frozenset[str] | None = None) -> Ffmpe
     for label, executable in (("FFmpeg", tools.ffmpeg), ("ffprobe", tools.ffprobe)):
         output = _capabilities(executable, "-version")
         match = re.search(r"version\s+n?(\d+)\.(\d+)(?:\.(\d+))?", output)
-        if match and (int(match[1]), int(match[2])) < MIN_VERSION:
-            raise FfmpegMissingError(f"{label} trop ancien ; version 4.4 ou plus requise.")
+        if match is None:
+            raise FfmpegMissingError(
+                f"Version de {label} non identifiable ; installez FFmpeg et ffprobe 9.0.2 ou plus."
+            )
+        parsed_version = tuple(int(part or 0) for part in match.groups())
+        if parsed_version < MIN_VERSION:
+            raise FfmpegMissingError(f"{label} trop ancien ; version 9.0.2 ou plus requise.")
         if label == "FFmpeg":
             version = (
                 f"FFmpeg {match[0].removeprefix('version ')}"

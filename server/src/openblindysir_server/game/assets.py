@@ -414,6 +414,8 @@ def previous_round(s: SessionState) -> Round | None:
 def retained_assets(s: SessionState) -> dict[str, AssetRole]:
     """Assets kept in RAM: previous, current, next (and next2). Everything else is evicted."""
     roles: dict[str, AssetRole] = {}
+    if s.game.finale_play is not None:
+        roles[s.game.finale_play.asset_id] = AssetRole.CURRENT
     previous = previous_round(s)
     if previous is not None and previous.slot.asset_id:
         roles[previous.slot.asset_id] = AssetRole.PREVIOUS

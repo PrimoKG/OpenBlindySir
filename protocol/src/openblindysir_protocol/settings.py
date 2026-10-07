@@ -51,6 +51,12 @@ class SourceView(OutboundModel):
 
 
 class GameSettings(OutboundModel):
+    scoring_mode: str = "manual"
+    acceptance_threshold: int = 90
+    answer_fields: list[str] = Field(default_factory=lambda: ["title", "artist"])
+    album_points: int = 1
+    year_points: int = 1
+    featuring_points: int = 1
     auto_advance: bool = True
     intermission_s: int = 2
     custom_points: int = 1
@@ -85,7 +91,27 @@ class SettingsPatch(InboundModel):
     custom_points: Annotated[int, Field(ge=0, le=1000)] | None = None
     prefetch_depth: Annotated[int, Field(ge=1, le=2)] | None = None
     allow_repeats: bool | None = None
-    answer_mode: Literal["title", "artist", "both", "custom"] | None = None
+    answer_mode: Literal["title", "artist", "both", "custom", "fields"] | None = None
+    scoring_mode: Literal["manual", "auto"] | None = None
+    acceptance_threshold: Annotated[int, Field(ge=80, le=100)] | None = None
+    answer_fields: (
+        Annotated[
+            list[Literal["title", "artist", "album", "year", "featuring"]],
+            Field(min_length=1, max_length=5),
+        ]
+        | None
+    ) = None
+    album_points: Annotated[int, Field(ge=0, le=1000)] | None = None
+    year_points: Annotated[int, Field(ge=0, le=1000)] | None = None
+    featuring_points: Annotated[int, Field(ge=0, le=1000)] | None = None
+
+    @field_validator("answer_fields")
+    @classmethod
+    def _unique_fields(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and len(set(value)) != len(value):
+            raise ValueError("duplicate answer criteria")
+        return value
+
     title_points: Annotated[int, Field(ge=0, le=1000)] | None = None
     artist_points: Annotated[int, Field(ge=0, le=1000)] | None = None
     instructions: Annotated[str, StringConstraints(max_length=500)] | None = None

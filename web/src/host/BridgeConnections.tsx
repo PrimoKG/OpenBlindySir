@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { t, tCode } from "../i18n";
+import { t, tCode, useMessage } from "../i18n";
 import { api } from "../net/api";
 import type { HostView } from "../protocol";
 import { Button, ConfirmDialog } from "../ui/components";
@@ -7,8 +7,8 @@ import { Button, ConfirmDialog } from "../ui/components";
 export function BridgeConnections({ view }: { readonly view: HostView }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useMessage(null);
+  const [error, setError] = useMessage(null);
   const revoke = async () => {
     if (!selected || busy) return;
     const id = selected;
@@ -17,9 +17,9 @@ export function BridgeConnections({ view }: { readonly view: HostView }) {
     const result = await api.revokeBridge(id);
     setBusy(false);
     if (result.ok) {
-      setNotice(t("bridges.revoked"));
+      setNotice(() => t("bridges.revoked"));
       setError(null);
-    } else setError(tCode("error", result.error));
+    } else setError(() => tCode("error", result.error));
   };
   return (
     <details className="disclosure bridge-connections">

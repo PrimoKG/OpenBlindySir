@@ -1,0 +1,139 @@
+/* Landscape laptops have more useful width than height. Keep the phone flow intact. */
+@media (min-width: 900px) and (min-aspect-ratio: 4 / 3) {
+  .app:is(.phase-lobby, .phase-in_game, .phase-final_score_review, .phase-final_results) {
+    max-width: 1480px;
+    padding-inline: clamp(1.25rem, 3vw, 3rem);
+  }
+  .phase-in_game .player-stage > main {
+    min-height: min(380px, 58svh);
+  }
+  .phase-in_game .player-stage > .open-round {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "deadline deadline"
+      "listening response"
+      "heading response"
+      "rules response";
+    gap: 1rem clamp(1.5rem, 3vw, 3rem);
+    align-content: start;
+    align-items: start;
+    min-height: 0;
+  }
+  .open-round > .answer-deadline {
+    grid-area: deadline;
+  }
+  .open-round > .playback {
+    grid-area: listening;
+  }
+  .open-round > .page-heading {
+    grid-area: heading;
+  }
+  .open-round > .game-rules {
+    grid-area: rules;
+  }
+  .open-round > :is(.answer-form, .answer-saved) {
+    grid-area: response;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1rem, 2vw, 1.8rem);
+    border-radius: 18px;
+    background: var(--surface-alt);
+    min-width: 0;
+  }
+  .open-round > .answer-form {
+    gap: 0.65rem;
+  }
+  .open-round > .answer-saved h2 {
+    font-size: 1.4rem;
+  }
+  .open-round > :is(.round-late-notice, .live) {
+    grid-column: 1;
+    font-size: 0.8rem;
+  }
+  .open-round .rules-compact p {
+    max-height: 7em;
+  }
+  .lobby {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 1.25rem 2rem;
+    align-items: start;
+  }
+  .lobby > :is(.page-heading, .game-rules) {
+    grid-column: 1 / -1;
+  }
+  .lobby > .participants {
+    grid-column: 1;
+    grid-row: 3;
+    margin-top: 0;
+  }
+  .lobby > .audio-setup {
+    grid-column: 2;
+    grid-row: 3 / span 2;
+    margin-top: 0;
+    padding: 1.25rem;
+    background: var(--surface-alt);
+    border: 0;
+    border-radius: 18px;
+  }
+  .lobby > .live {
+    grid-column: 1;
+    grid-row: 4;
+  }
+  .closed-round:has(.answer-saved) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "eyebrow answer"
+      "record answer"
+      "heading answer"
+      "transition answer";
+    align-content: center;
+    justify-items: center;
+    gap: 0.65rem 2rem;
+  }
+  .closed-round > .eyebrow {
+    grid-area: eyebrow;
+  }
+  .closed-round > .record {
+    grid-area: record;
+  }
+  .closed-round > h1 {
+    grid-area: heading;
+  }
+  .closed-round > .answer-saved {
+    grid-area: answer;
+    width: 100%;
+    padding: 1.5rem;
+  }
+  .closed-round > .round-transition {
+    grid-area: transition;
+  }
+  .mc-open-round {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 1rem 2rem;
+    align-content: start;
+  }
+  .mc-open-round > :is(.playback, h1, p) {
+    grid-column: 1;
+  }
+  .mc-open-round > .answer-deadline {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .mc-open-round > .mc-progress {
+    grid-column: 2;
+    grid-row: 2 / span 3;
+    margin-top: 0;
+  }
+}
+@media (min-width: 900px) and (min-aspect-ratio: 4 / 3) and (max-height: 650px) {
+  .open-round .rules-compact p {
+    max-height: 4.8em;
+  }
+}

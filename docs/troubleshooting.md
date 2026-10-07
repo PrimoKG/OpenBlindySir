@@ -24,7 +24,7 @@ Le Bridge connecté se lance avec `run`. [Installation](bridge-installation.md).
 | `network` / reconnexion | URL accessible depuis **l'appareil Bridge** ; DNS, VPN, proxy réseau, port HTTPS, pare-feu sortant. `/host` ne fait pas partie de l'URL Bridge. |
 | `certificate` | Adresse couverte par le certificat, date du système et bonne autorité. En privé, fournir la racine de l'hôte via `SSL_CERT_FILE` au Bridge ; ne jamais désactiver TLS. |
 | `authentication` | Copier localement **BRIDGE_SECRET** du serveur, pas BLIND_PASSWORD/HOST_PASSWORD. Vérifier qu'aucune ancienne variable ne surcharge le fichier. |
-| `protocol` | Mettre à jour ensemble serveur, Bridge et build web : protocole **4**. Un cache web ou ancien onglet doit être rechargé. |
+| `protocol` | Mettre à jour ensemble serveur, Bridge et build web : protocole **9**. Un cache web ou ancien onglet doit être rechargé. |
 | `catalogue` | Contrôler limites du proxy et logs privés du serveur ; taille gzip, propriétaire/jeton de catalogue, Bridge remplacé en cours d'upload. Relancer le Bridge hors partie. |
 | Test réussi mais Bridge hors ligne | `doctor --connect` ferme volontairement le test ; démarrer `run` et garder terminal/PC ouverts. |
 | Connexion remplacée | Deux processus utilisent le même fichier/UUID ; arrêter le doublon. Pour deux bibliothèques, utiliser des configurations distinctes. |
@@ -114,10 +114,18 @@ que pour son premier UUID. Rotation : conserver UUID, délivrer un nouveau fichi
 reconnecter uniquement ce Bridge. Voir [FR](v0.5.md) / [EN](v0.5.en.md).
 
 Incompatibilité : contrôler `/api/compatibility`, mettre à jour les trois composants
-au protocole 6 et recharger l'onglet. Un format snapshot/historique inconnu n'est
+au protocole 9 et recharger l'onglet. Un format snapshot/historique inconnu n'est
 pas une invitation à effacer l'état : conserver les deux copies et le registre,
 utiliser la version compatible ou le backup pré-migration. Historique vide après
 90 jours/50 parties/16 Mio : consulter la politique de rétention ; une sauvegarde
 indisponible est signalée à l'hôte. Archive supprimée mais résultats courants
 visibles : Nouvelle partie/Fin de session libère la partie courante ; les exports
 et backups externes demandent un nettoyage séparé.
+
+## Certificat LAN et notation optionnelle
+
+Pour approuver l’autorité HTTPS locale sur Windows/iOS/Android, voir
+[certificat-local.md](certificat-local.md). Partager uniquement le certificat public
+`root.crt`, jamais ses clés. Le mode LAN est conservé.
+La [notation automatique](notation-automatique.md) nécessite de mettre à jour
+serveur, Bridge et interface ensemble (protocole 9, snapshot 7), après sauvegarde privée.

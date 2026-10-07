@@ -15,7 +15,7 @@ import type {
 
 export type ApiResult<T> =
   | { ok: true; data: T; headers?: Headers }
-  | { ok: false; error: ErrorCode | "network" };
+  | { ok: false; error: ErrorCode | "network" | "persistence_failed" };
 
 async function request<T>(
   method: string,
@@ -29,10 +29,13 @@ async function request<T>(
       method,
       credentials: "same-origin",
       cache: "no-store",
-      headers: body === undefined ? {} : { "Content-Type": "application/json" },
+      headers:
+        body === undefined
+          ? {}
+          : { "Content-Type": body instanceof Blob ? "application/zip" : "application/json" },
     };
     if (body !== undefined) {
-      init.body = JSON.stringify(body);
+      init.body = body instanceof Blob ? body : JSON.stringify(body);
     }
     if (signal) init.signal = signal;
     response = await fetch(path, init);
@@ -53,6 +56,32 @@ async function request<T>(
 }
 
 export const api = {
+  access: () =>
+    request<{
+      code: string;
+      invitation: string;
+      requests: readonly { request_id: string; nickname: string; reference: string }[];
+    }>("GET", "/api/host/session/access"),
+  rotateAccess: (code?: string) =>
+    request<{ ok: true }>("POST", "/api/host/session/access", { code: code ?? null }),
+  decideAccess: (request_id: string, approve: boolean) =>
+    request<{ ok: true }>("POST", "/api/host/session/access/decide", { request_id, approve }),
+  sharedCode: () => request<{ code: string }>("GET", "/api/session/access-code"),
+  joinAccess: (nickname: string, code: string, invitation: string) =>
+    request<
+      SessionResponse | { status: "waiting"; request_id: string; token: string; reference: string }
+    >("POST", "/api/session/access", { nickname, code, invitation }),
+  pollAccess: (request_id: string, token: string) =>
+    request<SessionResponse | { status: "waiting" }>("POST", "/api/session/access/poll", {
+      request_id,
+      token,
+    }),
+  finishGame: (view: { game: { game_id: string } | null; phase: string }) =>
+    request<{ ok: true }>("POST", "/api/host/game/finish", {
+      game_id: view.game?.game_id,
+      phase: view.phase,
+      confirm_unreviewed: true,
+    }),
   compatibility: () => request<Compatibility>("GET", "/api/compatibility"),
   history: () => request<HistoryResponse>("GET", "/api/host/history"),
   historyRecord: (id: string) =>
@@ -69,7 +98,8 @@ export const api = {
     }),
   join: (password: string, nickname: string) =>
     request<JoinResponse>("POST", "/api/session/join", { password, nickname }),
-  session: () => request<SessionResponse>("GET", "/api/session"),
+  session: (signal?: AbortSignal) =>
+    request<SessionResponse>("GET", "/api/session", undefined, signal),
   elevate: (hostPassword: string) =>
     request<HostElevateResponse>("POST", "/api/session/host", { host_password: hostPassword }),
   leave: () => request<{ ok: true }>("POST", "/api/session/leave", {}),
@@ -90,7 +120,13 @@ export const api = {
       "/api/host/metadata/import",
       body,
     ),
-  metadata: () => request<{ version: 1; rows: unknown[] }>("GET", "/api/host/metadata"),
+  importMetadataArchive: (body: Blob) =>
+    request<{ accepted: number; issues: { row: number; code: string }[] }>(
+      "POST",
+      "/api/host/metadata/import-archive",
+      body,
+    ),
+  metadata: () => request<{ version: 1 | 2; rows: unknown[] }>("GET", "/api/host/metadata"),
   recoveryCode: () => request<{ code: string }>("POST", "/api/session/recovery-code", {}),
   recover: (password: string, code: string) =>
     request<SessionResponse>("POST", "/api/session/recover", { password, code }),

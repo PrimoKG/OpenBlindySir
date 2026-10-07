@@ -2,6 +2,7 @@
 import { type ButtonHTMLAttributes, type ReactNode, useEffect, useId, useRef } from "react";
 import { t } from "../i18n";
 import type { AudioState, ConnectionState } from "../protocol";
+import { LanguageChoice } from "./LanguageChoice";
 
 export function Button(
   props: ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -70,6 +71,7 @@ export function ConnectionScreen(props: {
     <div className="entry-page">
       <header className="entry-header">
         <Brand />
+        <LanguageChoice />
       </header>
       <main className="connection-screen">
         <StageMessage title={props.title} description={props.description}>
@@ -114,6 +116,8 @@ export function ConfirmDialog(props: {
   readonly message: string;
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
+  readonly cancelLabel?: string;
+  readonly confirmLabel?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -150,9 +154,9 @@ export function ConfirmDialog(props: {
       <p id={messageId}>{props.message}</p>
       {props.children}
       <div className="row">
-        <Button onClick={props.onCancel}>{t("hostui.cancel")}</Button>
+        <Button onClick={props.onCancel}>{props.cancelLabel ?? t("hostui.cancel")}</Button>
         <Button kind="primary" onClick={props.onConfirm}>
-          {t("hostui.confirm")}
+          {props.confirmLabel ?? t("hostui.confirm")}
         </Button>
       </div>
     </dialog>

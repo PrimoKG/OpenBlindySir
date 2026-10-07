@@ -64,6 +64,7 @@ def run_job(
     tmp_path: Path,
     catalog: LocalCatalog | None = None,
     request: ClipRequest | None = None,
+    preview: bool = False,
 ) -> tuple[list[Any], dict[str, bytes]]:
     """Run one PREPARE; ``catalog`` lets a test change the files after the scan."""
     tools = ffmpeg.discover()
@@ -87,7 +88,9 @@ def run_job(
         )
         task = asyncio.create_task(runner.run())
         runner.submit(
-            prepare(track_id),
+            prepare(track_id).model_copy(update={"review_mode": "preview"})
+            if preview
+            else prepare(track_id),
             request or ClipRequest(12.0, 0.3, 128, 4 * 1024 * 1024, ClipFormat.AAC),
         )
         for _ in range(400):
@@ -230,3 +233,21 @@ def test_shell_metacharacters_in_names_are_plain_data(tmp_path: Path) -> None:
     assert len(uploads) == 1
     assert not canary.exists()
     assert not (tmp_path / "work" / canary.name).exists()
+
+
+@pytest.mark.parametrize(("relpath", "duration"), [("Tagged/song.mp3", 15), ("short.flac", 6)])
+def test_private_preview_is_centered_and_short_tracks_remain_listenable(
+    library: Path, tmp_path: Path, relpath: str, duration: int
+) -> None:
+    sent, uploads = run_job(
+        library,
+        track_id_of(library, relpath),
+        tmp_path,
+        request=ClipRequest(15, 0.5, 128, 4 * 1024 * 1024, ClipFormat.AAC),
+        preview=True,
+    )
+    done = next(m for m in sent if isinstance(m, JobDone))
+    assert done.actual_start == pytest.approx((done.track_duration - duration) / 2, abs=0.05)
+    assert done.clip_duration == pytest.approx(duration, abs=0.2)
+    assert uploads
+    assert not list(tmp_path.glob("replay-*"))

@@ -53,7 +53,7 @@ class Settings:
     audio_cache_mb: int = 32
     max_clip_mb: int = 2
     ready_timeout_s: int = 10
-    answer_max_chars: int = 200
+    answer_max_chars: int = 1000
     near_tie_ms: int = 300
     session_idle_ttl_h: int = 24
     dev_mode: bool = False
@@ -245,7 +245,7 @@ def load_settings(
         audio_cache_mb=cache_mb,
         max_clip_mb=clip_mb,
         ready_timeout_s=r.integer("READY_TIMEOUT_S", 10, 3, 60),
-        answer_max_chars=r.integer("ANSWER_MAX_CHARS", 200, 20, 200),
+        answer_max_chars=r.integer("ANSWER_MAX_CHARS", 1000, 20, 1500),
         near_tie_ms=r.integer("NEAR_TIE_MS", 300, 0, 5000),
         session_idle_ttl_h=r.integer("SESSION_IDLE_TTL_H", 24, 1, 168),
         dev_mode=dev,

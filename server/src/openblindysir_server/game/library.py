@@ -5,6 +5,7 @@ import unicodedata
 
 from openblindysir_protocol.enums import BridgeState
 from openblindysir_protocol.http import FolderNode, LibraryBridge, LibraryIssue, LibraryResponse
+from openblindysir_server.game.metadata import musical_metadata
 from openblindysir_server.game.state import Catalog, CatalogEntryData, SessionState, TrackRef
 
 
@@ -32,7 +33,10 @@ def folder_tree(catalog: Catalog, s: SessionState | None = None) -> FolderNode:
         segments = folder.split("/") if folder else []
         counts[""] += 1
         ref = TrackRef(catalog.bridge_id, track_id)
-        usable = online and (s is None or ref not in s.game.unavailable)
+        usable = online and (
+            s is None
+            or (ref not in s.game.unavailable and musical_metadata(s, ref).enabled is not False)
+        )
         new = usable and (s is None or ref not in s.played)
         available[""] = available.get("", 0) + int(usable)
         fresh[""] = fresh.get("", 0) + int(new)

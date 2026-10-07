@@ -7,6 +7,7 @@ import pytest
 from conftest import ORIGIN, Harness, settings_for_test
 from fastapi.testclient import TestClient
 
+from openblindysir_protocol.version import PROTOCOL_VERSION
 from openblindysir_server.game import FakeClock, SequentialIds
 from openblindysir_server.main import create_app
 
@@ -23,7 +24,7 @@ def test_restart_preserves_host_cookie_and_configuration(tmp_path: Path) -> None
         harness.elevate(token)
         epoch = harness.runtime.engine.state.epoch
         with harness.player_ws(token) as ws:
-            ws.send_json({"t": "HELLO", "protocol": 6, "client_version": "example"})
+            ws.send_json({"t": "HELLO", "protocol": PROTOCOL_VERSION, "client_version": "example"})
             ws.receive_json()
             ws.send_json(
                 {

@@ -63,19 +63,26 @@ class TokenBucket:
 class ConnectionCounter:
     """Open WebSocket connections per IP (friends behind one NAT are allowed up to a cap)."""
 
-    def __init__(self, limit: int) -> None:
+    def __init__(self, limit: int, *, global_limit: int | None = None) -> None:
         self.limit = limit
+        self.global_limit = global_limit
+        self._total = 0
         self._open: dict[str, int] = {}
 
     def acquire(self, ip: str) -> bool:
         count = self._open.get(ip, 0)
-        if count >= self.limit:
+        if count >= self.limit or (
+            self.global_limit is not None and self._total >= self.global_limit
+        ):
             return False
         self._open[ip] = count + 1
+        self._total += 1
         return True
 
     def release(self, ip: str) -> None:
         count = self._open.get(ip, 0)
+        if count:
+            self._total -= 1
         if count > 1:
             self._open[ip] = count - 1
         else:

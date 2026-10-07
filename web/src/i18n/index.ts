@@ -1,6 +1,6 @@
-// Minimal i18n: typed keys, {name} placeholders. French in V0.1 (spec patch 2);
-// "?lang=en" is accepted for development only.
+// Typed messages and a browser-local language preference, shared by all screens.
 
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { readLocal, writeLocal } from "../storage";
 import { en } from "./en";
 import { fr, type MessageKey } from "./fr";
@@ -13,28 +13,57 @@ export type Dictionary = { readonly [K in MessageKey]: string };
 const dictionaries: Readonly<Record<"fr" | "en", Dictionary>> = { fr, en };
 
 function currentLanguage(): "fr" | "en" {
-  if (
-    typeof location !== "undefined" &&
-    new URLSearchParams(location.search).get("lang") === "en"
-  ) {
-    return "en";
+  const requested =
+    typeof location === "undefined" ? null : new URLSearchParams(location.search).get("lang");
+  if (requested === "fr" || requested === "en") {
+    writeLocal("language", requested);
+    return requested;
   }
-  if (typeof location !== "undefined" && new URLSearchParams(location.search).get("lang") === "fr")
-    return "fr";
   if (readLocal("language") === "en") return "en";
   return "fr";
 }
 
 let language: "fr" | "en" = currentLanguage();
+const listeners = new Set<() => void>();
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** Subscribe without remounting game/audio controllers or discarding form drafts. */
+export function useLanguage(): "fr" | "en" {
+  return useSyncExternalStore(subscribe, getLanguage);
+}
 
 export function setLanguage(lang: "fr" | "en"): void {
+  const changed = language !== lang;
   language = lang;
   writeLocal("language", lang);
   if (typeof document !== "undefined") document.documentElement.lang = lang;
+  // A link's initial language must not override the user's choice on refresh.
+  if (typeof location !== "undefined" && typeof history !== "undefined") {
+    const url = new URL(location.href);
+    if (url.searchParams.has("lang")) {
+      url.searchParams.delete("lang");
+      history.replaceState(history.state, "", url.href);
+    }
+  }
+  if (changed) for (const listener of listeners) listener();
 }
 
 export function getLanguage(): "fr" | "en" {
   return language;
+}
+
+/** Retain message data in state; resolve it in the currently selected language. */
+export function useMessage(initial: string | null) {
+  const [value, setValue] = useState<string | null | (() => string)>(initial);
+  const setMessage = useCallback(
+    (next: string | null | (() => string)) => setValue(() => next),
+    [],
+  );
+  return [typeof value === "function" ? value() : value, setMessage] as const;
 }
 
 export function format(template: string, params?: Params): string {
