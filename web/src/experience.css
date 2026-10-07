@@ -556,6 +556,9 @@ html:has(.final-review) {
     font-size: 0.875rem;
     padding-inline: 0.6rem;
   }
+  .phase-in_game .open-round {
+    gap: 0.4rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

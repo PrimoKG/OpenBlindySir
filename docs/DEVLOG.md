@@ -2108,3 +2108,9 @@ marges et leur texte sont compactés, en conservant 44 px de hauteur tactile.
 42 parcours adaptatifs sur Chromium/WebKit réussissent avec les mêmes assertions.
 Build/lint réussis, image applicative reconstruite et scan local renouvelé.
 La relance conserve le snapshot 8 et dispose d’une sauvegarde privée préalable.
+
+Le navigateur de test Docker utilisait initialement une police de remplacement.
+Après installation effective de DejaVu/FreeFont, une consigne personnalisée longue
+révèle encore 12 px de débordement WebKit. Sous 380 px, les espacements entre
+blocs sont légèrement réduits ; les cibles tactiles et la consigne sont conservées.
+Les 42 mêmes parcours passent ensuite avec les polices du runner réellement présentes.
