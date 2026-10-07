@@ -3,8 +3,15 @@
 set -eu
 prefix="$(pwd)/.local/ci-ffmpeg"
 jobs=2
+set --
 case "$(uname -s)" in
-    Darwin) jobs="$(sysctl -n hw.logicalcpu)" ;;
+    Darwin)
+        jobs="$(sysctl -n hw.logicalcpu)"
+        brew_prefix="$(brew --prefix)"
+        # LAME's configure check does not use pkg-config. Apple Silicon's
+        # /opt/homebrew is outside Clang's default include/linker search paths.
+        set -- "--extra-cflags=-I$brew_prefix/include" "--extra-ldflags=-L$brew_prefix/lib"
+        ;;
     Linux) jobs="$(getconf _NPROCESSORS_ONLN)" ;;
 esac
 # Bound memory use on shared runners while avoiding slow dual-thread Mac builds.
@@ -22,8 +29,11 @@ if [ ! -x "$prefix/bin/ffmpeg" ] || ! "$prefix/bin/ffmpeg" -version | head -n1 |
     fi
     tar -xf source.tar.xz
     cd ffmpeg-9.0.2
-    ./configure --prefix="$prefix" --disable-autodetect --disable-doc --disable-debug \
-        --enable-libmp3lame --enable-libopus --enable-libvorbis
+    if ! ./configure --prefix="$prefix" --disable-autodetect --disable-doc --disable-debug \
+        --enable-libmp3lame --enable-libopus --enable-libvorbis "$@"; then
+        tail -n 80 ffbuild/config.log >&2
+        exit 1
+    fi
     make -j"$jobs"
     make install
 fi
