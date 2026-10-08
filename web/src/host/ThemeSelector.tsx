@@ -17,12 +17,28 @@ export function emptyTheme(): ThemeFilter {
 }
 
 // Browser-local presets may predate themes or contain damaged data.
+const codePoints = (value: string) => Array.from(value).length;
+const invalidText = (value: string) =>
+  Array.from(value).some((char) => {
+    const point = char.codePointAt(0) ?? 0;
+    return point < 32 || point === 127 || (point >= 0xd800 && point <= 0xdfff);
+  });
+
+export function validThemeYears(value: ThemeFilter): boolean {
+  return (
+    [value.year_min, value.year_max].every(
+      (year) => year == null || (Number.isInteger(year) && year >= 1000 && year <= 9999),
+    ) &&
+    (value.year_min == null || value.year_max == null || value.year_min <= value.year_max)
+  );
+}
+
 export function readTheme(value: unknown): ThemeFilter | null {
   if (value === undefined) return emptyTheme();
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const candidate = value as Record<string, unknown>;
   const query = candidate.query ?? "";
-  if (typeof query !== "string" || query.length > 256 || /[\p{C}]/u.test(query)) return null;
+  if (typeof query !== "string" || codePoints(query) > 256 || invalidText(query)) return null;
   let result = { ...emptyTheme(), query };
   for (const field of ["genres", "languages", "tags", "linked_to"] as const) {
     const labels = candidate[field] ?? [];
@@ -33,8 +49,8 @@ export function readTheme(value: unknown): ThemeFilter | null {
         (label) =>
           typeof label !== "string" ||
           !label.trim() ||
-          label.length > 128 ||
-          /[\p{C}]/u.test(label),
+          codePoints(label) > 256 ||
+          invalidText(label),
       )
     )
       return null;
@@ -68,12 +84,20 @@ export function useSelectionPreview(draft: GameSettings, revision: string) {
   const [result, setResult] = useState<SelectionPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const valid = readTheme(draft.selection_filter) !== null;
   const payload = JSON.stringify({
     sources: draft.sources,
     selection_filter: draft.selection_filter ?? emptyTheme(),
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: catalogue events invalidate the same draft selection.
   useEffect(() => {
+    if (!valid) {
+      setResult(null);
+      setLoading(false);
+      setError("invalid_args");
+      return;
+    }
     const controller = new AbortController();
     let active = true;
     setLoading(true);
@@ -101,8 +125,8 @@ export function useSelectionPreview(draft: GameSettings, revision: string) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [payload, revision]);
-  return { result, loading, error };
+  }, [payload, revision, retry, valid]);
+  return { result, loading, error, retry: () => setRetry((old) => old + 1) };
 }
 
 export function ThemeSelector({
@@ -112,6 +136,7 @@ export function ThemeSelector({
   error,
   onChange,
   onQuickTheme,
+  onRetry,
 }: {
   readonly value: ThemeFilter;
   readonly facets: SelectionPreview | null;
@@ -119,13 +144,13 @@ export function ThemeSelector({
   readonly error: string | null;
   readonly onChange: (value: ThemeFilter) => void;
   readonly onQuickTheme: (value: ThemeFilter, cartoons: boolean) => void;
+  readonly onRetry: () => void;
 }) {
   const id = useId();
   const [labels, setLabels] = useState<Record<string, string>>({});
   const set = <K extends keyof ThemeFilter>(field: K, next: ThemeFilter[K]) =>
     onChange({ ...value, [field]: next });
-  const validRange =
-    value.year_min == null || value.year_max == null || value.year_min <= value.year_max;
+  const validRange = validThemeYears(value);
   const quick = (patch: Partial<ThemeFilter>, cartoons = false) =>
     onQuickTheme({ ...emptyTheme(), ...patch }, cartoons);
   return (
@@ -151,8 +176,10 @@ export function ThemeSelector({
         <input
           type="search"
           value={value.query ?? ""}
-          maxLength={256}
-          onChange={(e) => set("query", e.target.value)}
+          maxLength={512}
+          onChange={(e) => {
+            if (codePoints(e.target.value) <= 256) set("query", e.target.value);
+          }}
         />
       </label>
       <div className="theme-fields">
@@ -162,6 +189,8 @@ export function ThemeSelector({
             const next = label.trim();
             if (
               !next ||
+              codePoints(next) > 256 ||
+              invalidText(next) ||
               selected.length >= 16 ||
               selected.some((v) => v.toLocaleLowerCase() === next.toLocaleLowerCase())
             )
@@ -191,7 +220,7 @@ export function ThemeSelector({
               <div className="row theme-custom">
                 <input
                   aria-label={t("theme.custom", { field: t(`theme.${field}`) })}
-                  maxLength={128}
+                  maxLength={512}
                   value={labels[field] ?? ""}
                   onChange={(e) => setLabels((old) => ({ ...old, [field]: e.target.value }))}
                   onKeyDown={(e) => {
@@ -264,12 +293,15 @@ export function ThemeSelector({
         </p>
       )}
       <div className="capacity-card" aria-live="polite" aria-busy={loading}>
-        {loading ? (
+        {!validRange ? null : loading ? (
           <p>{t("theme.loading")}</p>
         ) : error ? (
-          <p className="error" role="alert">
-            {tCode("error", error)}
-          </p>
+          <>
+            <p className="error" role="alert">
+              {tCode("error", error)}
+            </p>
+            <Button onClick={onRetry}>{t("app.retry")}</Button>
+          </>
         ) : (
           facets && (
             <>

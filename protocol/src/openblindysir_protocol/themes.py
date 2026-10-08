@@ -6,7 +6,7 @@ from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from openblindysir_protocol.base import InboundModel
 
-Label = Annotated[str, StringConstraints(min_length=1, max_length=128)]
+Label = Annotated[str, StringConstraints(min_length=1, max_length=256)]
 Labels = Annotated[list[Label], Field(max_length=16)]
 
 

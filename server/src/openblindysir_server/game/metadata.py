@@ -1,14 +1,36 @@
 """Conservative title cleanup. The host may override ambiguous file metadata."""
 
 import re
+from dataclasses import replace
 
-from openblindysir_server.game.state import Metadata, SessionState, TrackRef
+from openblindysir_server.game.state import AssetRecord, Metadata, SessionState, TrackRef
 from openblindysir_server.game.themes import GENRE_LABELS, LANGUAGES, search_key
 
 DECORATION = re.compile(
     r"\s*[\[(](?:official\s+)?(?:lyrics?(?:\s+video)?|music\s+video|audio|video|clip\s+officiel|official\s+video)[\])]",
     re.IGNORECASE,
 )
+
+
+def measured_tracks(s: SessionState) -> dict[TrackRef, AssetRecord]:
+    """The most recently measured tags remain usable after audio eviction."""
+    return {a.track_ref: a for a in s.assets.values() if a.track_duration_ms is not None}
+
+
+def selection_metadata(s: SessionState, ref: TrackRef, asset: AssetRecord | None) -> Metadata:
+    """Resolve search/selection titles without overriding corrections or explicit clears."""
+    meta = musical_metadata(s, ref)
+    if asset is None:
+        return meta
+    return replace(
+        meta,
+        **{
+            key: None
+            if key in (meta.cleared_fields or [])
+            else getattr(meta, key) or getattr(asset, key)
+            for key in ("title", "artist")
+        },
+    )
 
 
 def musical_metadata(s: SessionState, ref: TrackRef) -> Metadata:

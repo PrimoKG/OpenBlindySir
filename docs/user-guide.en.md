@@ -3,7 +3,7 @@
 [Guide français](guide-utilisateur.md). One server hosts one game at a time, on a
 LAN, private VPN or the Internet. Players use a browser without creating an account.
 See [hosting](deployment.md) or [Docker](docker.md). Update server, Bridge and web
-UI together: **protocol 11**. [Install the Bridge from source](bridge-installation.en.md)
+UI together: **protocol 12**. [Install the Bridge from source](bridge-installation.en.md)
 or use Docker today; uvx and release archives require publication first.
 
 Quick access: [join and sound](#join-audio-and-recovery), [host setup](#host-setup),

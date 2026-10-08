@@ -6,12 +6,14 @@ import json
 import ssl
 import subprocess
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 
 import httpx
 
 from bots import play_game
 from openblindysir_server.config import read_dotenv
+from openblindysir_server.private_files import atomic_private_write, protect_file
 
 
 def validate_profiles(env_file: Path, ca_file: Path) -> None:
@@ -32,6 +34,7 @@ def validate_profiles(env_file: Path, ca_file: Path) -> None:
     assert private["bridge"]["network_mode"] == "service:app"
     assert private["bridge"]["volumes"][0]["read_only"]
     with tempfile.TemporaryDirectory(prefix="docker-profiles-") as temporary:
+        protect_file(Path(temporary))
         path = Path(temporary) / "profiles.env"
         lines = env_file.read_text(encoding="utf-8").splitlines()
         routing = {
@@ -43,13 +46,15 @@ def validate_profiles(env_file: Path, ca_file: Path) -> None:
             "CADDY_PROFILE",
         }
         base = "\n".join(line for line in lines if line.partition("=")[0] not in routing)
-        path.write_text(
-            base + "\nDOMAIN=blind.example.com\nTLS_HOST=blind.example.com\n"
-            "TLS_SERVER_NAME=blind.example.com\nHTTPS_PORT=443\nBIND_IP=0.0.0.0\n"
-            "CADDY_PROFILE=public\nBRIDGE_SERVER=https://blind.example.com\n"
-            f"BRIDGE_CA_FILE='{ca_file.resolve().as_posix()}'\n"
-            f"BRIDGE_CREDENTIALS_FILE='{ca_file.resolve().as_posix()}'\n",
-            encoding="utf-8",
+        atomic_private_write(
+            path,
+            (
+                base + "\nDOMAIN=blind.example.com\nTLS_HOST=blind.example.com\n"
+                "TLS_SERVER_NAME=blind.example.com\nHTTPS_PORT=443\nBIND_IP=0.0.0.0\n"
+                "CADDY_PROFILE=public\nBRIDGE_SERVER=https://blind.example.com\n"
+                f"BRIDGE_CA_FILE='{ca_file.resolve().as_posix()}'\n"
+                f"BRIDGE_CREDENTIALS_FILE='{ca_file.resolve().as_posix()}'\n"
+            ).encode("utf-8"),
         )
         public = compose(path, "compose.yaml", "deploy/compose.public.yaml")["services"]
         assert {port["target"] for port in public["app"]["ports"]} == {80, 443}
@@ -80,13 +85,24 @@ def validate_profiles(env_file: Path, ca_file: Path) -> None:
     print("Compose profiles PASS: private, public, bootstrap and individual Bridges with TLS root.")
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, default=Path(".local/docker/hosting.env"))
     parser.add_argument("--ca-file", type=Path, default=Path(".local/docker/root.crt"))
-    args = parser.parse_args()
-    config = read_dotenv(args.env_file)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--profiles-only", action="store_true", help="Validate Compose without contacting the app"
+    )
+    mode.add_argument(
+        "--allow-test-session-mutation",
+        action="store_true",
+        help="Dedicated test installation only: creates players and changes game settings/scores",
+    )
+    args = parser.parse_args(argv)
     validate_profiles(args.env_file, args.ca_file)
+    if args.profiles_only:
+        return 0
+    config = read_dotenv(args.env_file)
     context = ssl.create_default_context(cafile=str(args.ca_file))
     base = "https://" + config["DOMAIN"]
     with httpx.Client(base_url=base, verify=context, timeout=5) as client:

@@ -36,9 +36,9 @@ from openblindysir_server.auth.routes import current_player
 from openblindysir_server.game import commands as c
 from openblindysir_server.game import rounds, selection
 from openblindysir_server.game.auto_scoring import criteria
-from openblindysir_server.game.metadata import musical_metadata
+from openblindysir_server.game.metadata import measured_tracks, musical_metadata, selection_metadata
 from openblindysir_server.game.state import AssetRecord, Metadata, SessionState, TrackRef
-from openblindysir_server.game.themes import ThemeFacets, matches_theme, search_key
+from openblindysir_server.game.themes import ThemeFacets, label_key, matches_theme, search_key
 from openblindysir_server.library import metadata_archive
 from openblindysir_server.security import check_origin, error, read_bounded_body, read_json_body
 from openblindysir_server.state import AppState, app_state
@@ -166,8 +166,8 @@ async def search(
         len(q) > 256
         or len(tag) > 256
         or len(linked_to) > 256
-        or len(genre) > 128
-        or len(language) > 128
+        or len(genre) > 256
+        or len(language) > 256
         or (year_min is not None and not 1000 <= year_min <= 9999)
         or (year_max is not None and not 1000 <= year_max <= 9999)
         or (year_min is not None and year_max is not None and year_min > year_max)
@@ -184,6 +184,8 @@ async def search(
     try:
         ThemeFilter(
             query=q,
+            tags=[tag] if tag else [],
+            linked_to=[linked_to] if linked_to else [],
             genres=[genre] if genre else [],
             languages=[language] if language else [],
             year_min=year_min,
@@ -250,7 +252,7 @@ def search_snapshot(s: SessionState) -> SessionState:
         consumed_cancelled=s.consumed_cancelled.copy(),
         game=replace(
             s.game,
-            settings=replace(s.game.settings, sources=list(s.game.settings.sources)),
+            settings=s.game.settings.copy(),
             unavailable=s.game.unavailable.copy(),
             manual_tracks=s.game.manual_tracks.copy(),
             pipeline=[replace(slot) for slot in s.game.pipeline],
@@ -286,8 +288,8 @@ def search_response(
     reserved = set(s.game.manual_tracks.values()) | {
         slot.track_ref for slot in selection.live_slots(s)
     }
-    measured = {a.track_ref: a for a in s.assets.values() if a.track_duration_ms is not None}
-    tag_query, link_query = normalized(tag), normalized(linked_to)
+    measured = measured_tracks(s)
+    tag_query, link_query = label_key(tag), label_key(linked_to)
     facets = ThemeFacets()
     theme = ThemeFilter(
         query=q,
@@ -308,12 +310,15 @@ def search_response(
                 # monopolize HTTP/WS threads. This never sleeps on the network loop.
                 time.sleep(0.001)
             ref = TrackRef(b, tid)
+            if folder and not selection.matches(entry.relpath, folder):
+                continue
             if pool_only and not any(
                 ref.bridge_id == owner and selection.matches(entry.relpath, prefix)
                 for owner, prefix in sources
             ):
                 continue
-            meta = musical_metadata(s, ref)
+            asset = measured.get(ref)
+            meta = selection_metadata(s, ref, asset)
             if pool_only and not matches_theme(
                 meta, entry.relpath, s.game.settings.selection_filter
             ):
@@ -322,31 +327,19 @@ def search_response(
             enabled = meta.enabled is not False
             if (activation == "active" and not enabled) or (activation == "disabled" and enabled):
                 continue
-            if tag_query and tag_query not in {normalized(value) for value in meta.tags or []}:
+            if tag_query and tag_query not in {label_key(value) for value in meta.tags or []}:
                 continue
             if link_query and link_query not in {
-                normalized(value) for value in meta.linked_to or []
+                label_key(value) for value in meta.linked_to or []
             }:
                 continue
-            asset = measured.get(ref)
             missing = missing_references(s, meta, asset)
             if (quality == "ready" and missing) or (quality == "missing" and not missing):
                 continue
-            title = (
-                None
-                if "title" in (meta.cleared_fields or [])
-                else meta.title or (asset.title if asset else None)
-            )
-            artist = (
-                None
-                if "artist" in (meta.cleared_fields or [])
-                else meta.artist or (asset.artist if asset else None)
-            )
-            if not matches_theme(replace(meta, title=title, artist=artist), entry.relpath, theme):
+            title, artist = meta.title, meta.artist
+            if not matches_theme(meta, entry.relpath, theme):
                 continue
             available = online and enabled and ref not in s.game.unavailable
-            if folder and not selection.matches(entry.relpath, folder):
-                continue
             if ext and entry.ext != ext:
                 continue
             if (
@@ -371,8 +364,8 @@ def search_response(
             }[sort]
             found.append(((normalized(sort_value or filename), b, tid), ref))
     found.sort(key=lambda hit: hit[0], reverse=descending)
-    if sort == "year":
-        found.sort(key=lambda hit: hit[0][0] == "99999")
+    if sort in {"year", "genre", "language"}:
+        found.sort(key=lambda hit: hit[0][0] == ("99999" if sort == "year" else ""))
     tracks = [
         search_track(s, ref, measured.get(ref), reserved, sources)
         for _, ref in found[offset : offset + limit]
@@ -431,6 +424,7 @@ async def preview_selection(request: Request) -> Response:
 
 def selection_preview(s: SessionState, payload: SelectionPreviewRequest) -> SelectionPreview:
     sources = tuple((v.bridge_id, v.folder_prefix) for v in payload.sources)
+    measured = measured_tracks(s)
     facets = ThemeFacets()
     matching = available = fresh = unclassified = 0
     examples: list[TrackRef] = []
@@ -447,7 +441,7 @@ def selection_preview(s: SessionState, payload: SelectionPreviewRequest) -> Sele
             ):
                 continue
             ref = TrackRef(bid, tid)
-            meta = musical_metadata(s, ref)
+            meta = selection_metadata(s, ref, measured.get(ref))
             if meta.enabled is False:
                 continue
             unclassified += int(not meta.genres or not meta.languages or meta.year is None)
@@ -470,7 +464,7 @@ def selection_preview(s: SessionState, payload: SelectionPreviewRequest) -> Sele
         tags=facets.values("tags"),
         linked_to=facets.values("linked_to"),
         years=sorted(facets.years, reverse=True),
-        examples=[search_track(s, ref, None, set(), sources) for ref in examples],
+        examples=[search_track(s, ref, measured.get(ref), set(), sources) for ref in examples],
     )
 
 
@@ -495,7 +489,7 @@ def search_track(
 ) -> LibraryTrack:
     catalog = s.catalogs[ref.bridge_id]
     entry = catalog.entries[ref.track_id]
-    meta = musical_metadata(s, ref)
+    meta = selection_metadata(s, ref, asset)
     enabled = meta.enabled is not False
     online = (
         s.bridges.get(ref.bridge_id) is not None
@@ -537,12 +531,8 @@ def search_track(
         folder=entry.folder,
         ext=entry.ext,
         available=online and enabled and ref not in s.game.unavailable,
-        title=None
-        if "title" in (meta.cleared_fields or [])
-        else meta.title or (asset.title if asset else None),
-        artist=None
-        if "artist" in (meta.cleared_fields or [])
-        else meta.artist or (asset.artist if asset else None),
+        title=meta.title,
+        artist=meta.artist,
         featuring=meta.featuring,
         album=meta.album,
         year=meta.year,

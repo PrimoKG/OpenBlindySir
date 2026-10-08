@@ -2185,3 +2185,28 @@ Validation : 1 190 tests Python distincts réussis (1 179 généraux + 11 intég
 parcours FR/EN passent sur Chromium/WebKit en petit écran/mobile, ainsi qu'une
 régression de notation sur les deux moteurs. Détails et limites dans les rapports
 [FR](audits/2026-10-08-themed-nights.md) / [EN](audits/2026-10-08-themed-nights.en.md).
+
+
+## 2026-10-08 — Audit et autofix des thèmes
+
+Neuf corrections : références cache partagées entre recherche/aperçu/tirage,
+limites Unicode alignées à 256, emoji distincts, presets non latins restaurés,
+années validées localement, reprise réseau, inconnus triés en dernier, facettes
+limitées au dossier et garde explicite de l’outil Docker. Worker détaché,
+révocation rôle/phase/époque vérifiée sans divulgation privée.
+
+L’ancienne invocation implicite du smoke Docker a créé quatre sièges synthétiques
+sur la partie terminée. Scores/archives inchangés vérifiés ; paramètres et deux
+joueurs réels rétablis depuis le snapshot sauvegardé, primaire et secours vérifiés.
+Le mode profils seuls ne contacte plus l’app ; tests de jeu réservés à la démo
+avec option explicite dans la CI. Fichier temporaire de configuration privé.
+
+Protocole 12, snapshot 9, métadonnées 3 ; types/verrou/docs FR/EN mis à jour.
+Sauvegarde native, conteneurs relancés ; 300 morceaux, 211 génériques jouables,
+12 archives et accès conservés. 1 207 tests Python distincts (1 196 généraux,
+11 intégrations), 55 tests Web et 12 parcours Chromium/WebKit FR/EN réussis.
+Lint/format/types/build/schéma réussis ; profils Docker vérifiés sans mutation.
+Scan local base du 7 octobre : 0 critique ; 55 élevées par image Python, 8 Caddy,
+sans correctif proposé ; aucun match FFmpeg compilé. Inventaire non transmis.
+Rapports [FR](audits/2026-10-08-theme-autofix.md) /
+[EN](audits/2026-10-08-theme-autofix.en.md).

@@ -1,4 +1,4 @@
-# OpenBlindySir — Protocole réseau 11 — V0.5 développement
+# OpenBlindySir — Protocole réseau 12 — V0.5 développement
 
 Ce document fait autorité pour le §8 de l'architecture. Le paquet Pydantic est
 la définition exécutable ; `protocol/schema.lock.json` et le TypeScript généré
@@ -57,7 +57,7 @@ le transfert concerné sans attendre le délai maximal ni un second message d'é
 
 ## 8.2 WebSocket joueur `/api/ws`
 
-Cookie + Origin. `HELLO {client_version,protocol:11}` reçoit un `STATE` filtré.
+Cookie + Origin. `HELLO {client_version,protocol:12}` reçoit un `STATE` filtré.
 `PING {c}` reçoit `PONG {c,s}`. `AUDIO_STATUS` et `PLAYBACK_REPORT` sont des
 diagnostics, sans influence sur la notation.
 
@@ -144,7 +144,7 @@ L'identité est revérifiée après HELLO, chaque trame et les corps HTTP stream
 
 | Sens | Message |
 |---|---|
-| B → S | HELLO avec bridge_id, name, version, protocol=11, catalog_hash, track_count, formats, allow_full_review (false par défaut). |
+| B → S | HELLO avec bridge_id, name, version, protocol=12, catalog_hash, track_count, formats, allow_full_review (false par défaut). |
 | S → B | WELCOME avec clip_format, bitrate, limits, catalog_needed, catalog_upload_token si nécessaire, compatibility. |
 | B → S | CATALOG_CHANGED ; provoque WELCOME + nouveau jeton, même si seul le choix de dossiers a changé. |
 | S → B | SCAN_SOURCES `{folders:null|list}` ; sous-dossiers relatifs NFC autorisés localement uniquement. |
@@ -168,10 +168,10 @@ ou identité refusés sans consommer le bon jeton. Les noms ne vont jamais aux j
 ## 8.4 Compatibilité et persistance
 
 Logiciel `0.5.0.dev0`, `PROTOCOL_VERSION=7`, minimum/maximum admis 7/7.
-`Compatibility` décrit version, protocole, plage et formats (snapshot 8, historique 2),
+`Compatibility` décrit version, protocole, plage et formats (snapshot 9, historique 2),
 dans WELCOME, erreurs de protocole joueur, diagnostics et `/api/compatibility`.
 Le Bridge refuse avec le code 4 et une plage numérique extraite du motif borné
-`protocol_mismatch;required=11..11` ; aucun texte distant arbitraire n'est réaffiché.
+`protocol_mismatch;required=12..12` ; aucun texte distant arbitraire n'est réaffiché.
 Le client web recharge au plus une fois automatiquement, puis affiche une action
 de mise à jour ; une connexion STATE réussie réinitialise ce garde-fou.
 La dérive des schémas est vérifiée par `tools/gen_ts_types.py --check`.
@@ -345,11 +345,11 @@ et conserve la progression des vagues ; les anciennes sessions restent manuelles
 `cleared_fields` distingue héritage et suppression des références. `ReviewRound.scoring_reference` est privé à l’hôte et décrit la référence automatique figée ; `reference_changed` signale une modification non réévaluée. `expected_revision` protège les éditions de métadonnées, en HTTP et par commande de manche. `LibraryTrack` expose une révision et les références manquantes. Le filtre HTTP `quality=all|ready|missing` et `pool_only` prépare la correction. Les exports JSON utilisent `X-Next-Offset` lorsque la limite de réimport est atteinte. `/api/host/metadata/export` fournit des packs ZIP ; `/api/host/metadata/import-archive` accepte un pack de 8 Mio au maximum, 16 fichiers, 10 000 lignes, avec recontrôle de rôle et d’époque après le travail asynchrone. Aucun membre n’est extrait. Le snapshot 8 lit également le format 7 ; un retour à une ancienne image impose sa sauvegarde compatible.
 
 
-## Soirées à thème — protocole 11
+## Soirées à thème — protocole 12
 
 `GameSettings.selection_filter` et `SettingsPatch.selection_filter` contiennent
 `query`, `genres`, `languages`, `tags`, `linked_to`, `year_min`, `year_max`.
-Les listes acceptent 16 choix de 128 caractères ; mots-clés limités à 256 caractères,
+Les listes acceptent 16 choix de 256 caractères ; mots-clés limités à 256 caractères,
 années 1000–9999 dans l'ordre, sans contrôles. OU entre valeurs d'un champ, ET
 entre champs. La recherche et le tirage partagent la normalisation et le moteur
 thématique. Les filtres musicaux restent immuables pendant IN_GAME.

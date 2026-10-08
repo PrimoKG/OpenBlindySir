@@ -26,6 +26,6 @@ Before a manual update, make a consistent Backup, then keep an external copy of 
 
 Verify and load the new pack, copy the private configuration into its `.local/docker/`, then Start. Existing volumes are reused with the same Compose project name, `openblindysir`, declared in compose.
 
-To roll back, stop the services, restore the state backup compatible with the older image into its volume, then start the previous pack with its previous configuration. **Protocol 11 writes snapshot format 9 and reads formats 1–9. Protocol 10 must not receive a format 9 snapshot: restore its format 8 backup.** Scores and responses return to the backup’s date.
+To roll back, stop the services, restore the state backup compatible with the older image into its volume, then start the previous pack with its previous configuration. **Protocol 12 writes snapshot format 9 and reads formats 1–9. Protocol 10 must not receive a format 9 snapshot: restore its format 8 backup.** Returning to protocol 11 also requires its backup: it rejects filters exceeding 128 characters. Scores and responses return to the backup’s date.
 
 Signing a native installer and publishing tested multiarchitecture packs remain release steps. `tools/distribution_pack.py` does not publish externally.

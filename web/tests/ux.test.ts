@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { selectedCapacity, settingsKey } from "../src/host/SetupPanel";
-import { emptyTheme, readTheme } from "../src/host/ThemeSelector";
+import { emptyTheme, readTheme, validThemeYears } from "../src/host/ThemeSelector";
 import { recapCsv } from "../src/player/Recap";
 import type { GameRecord, GameSettings, LibraryResponse } from "../src/protocol";
 
 describe("theme presets", () => {
+  it("restores all valid metadata labels, emoji sequences and non-Latin text", () => {
+    const label = "a".repeat(256);
+    const filter = { ...emptyTheme(), query: "👨‍👩‍👧‍👦", tags: [label], linked_to: ["می‌خواهم"] };
+    expect(readTheme(filter)).toEqual(filter);
+    expect(readTheme({ tags: ["a".repeat(257)] })).toBeNull();
+    expect(readTheme({ query: "\ud800" })).toBeNull();
+    expect(readTheme({ tags: ["🎮".repeat(256)] })?.tags).toEqual(["🎮".repeat(256)]);
+  });
+  it("rejects incomplete, non-finite and reversed year ranges", () => {
+    for (const year of [20, 999, 10000, Number.NaN, Number.POSITIVE_INFINITY, 2012.5])
+      expect(validThemeYears({ ...emptyTheme(), year_min: year })).toBe(false);
+    expect(validThemeYears({ ...emptyTheme(), year_min: 2013, year_max: 2012 })).toBe(false);
+    expect(validThemeYears({ ...emptyTheme(), year_min: 2012 })).toBe(true);
+  });
   it("migrates old presets and rejects damaged filter values", () => {
     expect(readTheme(undefined)).toEqual(emptyTheme());
     expect(

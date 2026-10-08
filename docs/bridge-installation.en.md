@@ -150,7 +150,7 @@ Unix execution also requires a filesystem allowing execution.
 
 ## Updating
 
-V0.5 requires **protocol 11**, admitted range 11 to 11, on all components. Older protocols are refused;
+V0.5 requires **protocol 12**, admitted range 12 to 12, on all components. Older protocols are refused;
 the Bridge package pins its protocol package to the exact same version. Pin a
 published release by replacing `VERSION` below with the published version matching
 the server:

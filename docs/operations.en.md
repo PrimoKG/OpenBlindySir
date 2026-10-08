@@ -59,7 +59,7 @@ to stay connected. `doctor --json` is copyable without paths, URL, UUID or secre
 | `network`, reconnecting | Check URL from the music device, DNS/VPN/firewall/proxy and WebSocket forwarding. No inbound Bridge port needed. |
 | `certificate` | Correct address, system time and trusted CA; configure SSL_CERT_FILE for private Python TLS. |
 | `authentication` | Check the private credential's UUID/secret and revocation; never use game/host passwords. See V0.5 identity-file precedence. |
-| `protocol` | Update server, Bridge and web UI to protocol **11** together; reload old web tabs. |
+| `protocol` | Update server, Bridge and web UI to protocol **12** together; reload old web tabs. |
 | `catalogue` | Check proxy upload limits, server private diagnostics and duplicate Bridge identity; retry outside a game. |
 | Empty catalogue | Check accessible root/mount, scanned subfolders, extensions, then selected game sources. Scan does not decode all files. |
 | Missing/unreadable/no-audio source | Rescan and select a replacement. Only first audio stream of video files is used. |
@@ -103,7 +103,7 @@ or matching Docker profiles, keep secrets and state, replace the whole Bridge
 archive or pin the Python release, and reload browser tabs. Check version, local
 doctor and registration outside a game, then test synthetic audio.
 
-V0.5 uses software `0.5.0.dev0`, protocol 11 and admitted range 11 to 11. Inspect
+V0.5 uses software `0.5.0.dev0`, protocol 12 and admitted range 12 to 12. Inspect
 `/api/compatibility`, update all components and reload stale tabs. No mixed protocol
 or automatic downgrade; this development version is unpublished and does not freeze
 the protocol. Snapshot **9** reads 1/2/3/4/5/6/7/8/9; history **2** migrates old/version-1 records.
@@ -140,4 +140,10 @@ procedure are in [releasing.md](releasing.md).
 
 See [automatic scoring](automatic-scoring.en.md) for optional matching, aliases and
 finale waves, and [local CA trust](local-certificate.en.md) for LAN phones. Update
-all components together to protocol 11 and back up state before snapshot-9 migration.
+all components together to protocol 12 and back up state before snapshot-9 migration.
+
+`tools/docker_smoke.py` requires an explicit mode. Use `--profiles-only` to check
+Compose without contacting a real installation. Full gameplay requires
+`--allow-test-session-mutation` on a dedicated demo stack: it creates players and
+changes settings/scores. Running without a mode is rejected before reading access
+credentials.

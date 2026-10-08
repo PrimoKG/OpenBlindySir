@@ -52,14 +52,19 @@ a folder name does not prove genre, language or year.
 Exact recognizable legacy tags, such as Rap or Français, provide a fallback only
 when an explicit genre or language list is absent. An explicit empty list blocks
 that fallback. Metadata JSON version 3 accepts `genres` and `languages`; versions
-1 and 2 remain supported. See [metadata format](media-and-metadata.md).
+1 and 2 remain supported. Emoji-only tags and universes remain distinct. Every
+metadata label can serve as a filter, up to 256 Unicode characters. Local presets
+retain emoji sequences and joining characters in non-Latin scripts. Incomplete
+years block saving without sending a request; **Try again** reloads a failed
+preview without losing criteria. See [metadata format](media-and-metadata.md).
 
 ## Updating
 
-This change uses protocol **11** and snapshot **9**. Back up state, update the
+This change uses protocol **12** and snapshot **9**. Back up state, update the
 server, Bridge and web UI together, then reload existing browser tabs. Snapshots
 1–8 migrate. To return to protocol 10, restore its format-8 backup; older images
-cannot read format 9.
+cannot read format 9. To return to protocol 11, restore its backup too: its
+128-character filters cannot restore longer labels accepted by protocol 12.
 
 File paths determine track identity. Prefer app tags and metadata for organizing
 themes: moving or renaming files requires a rescan and reassociating metadata.

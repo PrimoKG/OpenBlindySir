@@ -20,7 +20,7 @@ jobs:
       - name: Start all services without host FFmpeg or Node
         shell: pwsh
         run: ./tools/docker-host.ps1 start -NoBrowser
-      - run: uv run python tools/docker_smoke.py
+      - run: uv run python tools/docker_smoke.py --allow-test-session-mutation
       - name: Inspect isolation and codecs
         run: |
           docker compose --env-file .local/docker/hosting.env exec -T app python -c "import os, shutil; assert os.getuid() == 10001; assert shutil.which('ffmpeg') is None"

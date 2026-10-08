@@ -6,7 +6,32 @@ from pathlib import Path
 
 import pytest
 
+import docker_smoke
 from docker_smoke import validate_profiles
+
+
+def test_smoke_requires_explicit_mode_before_reading_credentials(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Implicit invocation must not access the installed session")
+
+    monkeypatch.setattr(docker_smoke, "read_dotenv", forbidden)
+    monkeypatch.setattr(docker_smoke, "validate_profiles", forbidden)
+    with pytest.raises(SystemExit) as exc:
+        docker_smoke.main([])
+    assert exc.value.code == 2
+
+
+def test_profiles_only_never_contacts_the_app(monkeypatch):
+    calls = []
+    monkeypatch.setattr(docker_smoke, "validate_profiles", lambda *args: calls.append(args))
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Profile validation must not contact or log into the app")
+
+    monkeypatch.setattr(docker_smoke, "read_dotenv", forbidden)
+    monkeypatch.setattr(docker_smoke.httpx, "Client", forbidden)
+    assert docker_smoke.main(["--profiles-only"]) == 0
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize("bind", [{}, {"create_host_path": False}, {"create_host_path": True}])
@@ -19,8 +44,11 @@ def test_credential_mount_false_may_be_omitted_but_true_is_refused(
     env_file.write_text("BRIDGE_ID=example\n", encoding="utf-8")
     ca_file = tmp_path / "example.crt"
     ca_file.write_text("example", encoding="utf-8")
+    original_run = subprocess.run
 
     def compose(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if command[0] != "docker":
+            return original_run(command, **_)
         if "deploy/compose.bridge-credential.yaml" in command:
             services = {
                 "bridge": {

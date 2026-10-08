@@ -5,16 +5,181 @@ from conftest import BRIDGE_ID, ORIGIN, Harness, catalog
 from pydantic import TypeAdapter
 
 from openblindysir_protocol.client import ClientMessage
+from openblindysir_protocol.enums import AssetState, GamePhase, Role
 from openblindysir_server.game import commands as c
 from openblindysir_server.game import selection
 from openblindysir_server.game.metadata import musical_metadata
 from openblindysir_server.game.state import (
+    AssetRecord,
     CatalogEntryData,
     Metadata,
     Settings,
     ThemeFilterData,
     TrackRef,
 )
+from openblindysir_server.library import management
+
+
+def test_search_preview_and_pool_share_cached_titles_and_respect_explicit_clears(harness: Harness):
+    _, headers, refs = themed_library(harness)
+    state = harness.runtime.engine.state
+    state.imported_metadata[refs[0]] = Metadata()
+    state.assets["cached"] = AssetRecord(
+        "cached",
+        refs[0],
+        "job",
+        AssetState.EVICTED,
+        0,
+        0,
+        track_duration_ms=120_000,
+        title="Cached title",
+        artist="Cached artist",
+    )
+    filters = {"query": "Cached title artist"}
+    state.game.settings.selection_filter = ThemeFilterData(**filters)
+    response = harness.client.get(
+        "/api/host/library/search",
+        headers=headers,
+        params={"q": filters["query"]},
+    ).json()
+    assert response["total"] == 1
+    assert response["tracks"][0]["in_pool"] is True
+    preview = harness.client.post(
+        "/api/host/library/selection",
+        headers=headers,
+        json={
+            "sources": [{"bridge_id": BRIDGE_ID, "folder_prefix": ""}],
+            "selection_filter": filters,
+        },
+    ).json()
+    assert preview["available"] == 1
+    assert preview["examples"][0]["title"] == "Cached title"
+    assert selection.pool(state) == [refs[0]]
+    state.game.queue.extend(refs)
+    assert selection.take(state) == refs[0]
+    state.metadata[refs[0]] = Metadata(cleared_fields=["title", "artist"])
+    assert selection.pool(state) == []
+    assert (
+        harness.client.get(
+            "/api/host/library/search",
+            headers=headers,
+            params={"q": filters["query"]},
+        ).json()["total"]
+        == 0
+    )
+
+
+@pytest.mark.parametrize("field", ["genres", "languages", "tags", "linked_to"])
+def test_every_valid_metadata_label_can_be_selected(harness: Harness, field: str):
+    _, headers, refs = themed_library(harness)
+    state = harness.runtime.engine.state
+    label = "Long label " + "a" * 245
+    state.imported_metadata[refs[0]] = Metadata(**{field: [label]})
+    filters = {field: [label]}
+    response = harness.client.post(
+        "/api/host/library/selection",
+        headers=headers,
+        json={
+            "sources": [{"bridge_id": BRIDGE_ID, "folder_prefix": ""}],
+            "selection_filter": filters,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["available"] == 1
+    search_field = {
+        "genres": "genre",
+        "languages": "language",
+        "tags": "tag",
+        "linked_to": "linked_to",
+    }[field]
+    response = harness.client.get(
+        "/api/host/library/search",
+        headers=headers,
+        params={search_field: label},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["total"] == 1
+
+
+def test_symbolic_tags_and_search_do_not_match_every_track(harness: Harness):
+    _, headers, refs = themed_library(harness)
+    state = harness.runtime.engine.state
+    state.imported_metadata[refs[0]] = Metadata(tags=["🎮"])
+    state.imported_metadata[refs[1]] = Metadata(tags=["🎵"])
+    for query in ({"tag": "🎮"}, {"q": "🎮"}):
+        result = harness.client.get("/api/host/library/search", headers=headers, params=query)
+        assert result.status_code == 200
+        assert [r["track_id"] for r in result.json()["tracks"]] == [refs[0].track_id]
+    state.game.settings.selection_filter = ThemeFilterData(tags=["🎮"])
+    assert selection.pool(state) == [refs[0]]
+
+
+@pytest.mark.parametrize("sort", ["genre", "language"])
+@pytest.mark.parametrize("descending", ["true", "false"])
+def test_unknown_categories_sort_last(harness: Harness, sort, descending):
+    _, headers, refs = themed_library(harness)
+    response = harness.client.get(
+        "/api/host/library/search",
+        headers=headers,
+        params={"sort": sort, "descending": descending},
+    )
+    assert response.json()["tracks"][-1]["track_id"] == refs[4].track_id
+
+
+def test_facets_stay_within_the_selected_folder(harness: Harness):
+    _, headers, refs = themed_library(harness)
+    state = harness.runtime.engine.state
+    state.imported_metadata[refs[5]] = Metadata(tags=["Other folder"])
+    state.catalogs[BRIDGE_ID].entries[refs[5].track_id] = CatalogEntryData(
+        "Other/t5.flac",
+        "Other",
+        "flac",
+        100,
+    )
+    result = harness.client.get(
+        "/api/host/library/search",
+        headers=headers,
+        params={"folder": "Anime"},
+    ).json()
+    assert "Other folder" not in result["tags"]
+
+
+@pytest.mark.parametrize("change", ["role", "phase", "epoch"])
+def test_preview_never_returns_private_data_after_access_changes(
+    harness: Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
+):
+    pid, headers, _ = themed_library(harness)
+    state = harness.runtime.engine.state
+
+    async def changed_access(function, *args):
+        result = function(*args)
+        if change == "role":
+            state.players[pid].role = Role.PLAYER
+        elif change == "phase":
+            state.game.phase = GamePhase.IN_GAME
+        else:
+            state.epoch = "0000000000000002"
+        return result
+
+    monkeypatch.setattr(management, "run_in_threadpool", changed_access)
+    response = harness.client.post(
+        "/api/host/library/selection",
+        headers=headers,
+        json={"sources": [{"bridge_id": BRIDGE_ID, "folder_prefix": ""}]},
+    )
+    assert response.status_code == (403 if change == "role" else 409)
+    assert set(response.json()) == {"error"}
+    assert harness.client.app.state.obs.library_search_busy is False
+
+
+def test_worker_snapshot_detaches_selection_lists(harness: Harness):
+    _, _, _ = themed_library(harness)
+    state = harness.runtime.engine.state
+    snapshot = management.search_snapshot(state)
+    state.game.settings.selection_filter.tags.append("Changed")
+    assert snapshot.game.settings.selection_filter.tags == []
 
 
 def themed_library(h: Harness):

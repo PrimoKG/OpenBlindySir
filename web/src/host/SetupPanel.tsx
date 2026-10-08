@@ -18,7 +18,13 @@ import {
   criterionPoints,
   musicalCriteria,
 } from "../ui/ScoringCriteria";
-import { emptyTheme, readTheme, ThemeSelector, useSelectionPreview } from "./ThemeSelector";
+import {
+  emptyTheme,
+  readTheme,
+  ThemeSelector,
+  useSelectionPreview,
+  validThemeYears,
+} from "./ThemeSelector";
 
 export function selectedCapacity(
   library: LibraryResponse | null,
@@ -170,12 +176,7 @@ export function SetupPanel({
   const tooMany = !draft.allow_repeats && draft.rounds > capacity;
   const limits = view.host.limits;
   const valid =
-    (draft.selection_filter?.year_min == null ||
-      draft.selection_filter?.year_max == null ||
-      draft.selection_filter.year_min <= draft.selection_filter.year_max) &&
-    [draft.selection_filter?.year_min, draft.selection_filter?.year_max].every(
-      (year) => year == null || (Number.isInteger(year) && year >= 1000 && year <= 9999),
-    ) &&
+    validThemeYears(draft.selection_filter ?? emptyTheme()) &&
     Number.isInteger(draft.rounds) &&
     draft.rounds >= 1 &&
     draft.rounds <= 200 &&
@@ -479,6 +480,7 @@ export function SetupPanel({
           facets={preview.result}
           loading={preview.loading}
           error={preview.error}
+          onRetry={preview.retry}
           onChange={(filter) => set("selection_filter", filter)}
           onQuickTheme={(filter, cartoons) =>
             setDraft((old) => ({

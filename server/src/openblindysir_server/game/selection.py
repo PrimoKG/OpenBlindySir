@@ -4,7 +4,7 @@ from collections import deque
 
 from openblindysir_protocol.enums import BridgeState, GamePhase, RoundState
 from openblindysir_protocol.views import PoolStatus
-from openblindysir_server.game.metadata import musical_metadata
+from openblindysir_server.game.metadata import measured_tracks, selection_metadata
 from openblindysir_server.game.state import SessionState, Slot, TrackRef, current_round
 from openblindysir_server.game.themes import matches_theme
 
@@ -17,12 +17,14 @@ def matches(relpath: str, prefix: str) -> bool:
 def pool(s: SessionState) -> list[TrackRef]:
     """Available tracks matching the selected folders, sorted for determinism."""
     found: set[TrackRef] = set()
+    measured = measured_tracks(s)
     for bridge_id, prefix in s.game.settings.sources:
         catalog = s.catalogs.get(bridge_id)
         if catalog is None:
             continue
         for track_id, entry in catalog.entries.items():
-            meta = musical_metadata(s, TrackRef(bridge_id, track_id))
+            ref = TrackRef(bridge_id, track_id)
+            meta = selection_metadata(s, ref, measured.get(ref))
             if (
                 matches(entry.relpath, prefix)
                 and meta.enabled is not False
@@ -115,15 +117,17 @@ def online(s: SessionState, ref: TrackRef) -> bool:
 def take(s: SessionState) -> TrackRef | None:
     """Next usable track of the queue, or None when the pool is exhausted."""
     queue = s.game.queue
+    measured = measured_tracks(s)
     while queue:
         ref = queue.popleft()
+        meta = selection_metadata(s, ref, measured.get(ref))
         reserved = set(s.game.manual_tracks.values()) | {slot.track_ref for slot in live_slots(s)}
         if (
             ref not in s.game.unavailable
-            and musical_metadata(s, ref).enabled is not False
+            and meta.enabled is not False
             and track_exists(s, ref)
             and matches_theme(
-                musical_metadata(s, ref),
+                meta,
                 s.catalogs[ref.bridge_id].entries[ref.track_id].relpath,
                 s.game.settings.selection_filter,
             )

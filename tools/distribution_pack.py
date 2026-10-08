@@ -57,7 +57,7 @@ def main() -> None:
                 "from openblindysir_protocol.version import PROTOCOL_VERSION; "
                 "print(PROTOCOL_VERSION)",
             )
-            if protocol != "11":
+            if protocol != "12":
                 raise ValueError("Incompatible image protocol")
         manifest["images"][service] = {
             "reference": reference,
@@ -101,6 +101,8 @@ def main() -> None:
         "docs/audits/2026-10-08-autofix.en.md",
         "docs/audits/2026-10-08-themed-nights.md",
         "docs/audits/2026-10-08-themed-nights.en.md",
+        "docs/audits/2026-10-08-theme-autofix.md",
+        "docs/audits/2026-10-08-theme-autofix.en.md",
         "docs/themed-nights.md",
         "docs/themed-nights.en.md",
         "LICENSE",
@@ -128,8 +130,8 @@ def main() -> None:
         "# OpenBlindySir — local candidate / candidat local\n\n"
         "Unsigned Linux/amd64 pack. Open security findings remain; read the audit first.\n\n"
         "Pack Linux/amd64 non signé. Alertes de sécurité restantes : lire le rapport.\n\n"
-        "- [Audit FR](docs/audits/2026-10-08-autofix.md) / "
-        "[Audit EN](docs/audits/2026-10-08-autofix.en.md)\n"
+        "- [Audit FR](docs/audits/2026-10-08-theme-autofix.md) / "
+        "[Audit EN](docs/audits/2026-10-08-theme-autofix.en.md)\n"
         "- [Installation FR](docs/offline-pack.md) / [Installation EN](docs/offline-pack.en.md)\n\n"
         "- [Soirées à thème FR](docs/themed-nights.md) / "
         "[Themed nights EN](docs/themed-nights.en.md)\n\n"

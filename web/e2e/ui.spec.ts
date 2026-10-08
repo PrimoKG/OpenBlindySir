@@ -152,7 +152,7 @@ function playerView(): PlayerView {
     kind: "player",
     session: {
       epoch: "example-epoch",
-      protocol: 11,
+      protocol: 12,
       server_version: "0.1.0",
       recovered: false,
       persistence_status: "disabled",
@@ -812,7 +812,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
           bridge_id: first,
           name: "Appareil salon",
           version: "0.5.0.dev0",
-          protocol: 11,
+          protocol: 12,
           state: "ONLINE",
           track_count: 8,
           jobs_in_flight: 0,
@@ -824,7 +824,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
           bridge_id: second,
           name: "Appareil absent",
           version: "0.5.0.dev0",
-          protocol: 11,
+          protocol: 12,
           state: "OFFLINE",
           track_count: 4,
           jobs_in_flight: 0,
@@ -888,7 +888,7 @@ test("V0.5 incompatible client stops reload loops and shows the required range",
     route.fulfill({
       json: {
         server_version: "0.5.0.dev0",
-        protocol: 11,
+        protocol: 12,
         protocol_min: 8,
         protocol_max: 8,
         snapshot_format: 4,
@@ -4068,6 +4068,57 @@ for (const language of ["fr", "en"] as const) {
 }
 
 for (const language of ["fr", "en"] as const) {
+  test(`themed preview retries without losing filters and validates years locally (${language})`, async ({
+    page,
+  }) => {
+    const { view, library, track } = manualFixture();
+    await harness(page, view, library);
+    const copy = language === "fr" ? fr : en;
+    if (language === "en") await page.getByRole("button", { name: "English", exact: true }).click();
+    let requests = 0;
+    const longTag = "🎮".repeat(256);
+    await page.route("**/api/host/library/selection", (route) => {
+      requests++;
+      if (requests === 1) return route.fulfill({ status: 503, json: { error: "unavailable" } });
+      return route.fulfill({
+        json: {
+          matching: 4,
+          available: 4,
+          fresh: 3,
+          unclassified: 0,
+          genres: ["Rap"],
+          languages: ["fr"],
+          tags: [longTag],
+          linked_to: [],
+          years: [2012],
+          examples: [{ ...track, title: "Wakfu" }],
+        },
+      });
+    });
+    await page.getByRole("button", { name: copy["flow.prepare"], exact: true }).click();
+    const dialog = page.locator(".workspace-modal");
+    const theme = dialog.getByRole("region", { name: copy["theme.title"], exact: true });
+    await theme.getByRole("button", { name: copy["app.retry"], exact: true }).click();
+    await expect(theme.locator(".theme-examples")).toContainText("Wakfu");
+    await theme
+      .getByRole("combobox", { name: copy["theme.tags"], exact: true })
+      .selectOption(longTag);
+    await expect.poll(() => requests).toBe(3);
+    await theme.getByLabel(copy["theme.yearFrom"], { exact: true }).fill("20");
+    await expect(theme.getByRole("alert")).toHaveText(copy["theme.invalidRange"]);
+    await expect(
+      dialog.getByRole("button", { name: copy["hostui.save"], exact: true }),
+    ).toBeDisabled();
+    await page.waitForTimeout(450);
+    expect(requests).toBe(3);
+    await theme.getByLabel(copy["theme.yearFrom"], { exact: true }).fill("2012");
+    await expect(theme.getByRole("alert")).toHaveCount(0);
+    await expect.poll(() => requests).toBe(4);
+    await expect(
+      dialog.getByRole("button", { name: copy["hostui.save"], exact: true }),
+    ).toBeEnabled();
+  });
+
   test(`themed nights combine criteria and configure the actual game (${language})`, async ({
     page,
   }, info) => {

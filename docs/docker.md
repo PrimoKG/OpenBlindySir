@@ -346,4 +346,11 @@ Pour approuver l’autorité HTTPS locale sur Windows/iOS/Android, voir
 [certificat-local.md](certificat-local.md). Partager uniquement le certificat public
 `root.crt`, jamais ses clés. Le mode LAN est conservé.
 La [notation automatique](notation-automatique.md) nécessite de mettre à jour
-serveur, Bridge et interface ensemble (protocole 11, snapshot 9), après sauvegarde privée.
+serveur, Bridge et interface ensemble (protocole 12, snapshot 9), après sauvegarde privée.
+
+Les tests de jeu de `tools/docker_smoke.py` exigent désormais
+`--allow-test-session-mutation` et une installation dédiée de démonstration : ils
+créent des joueurs et modifient les paramètres/scores. Pour auditer uniquement la
+configuration d’une installation réelle, utilisez `--profiles-only`, qui ne
+contacte pas l’application. Une invocation sans mode est refusée avant lecture
+des accès.

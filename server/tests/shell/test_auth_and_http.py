@@ -1,4 +1,4 @@
-"""Session routes, Origin checks, rate limits and security headers (spec §8.1, §12)."""
+"""Session routes, Origin checks, rate limits and security headers (spec Â§8.1, Â§12)."""
 
 import random
 
@@ -174,4 +174,4 @@ def test_library_and_diagnostics_host_only(harness: Harness) -> None:
     assert harness.client.get("/api/host/library", headers=harness.cookie(token)).status_code == 200
     diag = harness.client.get("/api/host/diagnostics", headers=harness.cookie(token))
     assert diag.status_code == 200
-    assert diag.json()["protocol"] == 11
+    assert diag.json()["protocol"] == 12

@@ -58,14 +58,21 @@ Les anciens tags exactement reconnaissables, par exemple Rap ou Français,
 fournissent un repli lorsqu’aucun genre ou langue explicite n’existe. Une liste
 structurée vide bloque ce repli. Les métadonnées JSON version 3 acceptent
 `genres` et `languages` ; les imports versions 1 et 2 restent acceptés.
+Les tags et univers composés uniquement d’emoji restent distincts. Tous les
+libellés de métadonnées peuvent servir de filtre, jusqu’à 256 caractères Unicode.
+Les thèmes locaux conservent aussi les séquences emoji et les caractères de liaison
+des écritures non latines. Une année incomplète bloque la validation sans requête
+réseau ; **Réessayer** relance un aperçu en erreur sans perdre les critères.
 Voir [le format des métadonnées](media-and-metadata.md).
 
 ## Mise à jour
 
-Cette évolution utilise le protocole **11** et le snapshot **9**. Mettez à jour
+Cette évolution utilise le protocole **12** et le snapshot **9**. Mettez à jour
 serveur, Bridge et interface ensemble, après sauvegarde, puis rechargez les
 onglets existants. Les snapshots 1 à 8 sont migrés. Pour revenir au protocole 10,
 restaurez sa sauvegarde au format 8 ; une ancienne image ne peut pas lire le format 9.
+Pour revenir au protocole 11, restaurez également sa sauvegarde : ses filtres
+limités à 128 caractères ne peuvent pas relire les nouveaux libellés plus longs.
 
 Les chemins des fichiers déterminent leur identité. Pour organiser une soirée,
 privilégiez les tags et les métadonnées de l’app : déplacer ou renommer les

@@ -84,13 +84,18 @@ def search_key(value: str) -> str:
     return " ".join(re.sub(r"[^\w]+|_", " ", text).split())
 
 
+def label_key(value: str) -> str:
+    """Preserve symbolic labels instead of merging every emoji into an empty key."""
+    return search_key(value) or unicodedata.normalize("NFC", value).casefold().strip()
+
+
 def language_key(value: str) -> str:
-    key = search_key(value)
+    key = label_key(value)
     return LANGUAGES.get(key, key)
 
 
 def genre_key(value: str) -> str:
-    key = search_key(value)
+    key = label_key(value)
     return {"hip hop": "rap", "hiphop": "rap", "r b": "rnb", "r n b": "rnb"}.get(key, key)
 
 
@@ -105,8 +110,8 @@ class ThemeFacets:
         for name, key in (
             ("genres", genre_key),
             ("languages", language_key),
-            ("tags", search_key),
-            ("linked_to", search_key),
+            ("tags", label_key),
+            ("linked_to", label_key),
         ):
             for value in getattr(meta, name) or (["und"] if name == "languages" else []):
                 if len(self.labels[name]) < 512:
@@ -126,8 +131,8 @@ def matches_theme(meta: Metadata, relpath: str, theme: ThemeFilter | ThemeFilter
     for selected, values, key in (
         (theme.genres, meta.genres or [], genre_key),
         (theme.languages, meta.languages or ["und"], language_key),
-        (theme.tags, meta.tags or [], search_key),
-        (theme.linked_to, meta.linked_to or [], search_key),
+        (theme.tags, meta.tags or [], label_key),
+        (theme.linked_to, meta.linked_to or [], label_key),
     ):
         if selected and not ({key(v) for v in selected} & {key(v) for v in values}):
             return False
@@ -137,25 +142,24 @@ def matches_theme(meta: Metadata, relpath: str, theme: ThemeFilter | ThemeFilter
         return False
     if not theme.query:
         return True
-    text = search_key(
-        " ".join(
-            [
-                relpath,
-                meta.title or "",
-                meta.artist or "",
-                meta.album or "",
-                meta.featuring or "",
-                str(meta.year or ""),
-                *(meta.genres or []),
-                *(genre_key(v) for v in meta.genres or []),
-                *(meta.languages or []),
-                *(meta.tags or []),
-                *(meta.linked_to or []),
-            ]
-        )
+    raw_text = " ".join(
+        [
+            relpath,
+            meta.title or "",
+            meta.artist or "",
+            meta.album or "",
+            meta.featuring or "",
+            str(meta.year or ""),
+            *(meta.genres or []),
+            *(genre_key(v) for v in meta.genres or []),
+            *(meta.languages or []),
+            *(meta.tags or []),
+            *(meta.linked_to or []),
+        ]
     )
+    query = search_key(theme.query)
+    if not query:
+        return label_key(theme.query) in unicodedata.normalize("NFC", raw_text).casefold()
+    text = search_key(raw_text)
     language_keys = {language_key(v) for v in meta.languages or []}
-    return all(
-        term in text or LANGUAGES.get(term) in language_keys
-        for term in search_key(theme.query).split()
-    )
+    return all(term in text or LANGUAGES.get(term) in language_keys for term in query.split())
