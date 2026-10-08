@@ -57,7 +57,7 @@ def main() -> None:
                 "from openblindysir_protocol.version import PROTOCOL_VERSION; "
                 "print(PROTOCOL_VERSION)",
             )
-            if protocol != "12":
+            if protocol != "13":
                 raise ValueError("Incompatible image protocol")
         manifest["images"][service] = {
             "reference": reference,

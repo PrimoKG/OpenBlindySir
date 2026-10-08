@@ -1,6 +1,6 @@
 # Automatic scoring and grand finale
 
-[Français](notation-automatique.md). V0.5 development, protocol **12**, snapshot **9**.
+[Français](notation-automatique.md). V0.5 development, protocol **13**, snapshot **10**.
 Update the server, web UI and Bridge together. Older sessions keep manual scoring;
 existing scores are not recalculated during migration.
 
@@ -61,9 +61,13 @@ Aliases travel with version-2 metadata JSON imports and exports:
 {"artist": ["Maître Gims", "Gims"], "album": ["Pilule bleue"]}
 ```
 
-After saving the settings, the lobby reports selected tracks whose known references
-are incomplete. File tags may only become available after preparing the excerpt.
-A filename alone is not a trusted automatic title reference.
+Setup checks references **while settings are being edited**, using the current
+criteria, folders, filters and repeat policy. It shows ready tracks, missing fields
+and examples. Correct the library or explicitly accept manual scoring of missing
+references before starting. Changing the criteria or selection requires a fresh
+check; saving settings remains possible without starting. File tags may be enriched
+during audio preparation. A filename alone is not a trusted title reference; absent
+data is never invented.
 
 Rules, weights, threshold, references and aliases freeze when playback first starts.
 Library edits do not silently regrade a round. In the finale, edit references and

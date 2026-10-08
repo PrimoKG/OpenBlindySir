@@ -1,4 +1,4 @@
-# OpenBlindySir — Protocole réseau 12 — V0.5 développement
+# OpenBlindySir — Protocole réseau 13 — V0.5 développement
 
 Ce document fait autorité pour le §8 de l'architecture. Le paquet Pydantic est
 la définition exécutable ; `protocol/schema.lock.json` et le TypeScript généré
@@ -6,6 +6,22 @@ doivent correspondre. Mettre à jour serveur, Bridge et client ensemble. Toute
 modification ultérieure de schéma impose un nouveau `PROTOCOL_VERSION`.
 
 ## 8.1 HTTP
+
+### Évolutions du protocole 13
+
+`SelectionPreviewRequest` accepte les `scoring_criteria` du brouillon (liste bornée
+des cinq clés musicales) et `allow_repeats`. La réponse privée inclut
+`reference_eligible`, `reference_ready`, `missing_by_criterion` et jusqu'à six
+`reference_issues`. Le contrôle emploie les mêmes références fiables et suppressions
+explicites que la notation ; il ne modifie pas les réglages de la partie.
+
+`FinalResults.unreviewed_answers` conserve le nombre de réponses non entièrement
+notées lors de la publication. Zéro signifie complet ; `null` signifie inconnu
+pour les archives anciennes. Cette valeur accompagne les résultats, l'historique
+et les exports. Les snapshots passent au format **10** (lecture 1–10) et les
+historiques au format **3** (migration 1/2). Un retour à une image antérieure exige
+la sauvegarde privée réalisée avant migration ; ne pas lui présenter ces nouveaux
+formats. Serveur, Bridge et interface doivent tous utiliser le protocole **13**.
 
 Cookie de session requis, hôte vérifié côté serveur, Origin obligatoire pour les
 mutations navigateur. Les messages entrants sont stricts, `extra=forbid`.
@@ -57,7 +73,7 @@ le transfert concerné sans attendre le délai maximal ni un second message d'é
 
 ## 8.2 WebSocket joueur `/api/ws`
 
-Cookie + Origin. `HELLO {client_version,protocol:12}` reçoit un `STATE` filtré.
+Cookie + Origin. `HELLO {client_version,protocol:13}` reçoit un `STATE` filtré.
 `PING {c}` reçoit `PONG {c,s}`. `AUDIO_STATUS` et `PLAYBACK_REPORT` sont des
 diagnostics, sans influence sur la notation.
 
@@ -144,7 +160,7 @@ L'identité est revérifiée après HELLO, chaque trame et les corps HTTP stream
 
 | Sens | Message |
 |---|---|
-| B → S | HELLO avec bridge_id, name, version, protocol=12, catalog_hash, track_count, formats, allow_full_review (false par défaut). |
+| B → S | HELLO avec bridge_id, name, version, protocol=13, catalog_hash, track_count, formats, allow_full_review (false par défaut). |
 | S → B | WELCOME avec clip_format, bitrate, limits, catalog_needed, catalog_upload_token si nécessaire, compatibility. |
 | B → S | CATALOG_CHANGED ; provoque WELCOME + nouveau jeton, même si seul le choix de dossiers a changé. |
 | S → B | SCAN_SOURCES `{folders:null|list}` ; sous-dossiers relatifs NFC autorisés localement uniquement. |
@@ -167,17 +183,17 @@ ou identité refusés sans consommer le bon jeton. Les noms ne vont jamais aux j
 
 ## 8.4 Compatibilité et persistance
 
-Logiciel `0.5.0.dev0`, `PROTOCOL_VERSION=7`, minimum/maximum admis 7/7.
-`Compatibility` décrit version, protocole, plage et formats (snapshot 9, historique 2),
+Logiciel `0.5.0.dev0`, `PROTOCOL_VERSION=13`, minimum/maximum admis 13/13.
+`Compatibility` décrit version, protocole, plage et formats (snapshot 10, historique 3),
 dans WELCOME, erreurs de protocole joueur, diagnostics et `/api/compatibility`.
 Le Bridge refuse avec le code 4 et une plage numérique extraite du motif borné
-`protocol_mismatch;required=12..12` ; aucun texte distant arbitraire n'est réaffiché.
+`protocol_mismatch;required=13..13` ; aucun texte distant arbitraire n'est réaffiché.
 Le client web recharge au plus une fois automatiquement, puis affiche une action
 de mise à jour ; une connexion STATE réussie réinitialise ce garde-fou.
 La dérive des schémas est vérifiée par `tools/gen_ts_types.py --check`.
 Cette évolution non publiée ne constitue pas un gel de protocole.
 
-Snapshot 5, lecture/migration 1/2/3/4/5 ; historique 2, migration ancien/version 1.
+Snapshot 10, lecture/migration 1–10 ; historique 3, migration ancien/versions 1 et 2.
 Un format futur inconnu provoque un refus explicite sans repli sur un état plus ancien.
 La corruption connue peut utiliser la précédente copie valide. Audio et jetons bruts
 restent exclus. Les archives sont figées, sans audio, 50 parties/90 jours/16 Mio ;

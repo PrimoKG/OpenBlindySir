@@ -8,8 +8,8 @@
 >
 > Licence : MIT.
 
-État courant : **V0.5 développement**, logiciel `0.5.0.dev0`, protocole 12
-(plage 12 à 12), snapshot 9, historique 2. Identités/secrets Bridge distincts,
+État courant : **V0.5 développement**, logiciel `0.5.0.dev0`, protocole 13
+(plage 13 à 13), snapshot 10, historique 3. Identités/secrets Bridge distincts,
 archives privées bornées et passe clavier/focus sont implémentés. Les décisions
 et limites opératoires sont détaillées en [V0.5](v0.5.md) / [English](v0.5.en.md)
 et [ADR 0015](adr/0015-v05-private-bridges-history-compatibility.md).
@@ -593,7 +593,7 @@ facultatifs, priorité manuelle non vide puis import puis tags/nom du fichier.
 `session.json` est écrit atomiquement avec fsync ; `session.previous.json` fournit un
 repli si le dernier fichier est corrompu. Deux fichiers illisibles empêchent un démarrage
 silencieux avec perte de session. Format JSON versionné, classes autorisées, taille ≤64 MiB,
-sans pickle, audio ni secrets en clair. Format 4 lit 1/2/3/4, historique 2 migre 1 ;
+sans pickle, audio ni secrets en clair. Format 10 lit 1–10, historique 3 migre 1/2 ;
 un format inconnu bloque le démarrage, sans repli sur une copie plus ancienne.
 Deux copies et leurs écritures temporaires exigent jusqu'à 256 Mio.
 Les réponses et chemins relatifs du catalogue sont

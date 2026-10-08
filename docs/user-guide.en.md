@@ -3,7 +3,7 @@
 [Guide français](guide-utilisateur.md). One server hosts one game at a time, on a
 LAN, private VPN or the Internet. Players use a browser without creating an account.
 See [hosting](deployment.md) or [Docker](docker.md). Update server, Bridge and web
-UI together: **protocol 12**. [Install the Bridge from source](bridge-installation.en.md)
+UI together: **protocol 13**. [Install the Bridge from source](bridge-installation.en.md)
 or use Docker today; uvx and release archives require publication first.
 
 Quick access: [join and sound](#join-audio-and-recovery), [host setup](#host-setup),
@@ -191,6 +191,24 @@ theme and choose its numbered rounds. Selecting page cards allows batch category
 addition/activation changes, retaining existing labels and reporting success counts.
 
 ## The grand finale
+
+Desktop scoring and standings use the available width. Names and answers remain
+readable with five criteria; detailed automatic evidence can be expanded when
+needed. **Test my audio** stays in the header throughout the finale, including
+after scrolling.
+
+**You are scoring round X** identifies your private selection; **Players are
+watching round Y** identifies the public presentation. **Present again** revisits
+a revealed round without awarding its points twice.
+
+Each answer shows how many criteria are decided. **Mark remaining criteria as missed** resolves only undecided criteria and preserves previous decisions.
+**Score the N remaining answers** goes directly to an incomplete answer and takes
+priority over the podium while scoring remains unfinished.
+
+Publishing early remains an explicit choice. The result then displays the number of answers that were not fully scored, also retained in history and
+exports. Incomplete or all-zero results
+do not trigger a victory celebration. After the podium, new-game and end-session
+actions come before detailed standings.
 
 The last round opens **The grand finale** for everyone. Ending early can finish
 with the current awards and open the replay/end-session menu; see

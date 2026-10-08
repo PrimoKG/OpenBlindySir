@@ -432,7 +432,14 @@ export function ReviewRound({
                   <strong>{nameOf(view, row.player_id)}</strong>
 
                   <small className="review-status">
-                    {row.reviewed ? t("ux.checked") : t("ux.unchecked")}
+                    {row.reviewed
+                      ? t("ux.checked")
+                      : t("polish.criteriaProgress", {
+                          count: fields.filter(
+                            (field) => row.judgement === "criteria" && row[field] != null,
+                          ).length,
+                          total: fields.length,
+                        })}
                   </small>
                 </div>
 
@@ -472,16 +479,17 @@ export function ReviewRound({
                 <div className="score-cell">
                   {!!row.auto_evidence?.length && (
                     <p className="auto-reasons">
-                      {row.status === "CAPTURED" && view.rules?.captured_policy === "manual"
-                        ? t("auto.draftSuggestion")
-                        : row.auto_evidence
-                            .filter((item) => item.status !== "matched")
-                            .map(
-                              (item) =>
-                                `${criterionLabel(item.criterion as Criterion)} : ${t(`auto.${item.status}` as "auto.matched")}`,
-                            )
-                            .join(" · ") ||
-                          t(row.auto_overridden ? "auto.overridden" : "auto.confirmed")}
+                      {row.auto_overridden
+                        ? t("auto.overridden")
+                        : row.status === "CAPTURED" && view.rules?.captured_policy === "manual"
+                          ? t("auto.draftSuggestion")
+                          : row.auto_evidence.some((item) => item.status !== "matched")
+                            ? t("polish.autoSummary", {
+                                count: row.auto_evidence.filter((item) => item.status === "matched")
+                                  .length,
+                                total: row.auto_evidence.length,
+                              })
+                            : t(row.auto_overridden ? "auto.overridden" : "auto.confirmed")}
                     </p>
                   )}
 
@@ -593,6 +601,31 @@ export function ReviewRound({
                       </div>
                     )}
 
+                    {!row.reviewed &&
+                      row.judgement === "criteria" &&
+                      fields.some((field) => row[field] != null) &&
+                      fields.some((field) => row[field] == null) && (
+                        <Button
+                          disabled={
+                            !round.included || busy.has(row.player_id) || pending.has(row.player_id)
+                          }
+                          onClick={() =>
+                            score(
+                              row.player_id,
+                              fields.reduce(
+                                (sum, field) => sum + (row[field] === true ? weights[field] : 0),
+                                0,
+                              ),
+                              Object.fromEntries(
+                                fields.map((field) => [field, row[field] ?? false]),
+                              ),
+                            )
+                          }
+                        >
+                          {t("polish.remainingWrong")}
+                        </Button>
+                      )}
+
                     <details className="manual-score">
                       <summary>{t("finale.manualPoints")}</summary>
 
@@ -655,7 +688,11 @@ export function ReviewRound({
           </p>
         ) : (
           <p role="status" className="muted">
-            {t("hostui.saved")}
+            {t("polish.reviewProgress", {
+              count: checked,
+              total: round.answers.length,
+              remaining: round.answers.length - checked,
+            })}
           </p>
         )}
       </div>

@@ -1,6 +1,5 @@
 """Round machine (spec §7.2), ready check (§9.4), scoring of a round (§6.4–6.5)."""
 
-from copy import deepcopy
 from dataclasses import asdict
 
 from openblindysir_protocol.enums import (
@@ -34,7 +33,7 @@ from openblindysir_server.game import assets, auto_scoring, library, selection
 from openblindysir_server.game.answers import capture_drafts
 from openblindysir_server.game.clock import Instant
 from openblindysir_server.game.effects import EffectSink, Play, SendPlay, SendStop
-from openblindysir_server.game.metadata import clean_metadata, musical_metadata
+from openblindysir_server.game.metadata import clean_metadata, musical_metadata, scoring_metadata
 from openblindysir_server.game.permissions import rule_ok
 from openblindysir_server.game.readiness import expected_ready, ready_ids
 from openblindysir_server.game.rejections import require
@@ -283,28 +282,7 @@ def decode_failure(s: SessionState, r: Round, fx: EffectSink) -> None:
 def build_auto_reference(s: SessionState, r: Round) -> Metadata:
     """Only metadata/tags are scoring references, never the display filename fallback."""
     assert r.slot.track_ref is not None
-    meta = musical_metadata(s, r.slot.track_ref)
-    asset = s.assets.get(r.slot.asset_id or "")
-    title, artist = clean_metadata(
-        None
-        if "title" in (meta.cleared_fields or [])
-        else meta.title or (asset.title if asset else None),
-        None
-        if "artist" in (meta.cleared_fields or [])
-        else meta.artist or (asset.artist if asset else None),
-        "",
-    )
-    # Explicit host/imported references are authoritative; a series title may
-    # contain a spaced hyphen without being an "artist - title" filename.
-    title, artist = meta.title or title, meta.artist or artist
-    return Metadata(
-        title=None if "title" in (meta.cleared_fields or []) else title or None,
-        artist=None if "artist" in (meta.cleared_fields or []) else artist,
-        album=meta.album,
-        year=meta.year,
-        featuring=meta.featuring,
-        aliases=deepcopy(meta.aliases),
-    )
+    return scoring_metadata(s, r.slot.track_ref, s.assets.get(r.slot.asset_id or ""))
 
 
 def build_reveal(s: SessionState, r: Round) -> RevealInfo:

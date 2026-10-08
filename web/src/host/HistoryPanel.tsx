@@ -134,6 +134,11 @@ export function HistoryPanel({ view }: { readonly view: HostView }) {
                 </li>
               ))}
             </ul>
+            {!!record.results.unreviewed_answers && (
+              <p className="notice">
+                {t("polish.incompleteResults", { count: record.results.unreviewed_answers })}
+              </p>
+            )}
             <Recap rows={record.results.recap} players={record.players} />
           </section>
         )}

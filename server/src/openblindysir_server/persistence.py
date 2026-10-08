@@ -40,7 +40,7 @@ from openblindysir_server.private_files import (
     unique_json_object,
 )
 
-FORMAT = 9
+FORMAT = 10
 MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 
 
@@ -224,6 +224,7 @@ class SnapshotStore:
                     6,
                     7,
                     8,
+                    9,
                     FORMAT,
                 }:
                     raise SnapshotVersionError(

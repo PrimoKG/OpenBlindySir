@@ -2,11 +2,11 @@
 // Buttons shown = view.host.commands: the client never recomputes game rules.
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import * as cmd from "../app/commands";
-import { useGame, useServerNow, useUi } from "../app/hooks";
+import { useGame, useUi } from "../app/hooks";
 import { t, tCode, useMessage } from "../i18n";
 import { formatDelta, formatLate } from "../i18n/format";
 import { api } from "../net/api";
-import { FinaleStage, podiumStep, trackTitle } from "../player/Finale";
+import { FinaleStage, trackTitle } from "../player/Finale";
 import { AudioGate, nameOf, PlayerApp } from "../player/PlayerApp";
 import { PlayerHistory } from "../player/Recap";
 import type { HostView } from "../protocol";
@@ -23,7 +23,7 @@ import { SetupPanel } from "./SetupPanel";
 export function HostApp(props: { readonly view: HostView }) {
   const { view } = props;
   return (
-    <PlayerApp view={view}>
+    <PlayerApp view={view} resultActions={<AfterPodium view={view} />}>
       <Drawer view={view} />
     </PlayerApp>
   );
@@ -39,6 +39,7 @@ function Drawer({ view }: { readonly view: HostView }) {
   const tabId = useId();
   const [tab, setTab] = useState("actions");
   const [selecting, setSelecting] = useState(false);
+  const [startError, setStartError] = useMessage(null);
   const [claims, setClaims] = useState(0);
   useEffect(() => {
     const update = (event: Event) => setClaims((event as CustomEvent<number>).detail);
@@ -88,7 +89,17 @@ function Drawer({ view }: { readonly view: HostView }) {
             <Button
               kind="primary"
               disabled={!can("start_game") || view.host.start_blockers.length > 0}
-              onClick={() => game.send(cmd.startGame())}
+              onClick={async () => {
+                if (view.host.settings.scoring_mode === "auto") {
+                  setOpen(true);
+                  return;
+                }
+                await game.engine.unlock();
+                if (game.engine.unlocked) {
+                  setStartError(null);
+                  game.send(cmd.startGame());
+                } else setStartError(() => t("audio.unlockFailed"));
+              }}
             >
               {t("hostui.start")}
             </Button>
@@ -116,6 +127,11 @@ function Drawer({ view }: { readonly view: HostView }) {
         </fieldset>
       </div>
       <Warnings view={view} />
+      {startError && (
+        <p className="error" role="alert">
+          {startError}
+        </p>
+      )}
       {claims > 0 && view.phase !== "LOBBY" && (
         <Button onClick={() => setOpen(true)}>
           {t("session.pendingClaims")} ({claims})
@@ -129,7 +145,6 @@ function Drawer({ view }: { readonly view: HostView }) {
           <FinalReview view={view} />
         </>
       )}
-      {view.phase === "FINAL_RESULTS" && <AfterPodium view={view} />}
       <Modal
         open={open}
         title={t(view.phase === "LOBBY" ? "flow.prepare" : "flow.parameters")}
@@ -406,6 +421,7 @@ function RoundControls(props: { readonly view: HostView }) {
 
 function FinalReview(props: { readonly view: HostView }) {
   const { view } = props;
+  const game = useGame();
   const send = useSend();
   const rows = view.host.final_review ?? [];
   const [fastFinale, setFastFinale] = useState(() => readLocal("fastFinale") === "true");
@@ -492,6 +508,12 @@ function FinalReview(props: { readonly view: HostView }) {
     const controller = new AbortController();
     listenRequest.current = controller;
     try {
+      await game.engine.unlock();
+      if (controller.signal.aborted) return;
+      if (!game.engine.unlocked) {
+        setListenError(true);
+        return;
+      }
       const result = await fetch(`/api/host/finale/${id}/listen`, {
         method: "POST",
         credentials: "same-origin",
@@ -600,6 +622,28 @@ function FinalReview(props: { readonly view: HostView }) {
   const played = rounds.filter((r) => r.played);
   const unshown = played.filter((r) => !view.finale?.revealed_round_ids.includes(r.round_id));
   const isPresented = !!active && active.round_id === view.finale?.round?.round_id;
+  const focusPending = () => {
+    const next = rounds.find((r) => r.included && r.answers.some((answer) => !answer.reviewed));
+    if (!next) return;
+    choose(next.round_id);
+    const playerId = next.answers.find((answer) => !answer.reviewed)?.player_id;
+    requestAnimationFrame(() => {
+      const card = Array.from(
+        document.querySelectorAll<HTMLElement>(".review-section [data-scroll-id]"),
+      ).find((node) => node.dataset.scrollId === playerId);
+      const pane = card?.closest<HTMLElement>(".score-scroll");
+      if (pane && card) {
+        pane.scrollTo({
+          top: pane.scrollTop + card.getBoundingClientRect().top - pane.getBoundingClientRect().top,
+          behavior: "instant",
+        });
+        pane.scrollIntoView({ block: "start" });
+      }
+      card
+        ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
+        ?.focus({ preventScroll: true });
+    });
+  };
   return (
     <section className="stack final-review">
       <FinaleStage view={view}>
@@ -615,28 +659,18 @@ function FinalReview(props: { readonly view: HostView }) {
             />
             {t("finale.fastPace")}
           </label>
-          <ol className="finale-steps" aria-label={t("finale.guide")}>
-            {["reveal", "listen", "awards", "ranking", "next"].map((step, position) => (
-              <li
-                key={step}
-                aria-current={
-                  position ===
-                  (!isPresented
-                    ? 0
-                    : view.play
-                      ? 1
-                      : view.finale?.round?.awards_pending ||
-                          active?.answers.some((a) => !a.reviewed)
-                        ? 2
-                        : 4)
-                    ? "step"
-                    : undefined
-                }
-              >
-                {t(`finale.step.${step}` as "finale.step.reveal")}
-              </li>
-            ))}
-          </ol>
+          <nav className="row wrap finale-shortcuts" aria-label={t("finale.guide")}>
+            <Button disabled={saving || !unchecked} onClick={focusPending}>
+              {t("polish.reviewPending", { count: unchecked })}
+            </Button>
+            <Button
+              onClick={() =>
+                document.querySelector(".finale-scoreboard")?.scrollIntoView({ block: "center" })
+              }
+            >
+              {t("finale.step.ranking")}
+            </Button>
+          </nav>
           <div className="row finale-present-controls">
             <p className="scene-context" role="status">
               {t(view.finale?.round ? "experience.publicRound" : "experience.publicWaiting", {
@@ -761,6 +795,14 @@ function FinalReview(props: { readonly view: HostView }) {
                   ))}
                 </select>
               </div>
+              {active && (
+                <p className="review-target" role="status">
+                  {t("polish.reviewTarget", { number: active.number })} ·{" "}
+                  {t(view.finale?.round ? "experience.publicRound" : "experience.publicWaiting", {
+                    number: view.finale?.round?.number ?? 1,
+                  })}
+                </p>
+              )}
               {active && (
                 <ReviewRound
                   key={active.round_id}
@@ -904,18 +946,26 @@ function FinalReview(props: { readonly view: HostView }) {
       )}
       <div className="row finale-action-bar" ref={actionBar}>
         <FinishGameButton view={view} disabled={saving} />
-        <span role="status">
-          {saving
-            ? t("experience.saveBusy")
-            : unshown.length
-              ? t("experience.remainingReveals", { count: unshown.length })
-              : unchecked
-                ? t("experience.scoringRemaining", { count: unchecked })
-                : t("experience.readyPodium")}
+        <span role="status" className="action-progress">
+          {active && <strong>{t("polish.reviewTarget", { number: active.number })}</strong>}
+          <small>
+            {saving
+              ? t("experience.saveBusy")
+              : unshown.length
+                ? t("experience.remainingReveals", { count: unshown.length })
+                : unchecked
+                  ? t("experience.scoringRemaining", { count: unchecked })
+                  : t("experience.readyPodium")}
+          </small>
         </span>
         {active && !isPresented && active.played ? (
           <Button kind="primary" disabled={saving} onClick={() => present(active.round_id)}>
-            {t("finale.reveal", { number: active.number })}
+            {t(
+              view.finale?.revealed_round_ids.includes(active.round_id)
+                ? "polish.presentAgain"
+                : "finale.reveal",
+              { number: active.number },
+            )}
           </Button>
         ) : unshown.length > 0 ? (
           <Button
@@ -932,8 +982,17 @@ function FinalReview(props: { readonly view: HostView }) {
             {t("finale.reveal", { number: unshown[0]?.number ?? 1 })}
           </Button>
         ) : null}
+        {unchecked > 0 && (
+          <Button
+            kind={unshown.length ? "secondary" : "primary"}
+            disabled={saving}
+            onClick={focusPending}
+          >
+            {t("polish.reviewPending", { count: unchecked })}
+          </Button>
+        )}
         <Button
-          kind={unshown.length ? "secondary" : "primary"}
+          kind={unshown.length || unchecked ? "secondary" : "primary"}
           disabled={saving || unshown.length > 0 || !!view.finale?.round?.awards_pending}
           onClick={() => setConfirm(true)}
         >
@@ -949,11 +1008,7 @@ function FinalReview(props: { readonly view: HostView }) {
         confirmLabel={t(unchecked ? "finale.reviewRemaining" : "hostui.confirm")}
         onConfirm={() => {
           if (unchecked) {
-            const next = rounds.find((r) => r.included && r.answers.some((a) => !a.reviewed));
-            if (next) choose(next.round_id);
-            requestAnimationFrame(() =>
-              document.querySelector(".review-section")?.scrollIntoView({ block: "start" }),
-            );
+            focusPending();
           } else send(cmd.finalValidate(false));
           setConfirm(false);
         }}
@@ -1061,25 +1116,12 @@ function FinishGameButton({
 }
 
 function AfterPodium({ view }: { readonly view: HostView }) {
-  const game = useGame();
-  const start = view.final_results?.podium_started_at;
-  const now = useServerNow(
-    start != null && performance.now() + (game.clock.estimate()?.offset ?? 0) < start + 5400,
-  );
-  const rows = view.team_standings.length
-    ? view.team_standings
-    : (view.final_results?.podium ?? []);
-  const { done } = podiumStep(
-    now,
-    start,
-    rows.map((row) => row.rank),
-  );
-  return done ? (
+  return (
     <>
       <EndActions view={view} />
       <PartyHistory view={view} />
     </>
-  ) : null;
+  );
 }
 
 function EndActions(props: { readonly view: HostView }) {

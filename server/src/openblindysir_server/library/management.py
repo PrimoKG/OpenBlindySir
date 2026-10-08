@@ -36,7 +36,12 @@ from openblindysir_server.auth.routes import current_player
 from openblindysir_server.game import commands as c
 from openblindysir_server.game import rounds, selection
 from openblindysir_server.game.auto_scoring import criteria
-from openblindysir_server.game.metadata import measured_tracks, musical_metadata, selection_metadata
+from openblindysir_server.game.metadata import (
+    measured_tracks,
+    musical_metadata,
+    scoring_metadata,
+    selection_metadata,
+)
 from openblindysir_server.game.state import AssetRecord, Metadata, SessionState, TrackRef
 from openblindysir_server.game.themes import ThemeFacets, label_key, matches_theme, search_key
 from openblindysir_server.library import metadata_archive
@@ -428,6 +433,9 @@ def selection_preview(s: SessionState, payload: SelectionPreviewRequest) -> Sele
     facets = ThemeFacets()
     matching = available = fresh = unclassified = 0
     examples: list[TrackRef] = []
+    issues: list[LibraryTrack] = []
+    eligible = ready = 0
+    missing_counts: dict[str, int] = dict.fromkeys(payload.scoring_criteria, 0)
     scanned = 0
     for bid, catalog in sorted(s.catalogs.items()):
         online = s.bridges.get(bid) is not None and s.bridges[bid].state.value == "ONLINE"
@@ -452,9 +460,27 @@ def selection_preview(s: SessionState, payload: SelectionPreviewRequest) -> Sele
             usable = online and ref not in s.game.unavailable
             available += int(usable)
             fresh += int(usable and ref not in s.played)
+            if usable and (payload.allow_repeats or ref not in s.played):
+                eligible += 1
+                reference = scoring_metadata(s, ref, measured.get(ref))
+                missing = [
+                    key
+                    for key in missing_counts
+                    if not (getattr(reference, key) or (reference.aliases or {}).get(key))
+                ]
+                ready += int(not missing)
+                for key in missing:
+                    missing_counts[key] += 1
+                if missing and len(issues) < 6:
+                    issue = search_track(s, ref, measured.get(ref), set(), sources)
+                    issues.append(issue.model_copy(update={"missing_references": missing}))
             if usable and len(examples) < 6:
                 examples.append(ref)
     return SelectionPreview(
+        reference_eligible=eligible,
+        reference_ready=ready,
+        missing_by_criterion=missing_counts,
+        reference_issues=issues,
         matching=matching,
         available=available,
         fresh=fresh,

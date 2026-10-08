@@ -135,6 +135,10 @@ class LibrarySearch(OutboundModel):
 class SelectionPreviewRequest(InboundModel):
     sources: Annotated[list[SourceSelection], Field(max_length=64)]
     selection_filter: ThemeFilter = Field(default_factory=ThemeFilter)
+    scoring_criteria: Annotated[
+        list[Literal["title", "artist", "album", "year", "featuring"]], Field(max_length=5)
+    ] = Field(default_factory=list)
+    allow_repeats: bool = False
 
 
 class SelectionPreview(OutboundModel):
@@ -148,6 +152,10 @@ class SelectionPreview(OutboundModel):
     linked_to: list[str]
     years: list[int]
     examples: list[LibraryTrack]
+    reference_eligible: int = 0
+    reference_ready: int = 0
+    missing_by_criterion: dict[str, int] = Field(default_factory=dict)
+    reference_issues: list[LibraryTrack] = Field(default_factory=list)
 
 
 class SourceUpdate(InboundModel):

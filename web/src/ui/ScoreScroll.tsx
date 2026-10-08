@@ -44,12 +44,25 @@ export function ScoreScroll({
           top: node.getBoundingClientRect().top - box.top,
         };
     } else anchor.current = null;
-    visible.current = rowNodes()
+    const nodes = rowNodes();
+    visible.current = nodes
       .filter((node) => {
         const row = node.getBoundingClientRect();
         return row.top >= box.top - 1 && row.bottom <= box.bottom + 1;
       })
       .map((node) => node.dataset.scrollId || "");
+    // A long answer or expanded explanation can be taller than the pane.
+    // In that case follow the card the reader is actually looking at.
+    if (!visible.current.length && !ranking) {
+      const intersecting = nodes
+        .map((node) => {
+          const row = node.getBoundingClientRect();
+          return { node, overlap: Math.min(row.bottom, box.bottom) - Math.max(row.top, box.top) };
+        })
+        .filter(({ overlap }) => overlap > 0)
+        .sort((a, b) => b.overlap - a.overlap)[0];
+      if (intersecting) visible.current = [intersecting.node.dataset.scrollId || ""];
+    }
   }, [ranking, rowNodes]);
   const move = (id: string) => {
     const container = pane.current;
@@ -102,7 +115,9 @@ export function ScoreScroll({
         // This is a document section, not a fixed panel. Its position below the fold
         // must never squeeze it into a tiny strip that stays collapsed after scrolling.
         // Reserve room for the action bar and surrounding controls in each viewport.
-        const room = Math.max(88, height - reserve - 160);
+        const headerHeight =
+          document.querySelector(".is-finale .header")?.getBoundingClientRect().height ?? 0;
+        const room = Math.max(88, height - reserve - Math.max(160, headerHeight + 80));
         container.style.setProperty("--score-scroll-height", `${Math.min(cap, room)}px`);
         container.dataset.overflow = String(
           ranking
@@ -139,8 +154,10 @@ export function ScoreScroll({
         node.getBoundingClientRect().top - container.getBoundingClientRect().top - saved.top;
     remember();
   }, [ranking, rows, rowNodes, remember]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const before = previous.current;
+    // Resolve the previous visible batch before ResizeObserver measures cards
+    // shortened by the acknowledgement (for example a confirmed absent answer).
     previous.current = { scope, rows };
     if (scope !== before.scope) {
       pane.current?.scrollTo({ top: 0 });
@@ -163,8 +180,8 @@ export function ScoreScroll({
         return;
       const end = rows.findIndex((row) => row.id === last);
       const target =
-        rows.slice(0, end).find((row) => !row.reviewed) ??
-        rows.slice(end + 1).find((row) => !row.reviewed);
+        rows.slice(end + 1).find((row) => !row.reviewed) ??
+        rows.slice(0, end).find((row) => !row.reviewed);
       if (target) move(target.id);
     }
     remember();

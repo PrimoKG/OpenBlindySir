@@ -1,6 +1,6 @@
 # Notation automatique et grand final
 
-[English](automatic-scoring.en.md). Développement V0.5, protocole **12**, snapshots **9**.
+[English](automatic-scoring.en.md). Développement V0.5, protocole **13**, snapshots **10**.
 Mettre à jour ensemble serveur, interface et Bridge. Les anciennes sessions sont
 migrées avec la notation manuelle par défaut ; aucun ancien score n'est recalculé.
 
@@ -75,10 +75,14 @@ avec les métadonnées JSON version 2 dans `aliases` :
 {"artist": ["Maître Gims", "Gims"], "album": ["Pilule bleue"]}
 ```
 
-Le lobby signale le nombre de morceaux sélectionnés dont les références connues
-sont incomplètes, une fois les réglages enregistrés. Les tags du fichier peuvent
-n'être connus qu'après préparation de l'extrait. Un nom de fichier seul n'est pas
-une référence automatiquement fiable ; les critères manquants restent manuels.
+La préparation vérifie les références **pendant la modification**, pour les critères,
+dossiers, filtres et répétitions actuellement choisis. Elle indique le nombre de
+morceaux prêts, les champs manquants et des exemples. Corrigez la bibliothèque ou
+acceptez explicitement de noter les références manquantes à la main avant de lancer.
+Changer les critères ou la sélection demande une nouvelle vérification ; les
+réglages peuvent être enregistrés sans lancer. Les tags du fichier peuvent encore
+être enrichis lors de la préparation audio. Un nom de fichier seul ne constitue
+pas une référence de titre fiable ; une donnée absente n'est jamais inventée.
 
 Les règles, le seuil, les références et les variantes sont figés au premier lancement
 de la manche. Modifier la bibliothèque ne change pas silencieusement sa notation.

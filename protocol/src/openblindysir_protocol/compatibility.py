@@ -11,8 +11,8 @@ class Compatibility(OutboundModel):
     protocol: int = PROTOCOL_VERSION
     protocol_min: int = PROTOCOL_MIN
     protocol_max: int = PROTOCOL_MAX
-    snapshot_format: int = 9
-    history_format: int = 2
+    snapshot_format: int = 10
+    history_format: int = 3
 
 
 def mismatch_reason() -> str:

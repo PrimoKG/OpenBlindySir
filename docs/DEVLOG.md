@@ -2216,3 +2216,11 @@ un dossier avec 0600 empêchait sa traversée. Correction 0700 pour le dossier,
 0600 pour le fichier, ACL privées Windows conservées. Les tests vérifient la
 lisibilité propriétaire et les droits ; profil simulé validé localement sous
 Linux UID 10001, sans réseau ni accès aux identifiants. CI relancée.
+
+## 2026-10-09 — Final lisible et validation du parcours après le test filmé
+
+Corrections V01–V17 et réserves détaillées dans le [rapport de livraison](audits/2026-10-09-final-polish.md), avec [version anglaise](audits/2026-10-09-final-polish.en.md). Cartes à cinq critères lisibles, défilement des cartes longues et des absences, contrôle des références du brouillon, premier geste audio au lancement et récupération dans l'en-tête, contexte privé/public, progression partielle, podium adapté à la complétude et relance accessible. Traductions et guides FR/EN actualisés.
+
+Protocole 13, snapshot 10 et historique 3 : migration des anciens formats vérifiée ; retour arrière avec sauvegarde compatible. Déploiement LAN après sauvegarde privée à l'arrêt. Vérification des images, du build servi, de TLS et de la conservation de la partie, des scores, cookies, métadonnées et montages (3 joueurs, 14 archives, 300 morceaux).
+
+Exécuté localement : 1 200 tests Python réussis (2 exclusions Windows), 11 intégrations réelles, 55 tests unitaires web, 117 scénarios UI Chromium après les dernières corrections ; les 5 parcours de jeu complets ont également réussi. Ruff, Pyright, Biome, TypeScript, génération de protocole et hygiène réussis. Partie Computer Use isolée à deux navigateurs jusqu'au podium puis à la relance ; partie AAC avec les images Linux candidates en lecture seule/non-root. La capture publiée est synthétique. La CI distante n'est pas comptée dans ces résultats. Écoute sur téléphones physiques et portes de publication officielles encore à valider.

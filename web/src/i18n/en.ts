@@ -2,6 +2,29 @@
 import type { MessageKey } from "./fr";
 
 export const en: { readonly [K in MessageKey]: string } = {
+  "polish.partialAward": "{name}: {points} points · scoring in progress",
+  "polish.requested": "Identify:",
+  "polish.reviewRules": "Review the instructions",
+  "polish.referenceCoverage": "Automatic scoring: {ready} / {total} tracks have every reference",
+  "polish.referenceMissing":
+    "Missing information cannot be checked automatically. The host will score it during the finale; other criteria are still scored.",
+  "polish.referenceExamples": "Show tracks to complete",
+  "polish.referenceRepair":
+    "To complete these references, save this setup, open Sources and library search, and filter for incomplete references. An empty featuring field means unknown: do not invent a reference.",
+  "polish.acceptManual": "I will complete the missing awards during the finale.",
+  "polish.answerPrompt": "What did you recognise?",
+  "polish.singleField":
+    "Use this one field, in any order: {fields}. Partial answers are welcome too.",
+  "polish.incompleteTitle": "Published standings",
+  "polish.incompleteResults":
+    "{count} answers were not fully scored. These standings only include awarded points.",
+  "polish.criteriaProgress": "{count} / {total} criteria scored",
+  "polish.autoSummary": "{count} / {total} criteria recognised automatically · check the others",
+  "polish.remainingWrong": "Mark remaining criteria as missed",
+  "polish.reviewProgress": "{count} / {total} answers fully scored · {remaining} to finish",
+  "polish.reviewPending": "Score the {count} remaining answers",
+  "polish.reviewTarget": "You are scoring round {number}",
+  "polish.presentAgain": "Present round {number} again",
   "finale.animations": "Finale animations (respects reduced motion)",
   "library.selectedSources": "Limit to this game's selected sources",
   "library.editConflict":

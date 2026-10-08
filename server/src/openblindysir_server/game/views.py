@@ -365,6 +365,11 @@ def _final_results(s: SessionState, ranking: list[StandingRow]) -> FinalResults 
         if event.kind is ScoreKind.FINAL_ADJUSTMENT
     ]
     return FinalResults(
+        unreviewed_answers=sum(
+            len(set(rounds.review_player_ids(s, r)) - r.score_reviewed)
+            for r in g.rounds
+            if r.included and r.official_start_at is not None
+        ),
         standings=ranking,
         podium=[row for row in ranking if row.rank <= 3],
         rounds_played=sum(1 for r in g.rounds if r.state is RoundState.REVEALED),

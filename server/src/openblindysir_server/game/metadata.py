@@ -1,6 +1,7 @@
 """Conservative title cleanup. The host may override ambiguous file metadata."""
 
 import re
+from copy import deepcopy
 from dataclasses import replace
 
 from openblindysir_server.game.state import AssetRecord, Metadata, SessionState, TrackRef
@@ -30,6 +31,21 @@ def selection_metadata(s: SessionState, ref: TrackRef, asset: AssetRecord | None
             else getattr(meta, key) or getattr(asset, key)
             for key in ("title", "artist")
         },
+    )
+
+
+def scoring_metadata(s: SessionState, ref: TrackRef, asset: AssetRecord | None) -> Metadata:
+    """Shared by draft preflight and grading; filenames are never scoring references."""
+    meta = musical_metadata(s, ref)
+    resolved = selection_metadata(s, ref, asset)
+    title, artist = clean_metadata(resolved.title, resolved.artist, "")
+    return Metadata(
+        title=None if "title" in (meta.cleared_fields or []) else meta.title or title or None,
+        artist=None if "artist" in (meta.cleared_fields or []) else meta.artist or artist,
+        album=meta.album,
+        year=meta.year,
+        featuring=meta.featuring,
+        aliases=deepcopy(meta.aliases),
     )
 
 

@@ -193,7 +193,7 @@ export function recapCsv(record: GameRecord): string {
         "",
       ]);
   }
-  return `\uFEFF${rows.map((row) => [...row, ...Array(Math.max(0, (rows[0]?.length ?? 0) - row.length)).fill("")].map(cell).join(";")).join("\r\n")}\r\n`;
+  return `\uFEFF${rows.map((row, index) => [...row, ...Array(Math.max(0, (rows[0]?.length ?? 0) - row.length)).fill(""), index === 0 ? "unreviewed_answers" : record.results.unreviewed_answers].map(cell).join(";")).join("\r\n")}\r\n`;
 }
 
 function download(data: string, type: string, filename: string) {

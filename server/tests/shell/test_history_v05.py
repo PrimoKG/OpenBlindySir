@@ -172,7 +172,7 @@ def test_history_migration_rejects_extra_fields_unknown_versions_and_duplicates(
         for key, value in row.items()
         if key not in {"version", "settings", "started_at", "sources"}
     }
-    assert migrate_record(old)["version"] == 2
+    assert migrate_record(old)["version"] == 3
     assert migrate_record({**old, "version": 1})["sources"] == []
     with pytest.raises(HistoryVersionError):
         migrate_record({**old, "version": 500})
@@ -182,7 +182,7 @@ def test_history_migration_rejects_extra_fields_unknown_versions_and_duplicates(
         retained([row, copy.deepcopy(row)], harness.clock.now().wall_ms)
 
 
-@pytest.mark.parametrize("legacy_format", [1, 2, 3])
+@pytest.mark.parametrize("legacy_format", [1, 2, 3, 9])
 def test_old_snapshot_history_and_cookie_migrate(tmp_path, legacy_format):
     settings = settings_for_test(state_dir=tmp_path / "state")
     clock = FakeClock()
@@ -191,20 +191,29 @@ def test_old_snapshot_history_and_cookie_migrate(tmp_path, legacy_format):
         harness = Harness(client, clock)
         _, token, _ = operator(harness)
         row = record(clock.now().wall_ms)
-        row.pop("version")
+        if legacy_format == 9:
+            row["version"] = 2
+            row["results"].pop("unreviewed_answers", None)
+        else:
+            row.pop("version")
         harness.runtime.engine.state.archives = [row]
         harness.runtime.save_snapshot()
     path = settings.state_dir / "session.json"
     payload = json.loads(path.read_text())
     payload["format"] = legacy_format
-    payload["auth"] = harness.runtime.snapshots.legacy_fingerprint
+    if legacy_format < 4:
+        payload["auth"] = harness.runtime.snapshots.legacy_fingerprint
     path.write_text(json.dumps(payload), encoding="utf-8")
     restored = create_app(settings, clock=clock, background_tasks=False)
     with TestClient(restored, base_url=ORIGIN) as client:
         response = client.get("/api/host/history", headers=harness.cookie(token))
         assert response.status_code == 200
         assert len(response.json()["items"]) == 1
-        assert restored.state.obs.runtime.engine.state.archives[0]["version"] == 2
+        assert restored.state.obs.runtime.engine.state.archives[0]["version"] == 3
+        if legacy_format == 9:
+            detail = client.get("/api/host/history/g_example1", headers=harness.cookie(token))
+            assert detail.status_code == 200
+            assert detail.json()["results"]["unreviewed_answers"] is None
 
 
 @pytest.mark.parametrize("unknown_history", [False, True])

@@ -16,9 +16,9 @@ class HistoryVersionError(ValueError):
 
 def migrate_record(value: dict[str, Any]) -> dict[str, Any]:
     version = value.get("version", 1)
-    if type(version) is not int or version not in {1, 2}:
+    if type(version) is not int or version not in {1, 2, 3}:
         raise HistoryVersionError("unsupported history format; preserve files and upgrade")
-    return GameRecord.model_validate({**value, "version": 2}).model_dump(mode="json")
+    return GameRecord.model_validate({**value, "version": 3}).model_dump(mode="json")
 
 
 def record_bytes(record: dict[str, Any]) -> int:

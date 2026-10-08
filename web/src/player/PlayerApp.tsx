@@ -22,7 +22,11 @@ import { FinaleSoundControls } from "./FinaleSounds";
 import { clipPresentation } from "./presentation";
 import { ExportResults, Recap } from "./Recap";
 
-export function PlayerApp(props: { readonly view: AnyView; readonly children?: ReactNode }) {
+export function PlayerApp(props: {
+  readonly view: AnyView;
+  readonly children?: ReactNode;
+  readonly resultActions?: ReactNode;
+}) {
   const { view } = props;
   const stage = useRef<HTMLDivElement>(null);
   const phaseKey = `${view.phase}:${view.round?.round_id ?? ""}:${view.round?.state ?? ""}`;
@@ -66,7 +70,7 @@ export function PlayerApp(props: { readonly view: AnyView; readonly children?: R
             {t(`a11y.phase.${view.phase}`)}
           </p>
           <AudioGate view={view} />
-          <PhaseScreen view={view} />
+          <PhaseScreen view={view} resultActions={props.resultActions} />
         </div>
         {props.children}
       </div>
@@ -81,12 +85,24 @@ export function nameOf(view: AnyView, playerId: string): string {
 
 function Header(props: { readonly view: AnyView }) {
   const [soundOpen, setSoundOpen] = useState(false);
+  const header = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!header.current) return;
+    const measure = () =>
+      document.documentElement.style.setProperty(
+        "--app-header-height",
+        `${header.current?.getBoundingClientRect().height ?? 80}px`,
+      );
+    const observer = new ResizeObserver(measure);
+    observer.observe(header.current);
+    measure();
+    return () => observer.disconnect();
+  }, []);
   const { view } = props;
   const ui = useUi();
-  const engine = useEngine();
   return (
     <>
-      <header className="header">
+      <header className="header" ref={header}>
         <Brand />
         <div className="header-meta">
           <LanguageChoice />
@@ -96,9 +112,7 @@ function Header(props: { readonly view: AnyView }) {
             </span>
           )}
           <span className="identity">{view.me.nickname}</span>
-          {view.phase.startsWith("FINAL_") &&
-            (view.kind !== "player" ||
-              (engine.contextState === "running" && engine.state !== "ERROR")) && <AudioTest />}
+          {view.phase.startsWith("FINAL_") && <AudioTest />}
           {view.phase !== "LOBBY" && (
             <>
               <Button
@@ -197,9 +211,9 @@ export function AudioGate(props: { readonly view: AnyView }) {
       </p>
       {engine.state === "ERROR" && engine.contextState === "running" ? (
         <Button onClick={() => game.engine.syncWithView(props.view)}>{t("app.retry")}</Button>
-      ) : (
+      ) : !props.view.phase.startsWith("FINAL_") ? (
         <AudioTest />
-      )}
+      ) : null}
     </section>
   );
 }
@@ -212,7 +226,7 @@ function Notices() {
   ) : null;
 }
 
-function PhaseScreen(props: { readonly view: AnyView }) {
+function PhaseScreen(props: { readonly view: AnyView; readonly resultActions?: ReactNode }) {
   const { view } = props;
   switch (view.phase) {
     case "LOBBY":
@@ -226,7 +240,7 @@ function PhaseScreen(props: { readonly view: AnyView }) {
         </main>
       ) : null;
     case "FINAL_RESULTS":
-      return <Results view={view} />;
+      return <Results view={view} actions={props.resultActions} />;
   }
 }
 
@@ -610,7 +624,7 @@ function OpenRound(props: { readonly view: AnyView; readonly round: RoundOpen })
             view.rules?.answer_mode === "custom"
               ? "flow.customPrompt"
               : view.rules?.answer_mode === "fields"
-                ? "auto.fields"
+                ? "polish.answerPrompt"
                 : view.rules?.answer_mode === "title"
                   ? "flow.titlePrompt"
                   : view.rules?.answer_mode === "artist"
@@ -641,6 +655,13 @@ function OpenRound(props: { readonly view: AnyView; readonly round: RoundOpen })
       ) : (
         <form onSubmit={submit} className="stack answer-form">
           <label htmlFor="answer">{t("round.answerLabel")}</label>
+          {view.rules?.answer_mode === "fields" && (
+            <p id="answer-format" className="muted answer-format">
+              {t("polish.singleField", {
+                fields: criteriaFor(view.rules).map(criterionLabel).join(" · "),
+              })}
+            </p>
+          )}
           <input
             id="answer"
             ref={input}
@@ -657,7 +678,9 @@ function OpenRound(props: { readonly view: AnyView; readonly round: RoundOpen })
                       ? "flow.artistPrompt"
                       : "round.answerPlaceholder",
             )}
-            aria-describedby="draft-hint"
+            aria-describedby={
+              view.rules?.answer_mode === "fields" ? "answer-format draft-hint" : "draft-hint"
+            }
             onChange={(e) => onChange(e.target.value)}
             autoComplete="off"
             disabled={ui.pendingSubmit || !!view.paused}
@@ -787,13 +810,14 @@ export function Standings(props: {
   );
 }
 
-function Results(props: { readonly view: AnyView }) {
+function Results(props: { readonly view: AnyView; readonly actions?: ReactNode }) {
   const { view } = props;
   const results = view.final_results;
   if (!results) return null;
   return (
     <main className="stack results">
       <FinalPodium view={view}>
+        {props.actions}
         <div className="page-heading">
           <h2>{t("results.title")}</h2>
           <p className="muted">{t("results.rounds", { count: results.rounds_played })}</p>
@@ -823,7 +847,7 @@ function Results(props: { readonly view: AnyView }) {
         {view.game && (
           <ExportResults
             record={{
-              version: 2,
+              version: 3,
               started_at: null,
               settings: null,
               sources: [],

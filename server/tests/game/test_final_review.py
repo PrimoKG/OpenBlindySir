@@ -15,6 +15,22 @@ def at_final_review(points: dict[int, int] | None = None) -> Scenario:
     return sc
 
 
+def test_published_results_distinguish_incomplete_scoring_from_confirmed_zero():
+    sc = at_final_review()
+    expected = sum(len(r.answers) for r in sc.host_view().host.review_rounds)
+    assert expected > 0
+    sc.finalize()
+    for pid in [sc.host_id, *sc.player_ids]:
+        results = sc.view(pid).final_results
+        assert results is not None
+        assert results.unreviewed_answers == expected
+    complete = at_final_review()
+    ids = [row.player_id for row in complete.host_view().host.review_rounds[0].answers]
+    complete.score(dict.fromkeys(ids, 0))
+    complete.finalize()
+    assert complete.host_view().final_results.unreviewed_answers == 0
+
+
 def test_final_set_is_a_draft_value_not_an_event() -> None:
     sc = at_final_review({0: 3})
     a = sc.player_ids[0]

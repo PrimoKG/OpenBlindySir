@@ -3,6 +3,7 @@ import { getLanguage, t, tCode } from "../i18n";
 import { api } from "../net/api";
 import type { GameSettings, SelectionPreview, ThemeFilter } from "../protocol";
 import { Button } from "../ui/components";
+import { criteriaFor } from "../ui/ScoringCriteria";
 
 export function emptyTheme(): ThemeFilter {
   return {
@@ -85,17 +86,23 @@ export function useSelectionPreview(draft: GameSettings, revision: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+  const [completedKey, setCompletedKey] = useState("");
   const valid = readTheme(draft.selection_filter) !== null;
   const payload = JSON.stringify({
     sources: draft.sources,
     selection_filter: draft.selection_filter ?? emptyTheme(),
+    scoring_criteria:
+      draft.scoring_mode === "auto" ? criteriaFor(draft).filter((key) => key !== "custom") : [],
+    allow_repeats: draft.allow_repeats,
   });
+  const requestKey = `${payload}:${revision}:${retry}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: catalogue events invalidate the same draft selection.
   useEffect(() => {
     if (!valid) {
       setResult(null);
       setLoading(false);
       setError("invalid_args");
+      setCompletedKey(requestKey);
       return;
     }
     const controller = new AbortController();
@@ -109,12 +116,14 @@ export function useSelectionPreview(draft: GameSettings, revision: string) {
           setResult(response.data);
           setError(null);
           setLoading(false);
+          setCompletedKey(requestKey);
           return;
         }
         if (response.error !== "rate_limited" || attempt === 2) {
           setResult(null);
           setError(response.error);
           setLoading(false);
+          setCompletedKey(requestKey);
           return;
         }
         await new Promise((resolve) => window.setTimeout(resolve, 450));
@@ -125,8 +134,14 @@ export function useSelectionPreview(draft: GameSettings, revision: string) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [payload, revision, retry, valid]);
-  return { result, loading, error, retry: () => setRetry((old) => old + 1) };
+  }, [payload, revision, retry, valid, requestKey]);
+  const current = completedKey === requestKey;
+  return {
+    result: current ? result : null,
+    loading: loading || !current,
+    error: current ? error : null,
+    retry: () => setRetry((old) => old + 1),
+  };
 }
 
 export function ThemeSelector({

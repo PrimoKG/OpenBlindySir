@@ -152,7 +152,7 @@ function playerView(): PlayerView {
     kind: "player",
     session: {
       epoch: "example-epoch",
-      protocol: 12,
+      protocol: 13,
       server_version: "0.1.0",
       recovered: false,
       persistence_status: "disabled",
@@ -665,7 +665,7 @@ test("V0.5 history is fetched on demand, exported and deleted with keyboard conf
 }) => {
   const view = hostView();
   const historical: GameRecord = {
-    version: 2,
+    version: 3,
     game_id: "g_history1",
     finished_at: 1780000000000,
     started_at: 1779990000000,
@@ -674,6 +674,7 @@ test("V0.5 history is fetched on demand, exported and deleted with keyboard conf
     players: [...players],
     teams: [],
     results: {
+      unreviewed_answers: 0,
       podium_started_at: null,
       standings,
       podium: standings,
@@ -703,7 +704,7 @@ test("V0.5 history is fetched on demand, exported and deleted with keyboard conf
     }
     return route.fulfill({
       json: {
-        version: 2,
+        version: 3,
         items: rows,
         retained_bytes: 1000,
         max_games: 50,
@@ -760,7 +761,7 @@ test("V0.5 history purge errors are announced and retry stays available", async 
       ? route.fulfill({ status: 503, json: { error: "invalid_state" } })
       : route.fulfill({
           json: {
-            version: 2,
+            version: 3,
             items: [
               {
                 game_id: "g_history1",
@@ -812,7 +813,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
           bridge_id: first,
           name: "Appareil salon",
           version: "0.5.0.dev0",
-          protocol: 12,
+          protocol: 13,
           state: "ONLINE",
           track_count: 8,
           jobs_in_flight: 0,
@@ -824,7 +825,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
           bridge_id: second,
           name: "Appareil absent",
           version: "0.5.0.dev0",
-          protocol: 12,
+          protocol: 13,
           state: "OFFLINE",
           track_count: 4,
           jobs_in_flight: 0,
@@ -888,7 +889,7 @@ test("V0.5 incompatible client stops reload loops and shows the required range",
     route.fulfill({
       json: {
         server_version: "0.5.0.dev0",
-        protocol: 12,
+        protocol: 13,
         protocol_min: 8,
         protocol_max: 8,
         snapshot_format: 4,
@@ -1576,6 +1577,7 @@ for (const width of [320, 390, 1280]) {
       phase: "FINAL_RESULTS",
       standings,
       final_results: {
+        unreviewed_answers: 0,
         podium_started_at: null,
         standings,
         podium: standings,
@@ -2100,7 +2102,7 @@ test("equal score acknowledgements still retain distinct title and artist decisi
     });
   echo({ points_draft: 2, judgement: "criteria", title_correct: true, score_revision: 1 });
   await expect(artist.getByRole("button", { name: "Manqué", exact: true })).toBeEnabled();
-  await expect(page.locator(".review-status")).toHaveText("À vérifier");
+  await expect(page.locator(".review-status")).toHaveText("1 / 2 critères notés");
   await artist.getByRole("button", { name: "Manqué", exact: true }).click();
   echo({ points_draft: 2, judgement: "criteria", title_correct: true, score_revision: 1 });
   await expect(artist.getByRole("button", { name: "Manqué", exact: true })).toBeDisabled();
@@ -2225,6 +2227,7 @@ test("team podium comes first and restarting the full library requires explicit 
       { team: "Example team", score: 10, rank: 1, members: [players[0].id, players[1].id] },
     ],
     final_results: {
+      unreviewed_answers: 0,
       podium_started_at: null,
       finished_at: 60,
       rounds_played: 2,
@@ -2370,11 +2373,15 @@ test("shared finale keeps audio recovery reachable for players and hosts", async
     audio: { current: audio, next: null },
     play,
   });
-  await expect(page.locator(".audio-gate").getByRole("button")).toBeVisible();
+  await expect(
+    page.locator("header").getByRole("button", { name: "Tester mon audio", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Le grand final", exact: true })).toBeVisible();
   const host = globalReview(hostView(), []);
   ui.show({ ...host, audio: { current: audio, next: null }, play });
-  await expect(page.locator("#host-controls .audio-gate").getByRole("button")).toBeVisible();
+  await expect(
+    page.locator("header").getByRole("button", { name: "Tester mon audio", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Arrêter la réécoute", exact: true }),
   ).toBeEnabled();
@@ -2395,6 +2402,7 @@ test("podium reveals tied winners together and restored results stay immediate",
     phase: "FINAL_RESULTS",
     standings: tied,
     final_results: {
+      unreviewed_answers: 0,
       podium_started_at: now + 600,
       finished_at: 60,
       rounds_played: 2,
@@ -2425,7 +2433,11 @@ test("podium reveals tied winners together and restored results stay immediate",
   }
   ui.show({
     ...results,
-    final_results: results.final_results && { ...results.final_results, podium_started_at: null },
+    final_results: results.final_results && {
+      ...results.final_results,
+      unreviewed_answers: 0,
+      podium_started_at: null,
+    },
   });
   await page.reload();
   await expect(podium.locator(".podium-visible")).toHaveCount(3);
@@ -3039,6 +3051,7 @@ test("finale respects native autoplay policy and uses the existing gesture-unloc
 }, info) => {
   test.skip(browserName !== "chromium", "This check exercises Chromium's native autoplay policy.");
   const nativeBrowser = await chromium.launch({
+    ...(info.project.use.channel ? { channel: info.project.use.channel } : {}),
     args: ["--autoplay-policy=document-user-activation-required"],
   });
   const context = await nativeBrowser.newContext({
@@ -3084,7 +3097,10 @@ test("finale respects native autoplay policy and uses the existing gesture-unloc
         () => (window as unknown as { audioContextCreations: number }).audioContextCreations,
       ),
     ).toBe(0);
-    await page.locator(".audio-gate").getByRole("button").click();
+    await page
+      .locator("header")
+      .getByRole("button", { name: "Tester mon audio", exact: true })
+      .click();
     await expect(page.locator(".audio-gate")).toHaveCount(0);
     await expect(page.locator(".finale-track .record")).toHaveClass(/record-playing/);
     expect(
@@ -3293,7 +3309,10 @@ for (const language of ["fr", "en"] as const) {
     await suspend();
     const recovery = page.locator(".audio-gate");
     await expect(recovery).toBeVisible(); // No replay is active: recovery must remain available.
-    await recovery.getByRole("button", { name: copy["audio.reactivate"], exact: true }).click();
+    await page
+      .locator("header")
+      .getByRole("button", { name: copy["audio.reactivate"], exact: true })
+      .click();
     await expect(recovery).toHaveCount(0);
     await page.route("**/api/audio/recovery", (route) =>
       route.fulfill({ contentType: "audio/wav", body: silentWav(20) }),
@@ -3322,7 +3341,10 @@ for (const language of ["fr", "en"] as const) {
     await expect(page.locator(".finale-track .record")).toHaveClass(/record-playing/);
     await suspend();
     await expect(recovery).toBeVisible();
-    await recovery.getByRole("button", { name: copy["audio.reactivate"], exact: true }).click();
+    await page
+      .locator("header")
+      .getByRole("button", { name: copy["audio.reactivate"], exact: true })
+      .click();
     await expect(recovery).toHaveCount(0);
     await expect
       .poll(() =>
@@ -3518,7 +3540,10 @@ test("last two finale rounds can be presented again after navigating backward", 
     await page
       .getByRole("combobox", { name: "Choisir une manche à présenter", exact: true })
       .selectOption(id);
-    const button = page.getByRole("button", { name: `Présenter la manche ${number}`, exact: true });
+    const button = page.getByRole("button", {
+      name: `${visited.has(id) ? "Représenter" : "Présenter"} la manche ${number}`,
+      exact: true,
+    });
     await expect(button).toBeEnabled();
     await button.click();
     await expect
@@ -3821,6 +3846,7 @@ for (const width of [320, 1366]) {
             final_adjustments: [],
             recap: [],
             finished_at: 1780000000000,
+            unreviewed_answers: 0,
             podium_started_at: null,
           },
         },
@@ -4230,3 +4256,295 @@ for (const language of ["fr", "en"] as const) {
     await expect(dialog).toHaveCount(0);
   });
 }
+
+for (const size of [
+  { width: 1366, height: 768 },
+  { width: 1093, height: 600 },
+  { width: 390, height: 740 },
+]) {
+  test(`five missing criteria remain readable and oversized cards advance at ${size.width}`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize(size);
+    const ui = await harness(page, hostView());
+    const answers: ReviewRow[] = players.map((person) => ({
+      player_id: person.id,
+      text:
+        "Sapéscomme Ja m ais Maitre Gims 2015 ft niska pilule bleue " +
+        "Une réponse très longue mais lisible. ".repeat(12),
+      status: "LOCKED",
+      points_draft: 0,
+      reviewed: false,
+      score_revision: 0,
+      judgement: "criteria",
+      title_correct: null,
+      artist_correct: null,
+      album_correct: null,
+      year_correct: null,
+      featuring_correct: null,
+      custom_correct: null,
+      order: null,
+      near_tie: false,
+      elapsed_ms: 2000,
+      late_start_ms: null,
+      received_at_wall_ms: null,
+      score_before: 0,
+      auto_overridden: false,
+      auto_evidence: ["title", "artist", "album", "year", "featuring"].map((criterion) => ({
+        criterion,
+        reference: null,
+        fragment: null,
+        similarity: 0,
+        threshold: 90,
+        status: "missing_reference",
+      })),
+    }));
+    const base = globalReview(hostView(), answers);
+    const view = {
+      ...base,
+      rules: {
+        ...base.host.settings,
+        answer_mode: "fields",
+        answer_fields: ["title", "artist", "album", "year", "featuring"],
+        scoring_mode: "auto",
+        answer_max_chars: 1000,
+      },
+    } as HostView;
+    ui.show(view);
+    const pane = page.locator(".review-section .score-scroll");
+    const card = pane.locator(".answer-card").first();
+    await expect(card).toBeVisible();
+    await card.scrollIntoViewIfNeeded();
+    const widths = await card.evaluate((element) => ({
+      card: element.clientWidth,
+      name: element.querySelector(".answer-player")?.clientWidth ?? 0,
+      answer: element.querySelector(".answer-text")?.clientWidth ?? 0,
+    }));
+    expect(widths.name).toBeGreaterThan(widths.card * 0.75);
+    expect(widths.answer).toBeGreaterThan(widths.card * 0.75);
+    await expect(card.locator(".criterion")).toHaveCount(5);
+    await expect(card.locator(".review-status")).toContainText("0 / 5");
+    // Opening explanations creates a genuinely oversized card, unlike the old absence-only fixture.
+    await card.locator(".auto-assessment > summary").click();
+    expect(await card.evaluate((el) => el.clientHeight)).toBeGreaterThan(
+      await pane.evaluate((el) => el.clientHeight),
+    );
+    await pane.evaluate((el) => {
+      el.scrollTop = 0;
+      el.dispatchEvent(new Event("scroll"));
+    });
+    const before = await pane.evaluate((el) => el.scrollTop);
+    ui.show({
+      ...view,
+      host: {
+        ...view.host,
+        review_rounds: view.host.review_rounds.map((round) => ({
+          ...round,
+          answers: round.answers.map((row, index) =>
+            index === 0 ? { ...row, reviewed: true, score_revision: 1 } : row,
+          ),
+        })),
+      },
+    });
+    await expect.poll(() => pane.evaluate((el) => el.scrollTop)).toBeGreaterThan(before + 100);
+    await expect(
+      page.locator("header").getByRole("button", { name: "Tester mon audio", exact: true }),
+    ).toBeVisible();
+    await layout(page);
+    await page.screenshot({ path: info.outputPath("five-criteria-readable.png") });
+  });
+}
+
+for (const language of ["fr", "en"] as const) {
+  test(`draft automatic preflight blocks unchecked missing references (${language})`, async ({
+    page,
+  }) => {
+    const { view, library } = manualFixture();
+    const ui = await harness(page, view, library);
+    const copy = language === "fr" ? fr : en;
+    if (language === "en") await page.getByRole("button", { name: "English", exact: true }).click();
+    const payloads: { scoring_criteria: string[] }[] = [];
+    await page.route("**/api/host/library/selection", (route) => {
+      const body = route.request().postDataJSON();
+      payloads.push(body);
+      return route.fulfill({
+        json: {
+          matching: 12,
+          available: 12,
+          fresh: 12,
+          unclassified: 0,
+          genres: [],
+          languages: [],
+          tags: [],
+          linked_to: [],
+          years: [],
+          examples: [],
+          reference_eligible: 12,
+          reference_ready: body.scoring_criteria?.length ? 0 : 12,
+          missing_by_criterion: Object.fromEntries(
+            (body.scoring_criteria ?? []).map((key: string) => [key, 12]),
+          ),
+          reference_issues: [],
+        },
+      });
+    });
+    await page.getByRole("button", { name: copy["flow.prepare"], exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: copy["flow.prepare"], exact: true });
+    await dialog.getByRole("tab", { name: copy["flow.rules"], exact: true }).click();
+    await dialog
+      .getByRole("combobox", { name: copy["auto.mode"], exact: true })
+      .selectOption("auto");
+    await expect(dialog.locator(".reference-preflight")).toContainText("0 / 12");
+    const start = dialog.getByRole("button", { name: copy["ux.saveAndStart"], exact: true });
+    await expect(start).toBeDisabled();
+    await dialog.getByRole("checkbox", { name: copy["polish.acceptManual"], exact: true }).check();
+    await expect(start).toBeEnabled();
+    await dialog
+      .getByRole("combobox", { name: copy["ux.answerMode"], exact: true })
+      .selectOption("fields");
+    await dialog.getByRole("checkbox", { name: copy["review.album"], exact: true }).check();
+    await expect
+      .poll(() => payloads.at(-1)?.scoring_criteria)
+      .toEqual(["title", "artist", "album"]);
+    await expect(start).toBeDisabled();
+    expect(ui.sent.map((raw) => JSON.parse(raw)).some((msg) => msg.cmd === "configure")).toBe(
+      false,
+    );
+  });
+}
+
+for (const language of ["fr", "en"] as const) {
+  for (const incomplete of [false, true]) {
+    test(`zero and incomplete results stay honest and offer another game (${language}, ${incomplete})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1093, height: 600 });
+      const base = hostView();
+      const ui = await harness(page, base);
+      const copy = language === "fr" ? fr : en;
+      if (language === "en")
+        await page.getByRole("button", { name: "English", exact: true }).click();
+      const rows = standings.map((row) => ({
+        ...row,
+        score: incomplete && row.rank === 1 ? 5 : 0,
+        rank: incomplete ? row.rank : 1,
+      }));
+      const now = await page.evaluate(() => performance.now());
+      ui.show({
+        ...base,
+        phase: "FINAL_RESULTS",
+        standings: rows,
+        final_results: {
+          standings: rows,
+          podium: rows,
+          rounds_played: 2,
+          final_adjustments: [],
+          recap: [],
+          finished_at: 60,
+          podium_started_at: now + 800,
+          unreviewed_answers: incomplete ? 2 : 0,
+        },
+        host: { ...base.host, commands: ["new_game", "end_session"] },
+      });
+      await expect(
+        page.getByRole("heading", {
+          name: copy[incomplete ? "polish.incompleteTitle" : "experience.noAwardTitle"],
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(page.locator(".celebration-sparks, .podium-first")).toHaveCount(0);
+      await expect(page.locator(".podium-announcement")).toHaveCount(1);
+      if (incomplete)
+        await expect(page.locator(".podium-announcement")).toContainText(
+          copy["polish.incompleteResults"].replace("{count}", "2"),
+        );
+      await expect(page.locator(".end-actions")).toBeVisible();
+      const actions = await page.locator(".end-actions").boundingBox();
+      const details = await page
+        .getByRole("heading", { name: copy["results.title"], exact: true })
+        .boundingBox();
+      expect(actions).not.toBeNull();
+      expect(details).not.toBeNull();
+      expect((actions?.y ?? Infinity) + (actions?.height ?? 0)).toBeLessThan(details?.y ?? 0);
+      for (const button of await page.locator(".end-actions > .btn").all()) {
+        expect((await button.boundingBox())?.height).toBeLessThan(100);
+      }
+      await layout(page);
+    });
+  }
+}
+
+test("fresh host start unlocks audio under native gesture policy", async ({
+  browserName,
+}, info) => {
+  test.skip(browserName !== "chromium", "Chromium native gesture policy");
+  const nativeBrowser = await chromium.launch({
+    ...(info.project.use.channel ? { channel: info.project.use.channel } : {}),
+    args: ["--autoplay-policy=document-user-activation-required"],
+  });
+  const context = await nativeBrowser.newContext({
+    baseURL: String(info.project.use.baseURL),
+    locale: "fr-FR",
+  });
+  try {
+    const page = await context.newPage();
+    await page.addInitScript(() => {
+      const Original = window.AudioContext;
+      const contexts: AudioContext[] = [];
+      Object.assign(window, { startAudioProbe: contexts });
+      window.AudioContext = class extends Original {
+        constructor(options?: AudioContextOptions) {
+          super(options);
+          contexts.push(this);
+        }
+      };
+    });
+    const { view, library } = manualFixture();
+    const ui = await harness(page, view, library);
+    await page.getByRole("button", { name: fr["flow.prepare"], exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: fr["flow.prepare"], exact: true });
+    await dialog.getByRole("tab", { name: fr["flow.rhythm"], exact: true }).click();
+    await dialog.getByLabel(fr["hostui.rounds"], { exact: true }).fill("1");
+    await dialog.getByRole("button", { name: fr["ux.saveAndStart"], exact: true }).click();
+    await expect
+      .poll(() =>
+        ui.sent
+          .map((raw) => JSON.parse(raw))
+          .some((msg) => msg.cmd === "configure" && msg.start_game),
+      )
+      .toBe(true);
+    expect(
+      await page.evaluate(() =>
+        (window as unknown as { startAudioProbe: AudioContext[] }).startAudioProbe.map(
+          (ctx) => ctx.state,
+        ),
+      ),
+    ).toEqual(["running"]);
+  } finally {
+    await context.close();
+    await nativeBrowser.close();
+  }
+});
+
+test("finale activity changes language without repeating a score update", async ({ page }) => {
+  const base = playerView();
+  const ui = await harness(page, base);
+  const source = globalReview(hostView(), []);
+  if (!source.finale) throw new Error("Finale fixture");
+  const initial = {
+    ...base,
+    phase: "FINAL_SCORE_REVIEW" as const,
+    finale: { ...source.finale, round: null, revealed_round_ids: [] },
+  };
+  ui.show(initial);
+  await expect(page.locator(".finale-activity")).toContainText(fr["experience.publicWaiting"]);
+  ui.show({ ...initial, finale: source.finale });
+  await expect(page.locator(".finale-activity")).toContainText(
+    fr["experience.roundActivity"].replace("{number}", "1"),
+  );
+  await page.getByRole("button", { name: "English", exact: true }).click();
+  await expect(page.locator(".finale-activity")).toContainText(
+    en["experience.roundActivity"].replace("{number}", "1"),
+  );
+  await expect(page.locator(".score-updated")).toHaveCount(0);
+});

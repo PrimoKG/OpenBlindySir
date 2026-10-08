@@ -450,6 +450,7 @@ class FinalAdjustmentShown(OutboundModel):
 
 
 class FinalResults(OutboundModel):
+    unreviewed_answers: int | None = None
     standings: list[StandingRow]
     podium: list[StandingRow]  # rank <= 3 (may exceed 3 rows on ties)
     rounds_played: int
@@ -495,7 +496,7 @@ class Finale(OutboundModel):
 
 
 class GameRecord(OutboundModel):
-    version: Literal[2] = 2
+    version: Literal[3] = 3
     game_id: GameId
     finished_at: int
     players: list[ViewPlayer]
@@ -519,7 +520,7 @@ class HistoryItem(OutboundModel):
 
 
 class HistoryResponse(OutboundModel):
-    version: Literal[2] = 2
+    version: Literal[3] = 3
     items: list[HistoryItem]
     retained_bytes: int
     max_games: int

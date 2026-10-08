@@ -127,7 +127,7 @@ describe("library preflight", () => {
 describe("recap export", () => {
   it("retains manual corrections and escapes spreadsheet formulas and quoted answers", () => {
     const record: GameRecord = {
-      version: 2,
+      version: 3,
       started_at: null,
       settings: null,
       sources: [],
@@ -146,6 +146,7 @@ describe("recap export", () => {
         },
       ],
       results: {
+        unreviewed_answers: 0,
         podium_started_at: null,
         finished_at: 42,
         standings: [],
@@ -209,7 +210,8 @@ describe("recap export", () => {
         .trim()
         .split("\r\n")
         .map((line) => [...line.matchAll(/"(?:[^"]|"")*"/g)].length),
-    ).toEqual([24, 24, 24, 24]);
+    ).toEqual([25, 25, 25, 25]);
+    expect(csv).toContain('"unreviewed_answers"');
     expect(csv.split("\r\n")).toHaveLength(5);
   });
 });

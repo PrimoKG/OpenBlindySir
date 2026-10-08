@@ -1,7 +1,11 @@
 # OpenBlindySir
 ⚠️ Early development — API/protocol may change.
 
-Current step: **V0.5** (`0.5.0.dev0`, protocol **12**, snapshots **9**).
+Current step: **V0.5** (`0.5.0.dev0`, protocol **13**, snapshots **10**).
+
+Latest finale fixes, validation evidence and remaining device/release checks:
+[October 9 delivery report](docs/audits/2026-10-09-final-polish.en.md)
+([français](docs/audits/2026-10-09-final-polish.md)).
 Separate Bridge credentials, private history and recovery/accessibility checks
 are implemented in source. [V0.5 EN](docs/v0.5.en.md) / [V0.5 FR](docs/v0.5.md).
 This development version does not freeze the protocol or announce a release.
@@ -90,7 +94,7 @@ the shared podium reveal, including ties.
 The Bridge can normalize volume and avoid silent excerpts, with excluded files reported
 to the host. See the [English user guide](docs/user-guide.en.md) / [guide français](docs/guide-utilisateur.md).
 
-**Protocol 8:** update the server, Bridge and web UI together.
+**Protocol 13:** update the server, Bridge and web UI together.
 
 Full Docker Compose hosting is available: server plus built web UI, the official
 Caddy image, and a Bridge image containing FFmpeg. Windows and Unix launchers
@@ -194,7 +198,7 @@ Roadmap:
 | **v0.1** | A real game night | First playable version: password join, host playing or hosting as MC, synchronised playback, free-text answers, server-side timing, manual scoring, mandatory final score review, Bridge CLI with a demo mode, Docker + Caddy. French UI. Validated by an actual game night with friends. |
 | **v0.2** | Comfort and robustness | Implemented in source: global review/private replay, audio from video, dynamic multi-Bridge sources, search/metadata, pause, manual latency, silence/loudness, snapshots, join lock/recovery codes, exports, FR/EN, teams/spectators, folder balancing and live MC answers. Real-device/acoustic validation remains. |
 | **v0.3** | Distribution | Implemented in source: standalone uvx package, masked wizard/private backups, safe diagnostics, MC manual selection, native onedir build/checksums and validation/tag-only OIDC release workflows. PyPI setup, all-platform runner execution, signing/real-device checks remain before publication. |
-| **v0.5** | Private sources and durable nights | Implemented: UUID-bound revocable credentials, per-Bridge status/capabilities, offline recovery, host history with deletion and 50-game/90-day/16-MiB retention, protocol 12/snapshot 9 migrations, keyboard/reflow/security checks. Screen readers, real devices and all native runners remain manual validation. |
+| **v0.5** | Private sources and durable nights | Implemented: UUID-bound revocable credentials, per-Bridge status/capabilities, offline recovery, host history with deletion and 50-game/90-day/16-MiB retention, protocol 13/snapshot 10 migrations, keyboard/reflow/security checks. Screen readers, real devices and all native runners remain manual validation. |
 | **v1.0** | Stable | Future release decision, supported compatibility policy, platform/accessibility acceptance and removal of the early-development banner after validation. Protocol is not frozen in V0.5. |
 
 Real progress is recorded in [docs/DEVLOG.md](docs/DEVLOG.md).

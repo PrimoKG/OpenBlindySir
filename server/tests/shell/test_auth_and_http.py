@@ -174,4 +174,4 @@ def test_library_and_diagnostics_host_only(harness: Harness) -> None:
     assert harness.client.get("/api/host/library", headers=harness.cookie(token)).status_code == 200
     diag = harness.client.get("/api/host/diagnostics", headers=harness.cookie(token))
     assert diag.status_code == 200
-    assert diag.json()["protocol"] == 12
+    assert diag.json()["protocol"] == 13

@@ -1,5 +1,29 @@
 // French dictionary and canonical message keys for the bilingual interface.
 export const fr = {
+  "polish.partialAward": "{name} : {points} points · attribution à terminer",
+  "polish.requested": "À reconnaître :",
+  "polish.reviewRules": "Revoir la consigne",
+  "polish.referenceCoverage":
+    "Notation automatique : {ready} / {total} morceaux avec toutes les références",
+  "polish.referenceMissing":
+    "Les informations manquantes ne peuvent pas être validées automatiquement. Elles resteront à noter par l’hôte, sans pénaliser les autres critères.",
+  "polish.referenceExamples": "Voir des morceaux à compléter",
+  "polish.referenceRepair":
+    "Pour compléter ces références, enregistre cette préparation, puis ouvre « Sources et recherche de bibliothèque » et le filtre des références incomplètes. Un featuring vide reste une information inconnue : ne l’invente pas.",
+  "polish.acceptManual": "Je compléterai les attributions manquantes pendant le final.",
+  "polish.answerPrompt": "Qu’as-tu reconnu ?",
+  "polish.singleField":
+    "Tout dans ce champ, dans l’ordre que tu veux : {fields}. Tu peux aussi répondre en partie.",
+  "polish.incompleteTitle": "Classement publié",
+  "polish.incompleteResults":
+    "{count} réponses n’ont pas été entièrement notées. Ce classement comprend uniquement les points attribués.",
+  "polish.criteriaProgress": "{count} / {total} critères notés",
+  "polish.autoSummary": "{count} / {total} critères reconnus automatiquement · vérifie les autres",
+  "polish.remainingWrong": "Marquer le reste non trouvé",
+  "polish.reviewProgress": "{count} / {total} réponses entièrement notées · {remaining} à terminer",
+  "polish.reviewPending": "Noter les {count} réponses restantes",
+  "polish.reviewTarget": "Tu notes la manche {number}",
+  "polish.presentAgain": "Représenter la manche {number}",
   "finale.animations": "Animations du final (respecte le mouvement réduit)",
   "library.selectedSources": "Limiter aux sources sélectionnées pour cette partie",
   "library.editConflict":

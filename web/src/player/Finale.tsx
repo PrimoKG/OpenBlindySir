@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useGame, useServerNow } from "../app/hooks";
-import { t } from "../i18n";
+import { type MessageKey, type Params, t } from "../i18n";
 import { formatDelta } from "../i18n/format";
 import type { AnyView, RevealTrack } from "../protocol";
 import { RecordMark } from "../ui/components";
@@ -54,7 +54,7 @@ export function FinaleStage({
   const previousRound = useRef(finale?.round);
   const [updated, setUpdated] = useState<ReadonlySet<string>>(new Set());
   const [awarded, setAwarded] = useState<ReadonlySet<string>>(new Set());
-  const [activity, setActivity] = useState("");
+  const [activity, setActivity] = useState<{ key: MessageKey; params: Params }[]>([]);
   const positions = useRef(new Map<string, number>());
   const rankingOrder = useRef("");
   const board = useRef<HTMLOListElement>(null);
@@ -92,30 +92,30 @@ export function FinaleStage({
       const before = previous.current?.find((p) => p.player_id === row.player_id);
       return before && before.score !== row.score;
     });
-    const changed = changedRows.map((row) =>
-      t(
+    const changed: { key: MessageKey; params: Params }[] = changedRows.map((row) => ({
+      key:
         row.score < (previous.current?.find((p) => p.player_id === row.player_id)?.score ?? 0)
           ? "auto.adjusted"
           : "finale.activity",
-        {
-          name: nickname(view, row.player_id),
-          total: row.score,
-          delta: formatDelta(
-            row.score - (previous.current?.find((p) => p.player_id === row.player_id)?.score ?? 0),
-          ),
-        },
-      ),
-    );
+      params: {
+        name: nickname(view, row.player_id),
+        total: row.score,
+        delta: formatDelta(
+          row.score - (previous.current?.find((p) => p.player_id === row.player_id)?.score ?? 0),
+        ),
+      },
+    }));
     for (const row of changedRows) {
       const before = previous.current?.find((p) => p.player_id === row.player_id);
       if (before && row.rank < before.rank)
-        changed.push(
-          t("auto.overtake", {
+        changed.push({
+          key: "auto.overtake",
+          params: {
             name: nickname(view, row.player_id),
             before: before.rank,
             after: row.rank,
-          }),
-        );
+          },
+        });
     }
     const positiveAward = changedRows.some(
       (row) =>
@@ -137,26 +137,29 @@ export function FinaleStage({
         changed.push(
           ...awardedIds
             .filter((id) => !changedRows.some((row) => row.player_id === id))
-            .map((id) =>
-              t("experience.confirmedAward", {
+            .map((id) => ({
+              key: finale.round?.answers.find((a) => a.player_id === id)?.reviewed
+                ? ("experience.confirmedAward" as const)
+                : ("polish.partialAward" as const),
+              params: {
                 name: nickname(view, id),
                 points: finale.round?.answers.find((a) => a.player_id === id)?.points ?? 0,
-              }),
-            ),
+              },
+            })),
         );
       }
     } else {
       setAwarded(new Set());
       setUpdated(new Set());
-      setActivity("");
+      setActivity([]);
       if (finale.round && finale.round.round_id !== beforeRound?.round_id) {
-        changed.push(t("experience.roundActivity", { number: finale.round.number }));
+        changed.push({ key: "experience.roundActivity", params: { number: finale.round.number } });
         game.engine.playFinaleCue(`reveal:${finale.round.round_id}`, "reveal");
       }
     }
     previousRound.current = finale.round;
     if (changed.length) {
-      setActivity(changed.join(" · "));
+      setActivity(changed);
       if (finale.round && beforeRound?.round_id === finale.round.round_id && positiveAward)
         game.engine.playFinaleCue(
           `award:${finale.round.round_id}:${finale.round.answers.map((a) => a.revision).join(":")}`,
@@ -420,7 +423,7 @@ export function FinaleStage({
             aria-live="polite"
             aria-atomic="true"
           >
-            {activity ||
+            {activity.map(({ key, params }) => t(key, params)).join(" · ") ||
               t(finale.revealed_round_ids.length ? "finale.follow" : "experience.publicWaiting")}
           </p>
         </aside>
@@ -462,15 +465,17 @@ export function FinalPodium({
         name: nickname(view, row.player_id),
         ...row,
       }));
+  const allZero = rows.length > 0 && rows.every((row) => row.score === 0);
+  const unreviewed = view.final_results?.unreviewed_answers ?? 0;
+  const celebrate = rows.some((row) => row.score > 0) && unreviewed === 0;
   const { visible, done } = podiumStep(
     now,
-    motion ? start : null,
+    motion && celebrate ? start : null,
     rows.map((row) => row.rank),
   );
   const winners = rows.filter((row) => row.rank === 1);
-  const allZero = rows.length > 0 && rows.every((row) => row.score === 0);
   useEffect(() => {
-    if (start == null) return;
+    if (start == null || !celebrate) return;
     const order = [...new Set(rows.map((row) => row.rank))].sort((a, b) => b - a);
     for (const rank of visible) {
       const at = start + order.indexOf(rank) * 1800;
@@ -480,39 +485,40 @@ export function FinalPodium({
         at,
       );
     }
-  }, [start, visible, rows, game, view.game?.game_id]);
+  }, [start, visible, rows, game, view.game?.game_id, celebrate]);
   return (
     <>
       <section
         data-motion={motion ? "on" : "off"}
-        className={`final-podium ${visible.includes(1) ? "has-winner" : ""}`}
+        className={`final-podium ${celebrate && visible.includes(1) ? "has-winner" : "neutral-podium"}`}
       >
         <p className="eyebrow">{t("finale.podium")}</p>
         <h1>
-          {!rows.length || allZero
-            ? t("experience.noAwardTitle")
-            : visible.includes(1)
-              ? t(winners.length > 1 ? "finale.winners" : "finale.winner")
-              : t("finale.suspense")}
+          {unreviewed > 0
+            ? t("polish.incompleteTitle")
+            : !rows.length || allZero
+              ? t("experience.noAwardTitle")
+              : visible.includes(1)
+                ? t(winners.length > 1 ? "finale.winners" : "finale.winner")
+                : t("finale.suspense")}
         </h1>
         <p className="podium-announcement" role="status" aria-live="polite">
-          {allZero
-            ? t("experience.noScores")
-            : visible.includes(1)
-              ? winners.map((row) => row.name).join(" & ")
-              : t("finale.podiumHint")}
+          {unreviewed > 0
+            ? t("polish.incompleteResults", { count: unreviewed })
+            : allZero
+              ? t("experience.noScores")
+              : visible.includes(1)
+                ? winners.map((row) => row.name).join(" & ")
+                : t("finale.podiumHint")}
         </p>
-        {allZero && visible.includes(1) && (
-          <p className="zero-game-message">{t("experience.noScores")}</p>
-        )}
         <ol className="podium ceremony-podium">
           {rows.map((row) => (
             <li
               key={row.id}
-              className={`podium-place-${row.rank} ${row.rank === 1 ? "podium-first" : ""} ${visible.includes(row.rank) ? "podium-visible" : "podium-hidden"}`}
+              className={`podium-place-${row.rank} ${celebrate && row.rank === 1 ? "podium-first" : ""} ${visible.includes(row.rank) ? "podium-visible" : "podium-hidden"}`}
               aria-hidden={!visible.includes(row.rank)}
             >
-              <span className="podium-rank">{row.rank}.</span>
+              {!allZero && <span className="podium-rank">{row.rank}.</span>}
               <span className="podium-name">{visible.includes(row.rank) ? row.name : ""}</span>
               <strong>
                 {visible.includes(row.rank) ? t("standings.points", { score: row.score }) : ""}
@@ -520,7 +526,7 @@ export function FinalPodium({
             </li>
           ))}
         </ol>
-        {visible.includes(1) && !done && (
+        {celebrate && visible.includes(1) && !done && (
           <div className="celebration-sparks" aria-hidden="true">
             {celebrationSparks.map(({ id, ...style }) => (
               <i key={id} style={style} />

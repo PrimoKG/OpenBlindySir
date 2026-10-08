@@ -3,7 +3,7 @@
 [English guide](user-guide.en.md). Une instance accueille une partie à la fois,
 entre amis dans leur navigateur, sur LAN, VPN ou Internet. Aucun compte à créer.
 Préparez [l'hébergement](deployment.md) ou le [lancement Docker](docker.md).
-Mettez à jour serveur, Bridge et interface ensemble : **protocole 12**.
+Mettez à jour serveur, Bridge et interface ensemble : **protocole 13**.
 Aujourd’hui, utilisez Docker ou [l’installation du Bridge depuis le dépôt](bridge-installation.md).
 Le parcours uvx/archive sera disponible après publication.
 
@@ -206,6 +206,26 @@ Les joueurs et l'hôte joueur ne reçoivent pas ces informations avant le reveal
 [Dépannage](troubleshooting.md#extraction-et-choix-mc).
 
 ## Le grand final
+
+Sur ordinateur, la notation et le classement utilisent la largeur disponible. Les
+cartes gardent le pseudo et la réponse lisibles même avec cinq critères ; les
+justifications automatiques détaillées se déplient à la demande. Le bouton
+**Tester mon audio** reste dans l'en-tête pendant le final, même après défilement.
+
+**Tu notes la manche X** identifie votre sélection privée ; **Les joueurs voient
+la manche Y** identifie la présentation publique. **Représenter** permet de revenir
+sur une manche dévoilée sans attribuer une seconde fois ses points.
+
+Chaque réponse indique combien de critères sont décidés. **Marquer le reste non
+trouvé** termine uniquement les critères indécis et conserve ceux déjà accordés.
+Le bouton **Noter les N réponses restantes** rejoint une réponse incomplète. Tant
+qu'il en reste, cette action est mise en avant avant le podium.
+
+Publier volontairement sans finir reste possible, mais le résultat porte alors
+le nombre de réponses non entièrement notées, également conservé dans l'historique
+et les exports. Un résultat incomplet ou entièrement à zéro ne déclenche pas une fête de
+victoire. Après le podium, les actions de nouvelle partie et de fin de session
+précèdent les classements détaillés.
 
 La dernière manche ouvre **Le grand final**, partagé avec
 les joueurs. L’hôte utilise **Choisir une manche à présenter** pour sa préparation privée, puis

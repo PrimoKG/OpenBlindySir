@@ -510,7 +510,7 @@ async function endTestSession(page: Page): Promise<void> {
     );
     await new Promise<void>((resolve, reject) => {
       ws.onopen = () =>
-        ws.send(JSON.stringify({ t: "HELLO", client_version: "0.3.0", protocol: 12 }));
+        ws.send(JSON.stringify({ t: "HELLO", client_version: "0.3.0", protocol: 13 }));
       ws.onmessage = (event) => {
         const msg = JSON.parse(String(event.data));
         if (msg.t === "ERROR") reject(new Error(`Room reset failed: ${msg.code}`));

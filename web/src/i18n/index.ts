@@ -80,6 +80,11 @@ export function t(key: MessageKey, params?: Params): string {
   return format(dictionaries[language][key], params);
 }
 
+/** Recognise an unchanged generated preset even after switching languages. */
+export function isTranslation(key: MessageKey, value: string | undefined): boolean {
+  return Object.values(dictionaries).some((dictionary) => dictionary[key] === value);
+}
+
 /** Translation of a protocol code (error, start blocker, host warning). */
 export function tCode(prefix: "error" | "blocker" | "warning", code: string): string {
   const key = `${prefix}.${code}`;

@@ -132,6 +132,11 @@ html:has(.final-review) {
 .final-review button {
   scroll-margin-bottom: var(--finale-bar-reserve, 12rem);
 }
+/* The document reserves the fixed footer. Applying that reserve inside the
+   nested list moves a visible scoring button when it receives focus. */
+.final-review .score-scroll :is(button, .answer-card, .absent-answer) {
+  scroll-margin-block: 8px;
+}
 
 .metadata-field-actions {
   display: flex;
@@ -275,7 +280,6 @@ html:has(.final-review) {
   .review-section .answer-cards > article {
     padding: 0.75rem;
     gap: 0.5rem;
-    grid-template-columns: minmax(0, 1fr);
   }
   .review-section .score-controls {
     gap: 0.4rem;
@@ -299,15 +303,134 @@ html:has(.final-review) {
   }
 }
 
-@media (min-width: 1100px) and (min-aspect-ratio: 4 / 3) {
-  .review-section .score-controls {
+@container (min-width: 520px) {
+  .answer-card .score-controls {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .review-section .criterion {
+}
+/* Final review stays readable at laptop widths; a third column needs actual room. */
+html:has(.is-finale) {
+  scroll-padding-top: calc(var(--app-header-height, 80px) + 12px);
+}
+.is-finale .header {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  background: var(--bg);
+  min-height: 72px;
+  padding-block: 0.5rem;
+  gap: 0.5rem;
+}
+.is-finale .finale-scoreboard {
+  top: calc(var(--app-header-height, 80px) + 12px);
+}
+.review-target {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.finale-shortcuts .btn {
+  font-size: 0.82rem;
+}
+.setup-recap {
+  font-size: 0.85rem;
+}
+:where(.setup-recap p) {
+  margin-block: 0.35rem;
+}
+.setup-instructions {
+  overflow-wrap: anywhere;
+}
+.reference-preflight {
+  padding: 0.75rem;
+}
+.reference-preflight details {
+  margin-block: 0.5rem;
+}
+.neutral-podium .ceremony-podium li {
+  min-height: 7rem;
+}
+.results .end-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.results .end-actions .btn {
+  flex: 1 1 14rem;
+  width: auto;
+}
+@media (min-width: 701px) {
+  .with-host.is-finale {
+    max-width: 1560px;
+    padding-inline: clamp(1rem, 2vw, 2rem);
+  }
+  .with-host .finale-track {
+    min-height: 7rem;
+  }
+  .with-host .finale-banner h1 {
+    font-size: 2.4rem;
+  }
+  .with-host .finale-scene {
+    gap: 0.8rem;
+  }
+}
+@media (min-width: 701px) and (max-width: 1439px) {
+  .is-finale .review-section {
+    display: flex;
+    flex-direction: column;
+  }
+  .review-section > .review-context {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: static;
+    width: 100%;
+    gap: 0.75rem;
+  }
+  .review-context .review-heading {
+    grid-column: 1 / -1;
+  }
+  .review-section > :not(.review-context) {
+    width: 100%;
+  }
+  .review-context .review-audio {
+    margin: 0;
+  }
+}
+@media (min-width: 1440px) {
+  .review-section > .review-context {
+    top: calc(var(--app-header-height, 80px) + 12px);
+  }
+}
+@media (max-width: 700px) {
+  .is-finale .header .brand {
+    display: none;
+  }
+  .is-finale .header-meta {
+    width: 100%;
+    gap: 0.35rem;
+    justify-content: space-between;
+  }
+  .is-finale .header-meta .round-number,
+  .is-finale .header-meta .identity {
+    display: none;
+  }
+  .is-finale .header .btn {
+    font-size: 0.8rem;
+    padding-inline: 0.65rem;
+  }
+  .is-finale .header {
+    min-height: 64px;
+  }
+  .answer-card .answer-player {
     flex-wrap: wrap;
   }
-  .review-section .criterion > span {
-    flex-basis: 100%;
-  }
+}
+.action-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.action-progress strong {
+  font-size: 0.85rem;
 }

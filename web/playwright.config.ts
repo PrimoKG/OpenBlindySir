@@ -25,6 +25,7 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
+        ...(env.E2E_CHROME_CHANNEL ? { channel: env.E2E_CHROME_CHANNEL } : {}),
         launchOptions: { args: ["--autoplay-policy=no-user-gesture-required"] },
       },
     },

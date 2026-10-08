@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useId, useState } from "react";
 import * as cmd from "../app/commands";
 import { useGame, useUi } from "../app/hooks";
-import { t, tCode, useMessage } from "../i18n";
+import { isTranslation, t, tCode, useMessage } from "../i18n";
 import { api } from "../net/api";
 import type {
   FolderNode,
@@ -126,6 +126,7 @@ export function SetupPanel({
   const [presets, setPresets] = useState<Preset[]>(loadPresets);
   const [presetName, setPresetName] = useState("");
   const [folderQuery, setFolderQuery] = useState("");
+  const [acceptedReferenceKey, setAcceptedReferenceKey] = useState("");
   const key = `${view.host.bridge.state}:${view.host.bridge.track_count}:${retry}`;
   useEffect(() => {
     const refresh = () => setRetry((n) => n + 1);
@@ -168,6 +169,11 @@ export function SetupPanel({
     setDraft((old) => ({ ...old, [field]: value }));
   const selected = new Set(draft.sources.map((s) => `${s.bridge_id}|${s.folder_prefix}`));
   const preview = useSelectionPreview(draft, key);
+  const referenceKey = `${settingsKey(draft)}:${key}:${JSON.stringify(preview.result?.missing_by_criterion)}`;
+  const missingReferences =
+    (preview.result?.reference_eligible ?? 0) - (preview.result?.reference_ready ?? 0);
+  const needsReferenceAcknowledgement =
+    draft.scoring_mode === "auto" && missingReferences > 0 && acceptedReferenceKey !== referenceKey;
   const capacity =
     preview.loading || preview.error
       ? 0
@@ -198,7 +204,15 @@ export function SetupPanel({
     criteriaFor(draft)
       .map((key) => criterionPoints(key, draft))
       .every((p) => Number.isInteger(p) && p >= 0 && p <= 1000);
-  const save = (start: boolean) => {
+  const save = async (start: boolean) => {
+    if (start) {
+      if (needsReferenceAcknowledgement || preview.loading || preview.error) return;
+      await game.engine.unlock();
+      if (!game.engine.unlocked) {
+        setError(() => t("audio.unlockFailed"));
+        return;
+      }
+    }
     if (valid && game.send(cmd.configure(view, draft as SettingsPatch, start))) setPending(true);
   };
   const toggle = (bridge_id: string, folder_prefix: string) => {
@@ -410,11 +424,6 @@ export function SetupPanel({
               />
             </label>
             <p className="muted">{t("auto.hint")}</p>
-            {!dirty && !!view.host.auto_missing_references && (
-              <p className="notice">
-                {t("auto.preflight", { count: view.host.auto_missing_references })}
-              </p>
-            )}
           </>
         )}
         <label>
@@ -498,7 +507,9 @@ export function SetupPanel({
                     clip_seconds: Math.max(limits.clip_min_s, Math.min(limits.clip_max_s, 12)),
                     instructions: t("theme.cartoonInstructions"),
                   }
-                : {}),
+                : isTranslation("theme.cartoonInstructions", old.instructions)
+                  ? { instructions: "" }
+                  : {}),
             }))
           }
         />
@@ -651,8 +662,9 @@ export function SetupPanel({
       {view.host.start_blockers
         .filter(
           (b) =>
-            (b !== "no_sources" && b !== "pool_exhausted") ||
-            (!dirty && !preview.loading && !preview.error && capacity === 0),
+            !(b === "bridge_offline" && dirty && capacity > 0) &&
+            ((b !== "no_sources" && b !== "pool_exhausted") ||
+              (!dirty && !preview.loading && !preview.error && capacity === 0)),
         )
         .map((b) => (
           <p className="notice" key={b}>
@@ -662,6 +674,84 @@ export function SetupPanel({
       {capacity === 0 && library && !preview.loading && !preview.error && (
         <p className="notice">{t("ux.noPlayableTracks")}</p>
       )}
+      <div className="setup-preflight stack">
+        {preview.error && (
+          <p className="error" role="alert">
+            {tCode("error", preview.error)}{" "}
+            <Button onClick={preview.retry}>{t("app.retry")}</Button>
+          </p>
+        )}
+        {preview.loading && <p role="status">{t("app.loading")}</p>}
+        <div className="setup-recap">
+          <p>
+            <strong>{t("polish.requested")}</strong>{" "}
+            {criteriaFor(draft)
+              .map(
+                (criterion) =>
+                  `${criterionLabel(criterion)} (${criterionPoints(criterion, draft)} pt)`,
+              )
+              .join(" · ")}
+          </p>
+          {!!draft.instructions && (
+            <p className="setup-instructions">
+              <strong>{t("ux.instructions")}</strong> {draft.instructions}{" "}
+              <Button onClick={() => setTab("rules")}>{t("polish.reviewRules")}</Button>
+            </p>
+          )}
+          {draft.scoring_mode === "auto" && !preview.loading && preview.result && (
+            <div
+              className={missingReferences ? "notice reference-preflight" : "reference-preflight"}
+            >
+              <strong>
+                {t("polish.referenceCoverage", {
+                  ready: preview.result.reference_ready ?? 0,
+                  total: preview.result.reference_eligible ?? 0,
+                })}
+              </strong>
+              {missingReferences > 0 && (
+                <>
+                  <p>{t("polish.referenceMissing")}</p>
+                  <p>
+                    {Object.entries(preview.result.missing_by_criterion ?? {})
+                      .filter(([, count]) => count > 0)
+                      .map(
+                        ([criterion, count]) =>
+                          `${criterionLabel(criterion as (typeof musicalCriteria)[number])} : ${count}`,
+                      )
+                      .join(" · ")}
+                  </p>
+                  <details>
+                    <summary>{t("polish.referenceExamples")}</summary>
+                    <ul>
+                      {preview.result.reference_issues?.map((track) => (
+                        <li key={`${track.bridge_id}:${track.track_id}`}>
+                          {track.title || track.filename} —{" "}
+                          {track.missing_references
+                            ?.map((criterion) =>
+                              criterionLabel(criterion as (typeof musicalCriteria)[number]),
+                            )
+                            .join(", ")}
+                        </li>
+                      ))}
+                    </ul>
+                    <p>{t("polish.referenceRepair")}</p>
+                  </details>
+                  <label className="folder-option">
+                    <input
+                      type="checkbox"
+                      checked={!needsReferenceAcknowledgement}
+                      onChange={(event) =>
+                        setAcceptedReferenceKey(event.target.checked ? referenceKey : "")
+                      }
+                    />
+                    {t("polish.acceptManual")}
+                  </label>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
       <div className="setup-footer stack">
         <strong>
           {t("flow.summary", {
@@ -679,6 +769,7 @@ export function SetupPanel({
             kind="primary"
             disabled={
               !valid ||
+              needsReferenceAcknowledgement ||
               pending ||
               capacity === 0 ||
               tooMany ||

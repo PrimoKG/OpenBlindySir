@@ -20,6 +20,69 @@ from openblindysir_server.game.state import (
 from openblindysir_server.library import management
 
 
+def test_draft_preflight_checks_requested_references_and_excludes_played_disabled(harness: Harness):
+    _, headers, refs = themed_library(harness)
+    state = harness.runtime.engine.state
+    state.game.settings.answer_mode = "title"  # The saved rules are deliberately different.
+    state.metadata[refs[0]] = Metadata(
+        title="Complete", artist="Artist", album="Album", year=2012, featuring="Guest"
+    )
+    state.metadata[refs[1]] = Metadata(enabled=False)
+    state.played.add(refs[2])
+    response = harness.client.post(
+        "/api/host/library/selection",
+        headers=headers,
+        json={
+            "sources": [{"bridge_id": BRIDGE_ID, "folder_prefix": ""}],
+            "scoring_criteria": ["title", "artist", "album", "year", "featuring"],
+            "allow_repeats": False,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["reference_eligible"], body["reference_ready"]) == (4, 1)
+    assert body["missing_by_criterion"] == {
+        "title": 0,
+        "artist": 3,
+        "album": 3,
+        "year": 1,
+        "featuring": 3,
+    }
+    assert len(body["reference_issues"]) == 3
+    assert all("artist" in row["missing_references"] for row in body["reference_issues"])
+
+
+def test_preflight_uses_grading_cleanup_aliases_and_explicit_clears(harness: Harness):
+    _, headers, refs = themed_library(harness)
+    state = harness.runtime.engine.state
+    for ref in refs[1:]:
+        state.metadata[ref] = Metadata(enabled=False)
+    state.imported_metadata[refs[0]] = Metadata()
+    state.assets["cached"] = AssetRecord(
+        "cached",
+        refs[0],
+        "job",
+        AssetState.EVICTED,
+        0,
+        0,
+        track_duration_ms=120_000,
+        title="Artist - Song (Official Video)",
+        artist=None,
+    )
+    payload = {
+        "sources": [{"bridge_id": BRIDGE_ID, "folder_prefix": ""}],
+        "scoring_criteria": ["title", "artist"],
+    }
+    response = harness.client.post("/api/host/library/selection", headers=headers, json=payload)
+    assert response.json()["reference_ready"] == 1
+    state.metadata[refs[0]] = Metadata(cleared_fields=["artist"])
+    response = harness.client.post("/api/host/library/selection", headers=headers, json=payload)
+    assert response.json()["missing_by_criterion"] == {"title": 0, "artist": 1}
+    state.metadata[refs[0]] = Metadata(aliases={"artist": ["Artist"]})
+    response = harness.client.post("/api/host/library/selection", headers=headers, json=payload)
+    assert response.json()["reference_ready"] == 1
+
+
 def test_search_preview_and_pool_share_cached_titles_and_respect_explicit_clears(harness: Harness):
     _, headers, refs = themed_library(harness)
     state = harness.runtime.engine.state
