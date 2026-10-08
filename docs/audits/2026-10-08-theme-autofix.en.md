@@ -59,6 +59,10 @@ mode. Full gameplay tests use the isolated stack.
 
 Private, public and individually authenticated Bridge Compose profiles passed
 without mutation. CI workflows also cover CLI/native installations and both browsers.
+The first CI run found a POSIX-specific regression in temporary directory
+protection: `0600` prevented directory traversal. The directory now uses `0700`,
+the file `0600`, while Windows ACLs remain private. Checks verify owner readability
+and exclusion of other users; a local unprivileged Linux run supplements Windows tests.
 
 ## Image security
 

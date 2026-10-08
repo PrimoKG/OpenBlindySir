@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import os
 import ssl
 import subprocess
 import tempfile
@@ -34,8 +35,12 @@ def validate_profiles(env_file: Path, ca_file: Path) -> None:
     assert private["bridge"]["network_mode"] == "service:app"
     assert private["bridge"]["volumes"][0]["read_only"]
     with tempfile.TemporaryDirectory(prefix="docker-profiles-") as temporary:
-        protect_file(Path(temporary))
-        path = Path(temporary) / "profiles.env"
+        directory = Path(temporary).resolve()
+        if os.name == "posix":
+            directory.chmod(0o700)
+        else:
+            protect_file(directory)
+        path = directory / "profiles.env"
         lines = env_file.read_text(encoding="utf-8").splitlines()
         routing = {
             "DOMAIN",

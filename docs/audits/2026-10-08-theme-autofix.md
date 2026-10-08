@@ -61,6 +61,11 @@ l’app en mode profils seuls. Les essais de jeu complets utilisent la pile isol
 
 Les profils Docker privé, public et Bridge individuel passent en mode sans mutation.
 Les workflows CI couvrent aussi les installations CLI/native et les deux navigateurs.
+La première CI a identifié une régression propre à POSIX dans la protection du
+dossier temporaire de l’outil : `0600` empêchait de le traverser. Le dossier utilise
+désormais `0700`, le fichier `0600`, et les ACL restent privées sur Windows.
+Les tests vérifient la lisibilité par le propriétaire et l’exclusion des tiers ;
+une exécution locale Linux sans privilèges complète les vérifications Windows.
 
 ## Sécurité des images
 

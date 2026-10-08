@@ -2210,3 +2210,9 @@ Scan local base du 7 octobre : 0 critique ; 55 élevées par image Python, 8 Cad
 sans correctif proposé ; aucun match FFmpeg compilé. Inventaire non transmis.
 Rapports [FR](audits/2026-10-08-theme-autofix.md) /
 [EN](audits/2026-10-08-theme-autofix.en.md).
+
+La première CI a détecté une régression de droits POSIX dans le smoke : protéger
+un dossier avec 0600 empêchait sa traversée. Correction 0700 pour le dossier,
+0600 pour le fichier, ACL privées Windows conservées. Les tests vérifient la
+lisibilité propriétaire et les droits ; profil simulé validé localement sous
+Linux UID 10001, sans réseau ni accès aux identifiants. CI relancée.

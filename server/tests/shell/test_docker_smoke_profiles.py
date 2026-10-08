@@ -1,6 +1,7 @@
 """Credential mount safety checks support both Compose JSON serializers."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -49,6 +50,12 @@ def test_credential_mount_false_may_be_omitted_but_true_is_refused(
     def compose(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         if command[0] != "docker":
             return original_run(command, **_)
+        profile = Path(command[command.index("--env-file") + 1])
+        if profile.name == "profiles.env":
+            assert "BRIDGE_ID=example" in profile.read_text(encoding="utf-8")
+            if os.name == "posix":
+                assert profile.parent.stat().st_mode & 0o777 == 0o700
+                assert profile.stat().st_mode & 0o777 == 0o600
         if "deploy/compose.bridge-credential.yaml" in command:
             services = {
                 "bridge": {
