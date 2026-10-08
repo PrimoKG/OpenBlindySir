@@ -336,7 +336,7 @@ supplémentaires du Bridge. `start` les conserve lors d’un rebuild/recréation
 configuration privée, en plus de `hosting.env`. Les montages musicaux supplémentaires doivent rester en lecture seule.
 
 Après une mise à jour, rechargez les onglets et mettez tous les Bridges au protocole
-9. Les snapshots 1 à 8 sont lus puis sauvegardés au format 8 ; un redémarrage ne
+11. Les snapshots 1 à 9 sont lus puis sauvegardés au format 9 ; un redémarrage ne
 relance pas automatiquement une transition interrompue. L’hôte reprend la partie
 explicitement dans ses paramètres.
 
@@ -346,4 +346,4 @@ Pour approuver l’autorité HTTPS locale sur Windows/iOS/Android, voir
 [certificat-local.md](certificat-local.md). Partager uniquement le certificat public
 `root.crt`, jamais ses clés. Le mode LAN est conservé.
 La [notation automatique](notation-automatique.md) nécessite de mettre à jour
-serveur, Bridge et interface ensemble (protocole 10, snapshot 8), après sauvegarde privée.
+serveur, Bridge et interface ensemble (protocole 11, snapshot 9), après sauvegarde privée.

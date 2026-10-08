@@ -2,6 +2,6 @@
 
 from typing import Final
 
-PROTOCOL_VERSION: Final[int] = 10
+PROTOCOL_VERSION: Final[int] = 11
 PROTOCOL_MIN: Final[int] = PROTOCOL_VERSION
 PROTOCOL_MAX: Final[int] = PROTOCOL_VERSION

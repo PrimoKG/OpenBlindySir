@@ -8,8 +8,8 @@
 >
 > Licence : MIT.
 
-État courant : **V0.5 développement**, logiciel `0.5.0.dev0`, protocole 10
-(plage 9 à 9), snapshot 8, historique 2. Identités/secrets Bridge distincts,
+État courant : **V0.5 développement**, logiciel `0.5.0.dev0`, protocole 11
+(plage 11 à 11), snapshot 9, historique 2. Identités/secrets Bridge distincts,
 archives privées bornées et passe clavier/focus sont implémentés. Les décisions
 et limites opératoires sont détaillées en [V0.5](v0.5.md) / [English](v0.5.en.md)
 et [ADR 0015](adr/0015-v05-private-bridges-history-compatibility.md).
@@ -1337,3 +1337,7 @@ références/configurations figées par manche. Le snapshot 8 persiste preuves p
 priorité des corrections manuelles et progression des vagues. Les vues publiques
 masquent points/critères jusqu’à la révélation effective ; les acquittements de
 réponse n’exposent aucune décision. Voir [le guide](notation-automatique.md).
+
+## Sélections thématiques — protocole 11
+
+Les sources et filtres genre/langue/année/tags/univers déterminent ensemble le pool et les manches. Un aperçu privé utilise le même moteur, compte les pistes jouables et inédites sans doublonner les dossiers, et propose des exemples. Les presets locaux incluent ces critères. Métadonnées version 3, snapshots 9 migrés depuis 1–8. Voir [soirées à thème](themed-nights.md) et [protocole](protocol.md).

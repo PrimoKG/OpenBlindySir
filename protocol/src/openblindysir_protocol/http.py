@@ -8,6 +8,8 @@ from openblindysir_protocol.base import BridgeId, InboundModel, OutboundModel, P
 from openblindysir_protocol.enums import BridgeState, HostMode, Role
 from openblindysir_protocol.errors import ErrorCode
 from openblindysir_protocol.metadata import MusicalMetadata
+from openblindysir_protocol.settings import SourceSelection
+from openblindysir_protocol.themes import ThemeFilter
 
 _Secret = Annotated[str, StringConstraints(min_length=1, max_length=256)]
 
@@ -92,6 +94,8 @@ class LibraryBridge(OutboundModel):
 
 
 class LibraryTrack(OutboundModel):
+    genres: list[str] = Field(default_factory=list)
+    languages: list[str] = Field(default_factory=list)
     metadata_revision: int = 0
     cleared_fields: list[str] = Field(default_factory=list)
     missing_references: list[str] = Field(default_factory=list)
@@ -123,6 +127,27 @@ class LibrarySearch(OutboundModel):
     tracks: list[LibraryTrack]
     tags: list[str] = Field(default_factory=list)
     linked_to: list[str] = Field(default_factory=list)
+    genres: list[str] = Field(default_factory=list)
+    languages: list[str] = Field(default_factory=list)
+    years: list[int] = Field(default_factory=list)
+
+
+class SelectionPreviewRequest(InboundModel):
+    sources: Annotated[list[SourceSelection], Field(max_length=64)]
+    selection_filter: ThemeFilter = Field(default_factory=ThemeFilter)
+
+
+class SelectionPreview(OutboundModel):
+    matching: int
+    available: int
+    fresh: int
+    unclassified: int
+    genres: list[str]
+    languages: list[str]
+    tags: list[str]
+    linked_to: list[str]
+    years: list[int]
+    examples: list[LibraryTrack]
 
 
 class SourceUpdate(InboundModel):

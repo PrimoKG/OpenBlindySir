@@ -3,7 +3,6 @@
 import json
 import posixpath
 import time
-import unicodedata
 import zipfile
 import zlib
 from dataclasses import asdict, replace
@@ -23,14 +22,23 @@ from openblindysir_protocol.host_commands import (
     HostFinalValidate,
     PublishArgs,
 )
-from openblindysir_protocol.http import LibrarySearch, LibraryTrack, MetadataEdit, SourceUpdate
+from openblindysir_protocol.http import (
+    LibrarySearch,
+    LibraryTrack,
+    MetadataEdit,
+    SelectionPreview,
+    SelectionPreviewRequest,
+    SourceUpdate,
+)
 from openblindysir_protocol.metadata import MetadataRow
+from openblindysir_protocol.themes import ThemeFilter
 from openblindysir_server.auth.routes import current_player
 from openblindysir_server.game import commands as c
 from openblindysir_server.game import rounds, selection
 from openblindysir_server.game.auto_scoring import criteria
 from openblindysir_server.game.metadata import musical_metadata
 from openblindysir_server.game.state import AssetRecord, Metadata, SessionState, TrackRef
+from openblindysir_server.game.themes import ThemeFacets, matches_theme, search_key
 from openblindysir_server.library import metadata_archive
 from openblindysir_server.security import check_origin, error, read_bounded_body, read_json_body
 from openblindysir_server.state import AppState, app_state
@@ -124,7 +132,7 @@ def host_access(
 
 
 def normalized(value: str) -> str:
-    return unicodedata.normalize("NFC", value).casefold().strip()
+    return search_key(value)
 
 
 @router.get("/api/host/library/search")
@@ -141,6 +149,10 @@ async def search(
     pool_only: bool = False,
     tag: str = "",
     linked_to: str = "",
+    genre: str = "",
+    language: str = "",
+    year_min: int | None = None,
+    year_max: int | None = None,
     offset: int = 0,
     limit: int = 100,
     sort: str = "filename",
@@ -154,15 +166,30 @@ async def search(
         len(q) > 256
         or len(tag) > 256
         or len(linked_to) > 256
+        or len(genre) > 128
+        or len(language) > 128
+        or (year_min is not None and not 1000 <= year_min <= 9999)
+        or (year_max is not None and not 1000 <= year_max <= 9999)
+        or (year_min is not None and year_max is not None and year_min > year_max)
         or activation not in {"all", "active", "disabled"}
         or quality not in {"all", "ready", "missing"}
         or len(folder) > 1024
         or offset < 0
         or not 1 <= limit <= 100
-        or sort not in {"title", "artist", "filename", "folder"}
+        or sort not in {"title", "artist", "filename", "folder", "year", "genre", "language"}
         or availability
         not in {"all", "available", "unavailable", "online", "offline", "fresh", "used", "reserved"}
     ):
+        return error(400, ErrorCode.INVALID_ARGS)
+    try:
+        ThemeFilter(
+            query=q,
+            genres=[genre] if genre else [],
+            languages=[language] if language else [],
+            year_min=year_min,
+            year_max=year_max,
+        )
+    except ValidationError:
         return error(400, ErrorCode.INVALID_ARGS)
     pid = current_player(request, state)
     assert pid is not None
@@ -185,6 +212,10 @@ async def search(
             pool_only=pool_only,
             tag=tag,
             linked_to=linked_to,
+            genre=genre,
+            language=language,
+            year_min=year_min,
+            year_max=year_max,
             offset=offset,
             limit=limit,
             sort=sort,
@@ -245,6 +276,10 @@ def search_response(
     descending: bool,
     quality: str = "all",
     pool_only: bool = False,
+    genre: str = "",
+    language: str = "",
+    year_min: int | None = None,
+    year_max: int | None = None,
 ) -> Response:
     found: list[tuple[tuple[str, str, str], TrackRef]] = []
     sources = tuple(s.game.settings.sources)
@@ -252,11 +287,15 @@ def search_response(
         slot.track_ref for slot in selection.live_slots(s)
     }
     measured = {a.track_ref: a for a in s.assets.values() if a.track_duration_ms is not None}
-    query = normalized(q)
     tag_query, link_query = normalized(tag), normalized(linked_to)
-    total = 0
-    tags: dict[str, str] = {}
-    links: dict[str, str] = {}
+    facets = ThemeFacets()
+    theme = ThemeFilter(
+        query=q,
+        genres=[genre] if genre else [],
+        languages=[language] if language else [],
+        year_min=year_min,
+        year_max=year_max,
+    )
     scanned = 0
     for b, catalog in sorted(s.catalogs.items()):
         if bridge and b != bridge:
@@ -275,10 +314,11 @@ def search_response(
             ):
                 continue
             meta = musical_metadata(s, ref)
-            for label in meta.tags or []:
-                tags.setdefault(normalized(label), label)
-            for label in meta.linked_to or []:
-                links.setdefault(normalized(label), label)
+            if pool_only and not matches_theme(
+                meta, entry.relpath, s.game.settings.selection_filter
+            ):
+                continue
+            facets.add(meta)
             enabled = meta.enabled is not False
             if (activation == "active" and not enabled) or (activation == "disabled" and enabled):
                 continue
@@ -302,6 +342,8 @@ def search_response(
                 if "artist" in (meta.cleared_fields or [])
                 else meta.artist or (asset.artist if asset else None)
             )
+            if not matches_theme(replace(meta, title=title, artist=artist), entry.relpath, theme):
+                continue
             available = online and enabled and ref not in s.game.unavailable
             if folder and not selection.matches(entry.relpath, folder):
                 continue
@@ -317,39 +359,118 @@ def search_response(
                 or (availability == "reserved" and (ref not in reserved or ref in s.played))
             ):
                 continue
-            if query not in normalized(
-                " ".join(
-                    [
-                        entry.relpath,
-                        title or "",
-                        artist or "",
-                        *(meta.tags or []),
-                        *(meta.linked_to or []),
-                    ]
-                )
-            ):
-                continue
-            total += 1
             filename = posixpath.basename(entry.relpath)
             sort_value = {
                 "title": title,
                 "artist": artist,
                 "filename": filename,
                 "folder": entry.folder,
+                "year": str(meta.year or 99999),
+                "genre": " ".join(meta.genres or []) or "\uffff",
+                "language": " ".join(meta.languages or []) or "\uffff",
             }[sort]
             found.append(((normalized(sort_value or filename), b, tid), ref))
     found.sort(key=lambda hit: hit[0], reverse=descending)
+    if sort == "year":
+        found.sort(key=lambda hit: hit[0][0] == "99999")
     tracks = [
         search_track(s, ref, measured.get(ref), reserved, sources)
         for _, ref in found[offset : offset + limit]
     ]
     return JSONResponse(
         LibrarySearch(
-            total=total,
+            total=len(found),
             tracks=tracks,
-            tags=sorted(tags.values(), key=normalized),
-            linked_to=sorted(links.values(), key=normalized),
+            tags=facets.values("tags"),
+            linked_to=facets.values("linked_to"),
+            genres=facets.values("genres"),
+            languages=facets.values("languages"),
+            years=sorted(facets.years, reverse=True),
         ).model_dump(mode="json")
+    )
+
+
+@router.post("/api/host/library/selection")
+async def preview_selection(request: Request) -> Response:
+    state = app_state(request)
+    denied = host_access(request, state, mutation=True)
+    if denied is not None:
+        return denied
+    raw = await read_json_body(request, limit=65536)
+    if isinstance(raw, Response):
+        return raw
+    denied = host_access(request, state, mutation=True)
+    if denied is not None:
+        return denied
+    try:
+        payload = SelectionPreviewRequest.model_validate_json(raw)
+    except ValidationError:
+        return error(400, ErrorCode.INVALID_ARGS)
+    pid = current_player(request, state)
+    assert pid is not None
+    if state.library_search_busy or not state.library_search_limiter.allow(
+        pid, state.runtime.clock.now().mono_ms
+    ):
+        return error(429, ErrorCode.RATE_LIMITED)
+    snapshot = search_snapshot(state.runtime.engine.state)
+    known = set(snapshot.catalogs) | set(snapshot.bridges)
+    if any(source.bridge_id not in known for source in payload.sources):
+        return error(400, ErrorCode.INVALID_ARGS)
+    state.library_search_busy = True
+    try:
+        result = await run_in_threadpool(selection_preview, snapshot, payload)
+        denied = host_access(request, state)
+        if denied is not None:
+            return denied
+        if snapshot.epoch != state.runtime.engine.state.epoch:
+            return error(409, ErrorCode.STALE_COMMAND)
+        return JSONResponse(result.model_dump(mode="json"))
+    finally:
+        state.library_search_busy = False
+
+
+def selection_preview(s: SessionState, payload: SelectionPreviewRequest) -> SelectionPreview:
+    sources = tuple((v.bridge_id, v.folder_prefix) for v in payload.sources)
+    facets = ThemeFacets()
+    matching = available = fresh = unclassified = 0
+    examples: list[TrackRef] = []
+    scanned = 0
+    for bid, catalog in sorted(s.catalogs.items()):
+        online = s.bridges.get(bid) is not None and s.bridges[bid].state.value == "ONLINE"
+        for tid, entry in sorted(catalog.entries.items()):
+            scanned += 1
+            if scanned % 256 == 0:
+                time.sleep(0.001)
+            if not any(
+                bid == owner and selection.matches(entry.relpath, prefix)
+                for owner, prefix in sources
+            ):
+                continue
+            ref = TrackRef(bid, tid)
+            meta = musical_metadata(s, ref)
+            if meta.enabled is False:
+                continue
+            unclassified += int(not meta.genres or not meta.languages or meta.year is None)
+            facets.add(meta)
+            if not matches_theme(meta, entry.relpath, payload.selection_filter):
+                continue
+            matching += 1
+            usable = online and ref not in s.game.unavailable
+            available += int(usable)
+            fresh += int(usable and ref not in s.played)
+            if usable and len(examples) < 6:
+                examples.append(ref)
+    return SelectionPreview(
+        matching=matching,
+        available=available,
+        fresh=fresh,
+        unclassified=unclassified,
+        genres=facets.values("genres"),
+        languages=facets.values("languages"),
+        tags=facets.values("tags"),
+        linked_to=facets.values("linked_to"),
+        years=sorted(facets.years, reverse=True),
+        examples=[search_track(s, ref, None, set(), sources) for ref in examples],
     )
 
 
@@ -387,6 +508,8 @@ def search_track(
         aliases=meta.aliases,
         enabled=enabled,
         tags=meta.tags or [],
+        genres=meta.genres or [],
+        languages=meta.languages or [],
         linked_to=meta.linked_to or [],
         consumption=(
             "cancelled"
@@ -402,6 +525,7 @@ def search_track(
         played=ref in s.played,
         reserved=ref in reserved and ref not in s.played,
         in_pool=enabled
+        and matches_theme(meta, entry.relpath, s.game.settings.selection_filter)
         and ref not in s.game.unavailable
         and any(
             ref.bridge_id == owner and selection.matches(entry.relpath, prefix)
@@ -474,7 +598,7 @@ async def import_metadata(request: Request) -> Response:
         if (
             set(doc) != {"version", "rows"}
             or type(doc["version"]) is not int
-            or doc["version"] not in {1, 2}
+            or doc["version"] not in {1, 2, 3}
             or not isinstance(doc["rows"], list)
             or len(doc["rows"]) > 10000
         ):
@@ -613,6 +737,8 @@ def metadata_rows(s: SessionState) -> list[dict]:
                             "featuring",
                             "album",
                             "year",
+                            "genres",
+                            "languages",
                             "tags",
                             "linked_to",
                             "enabled",

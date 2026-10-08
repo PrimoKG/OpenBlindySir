@@ -8,6 +8,7 @@ from builders import Scenario
 
 from openblindysir_protocol.enums import Role, RoundState, ScoreKind
 from openblindysir_server.auth.sessions import SessionRegistry
+from openblindysir_server.game.state import Metadata, ThemeFilterData, TrackRef
 from openblindysir_server.persistence import SnapshotStore
 
 
@@ -26,6 +27,10 @@ def damage(payload, kind):
         game["rounds"] = ["invalid"]
     elif kind == "settings":
         game["settings"]["fields"]["clip_seconds"] = "20"
+    elif kind == "theme_bounds":
+        game["settings"]["fields"]["selection_filter"]["fields"]["year_min"] = 99999
+    elif kind == "theme_control":
+        game["settings"]["fields"]["selection_filter"]["fields"]["query"] = "bad\u0000query"
     elif kind == "queue":
         game["queue"] = []
     elif kind == "role":
@@ -71,6 +76,8 @@ def damage(payload, kind):
         "phase",
         "rounds",
         "settings",
+        "theme_bounds",
+        "theme_control",
         "queue",
         "role",
         "surrogate",
@@ -152,3 +159,42 @@ def test_duplicate_snapshot_field_falls_back_instead_of_changing_a_role(tmp_path
     restored = Scenario(players=(), host=None)
     assert store.restore(restored.engine, SessionRegistry(60000), scenario.clock.now())
     assert restored.s.players[scenario.player_ids[0]].role is Role.PLAYER
+
+
+def test_format_8_migrates_with_an_empty_theme_and_preserves_cookie(tmp_path):
+    scenario = Scenario()
+    sessions = SessionRegistry(60000)
+    player = scenario.player_ids[0]
+    token = sessions.issue(player, scenario.clock.now().mono_ms)
+    store = SnapshotStore(tmp_path, ("synthetic",))
+    store.save(scenario.engine, sessions, scenario.clock.now())
+    target = tmp_path / "session.json"
+    payload = json.loads(target.read_bytes())
+    payload["format"] = 8
+    del payload["state"]["game"]["fields"]["settings"]["fields"]["selection_filter"]
+    target.write_text(json.dumps(payload), encoding="utf-8")
+    restored = Scenario(players=(), host=None)
+    restored_sessions = SessionRegistry(60000)
+    assert store.restore(restored.engine, restored_sessions, scenario.clock.now())
+    assert restored_sessions.resolve(token, scenario.clock.now().mono_ms) == player
+    assert restored.s.game.settings.selection_filter == ThemeFilterData()
+    assert restored.s.players.keys() == scenario.s.players.keys()
+
+
+def test_theme_and_structured_metadata_survive_a_snapshot(tmp_path):
+    scenario = Scenario()
+    ref = next(
+        TrackRef(bid, tid) for bid, cat in scenario.s.catalogs.items() for tid in cat.entries
+    )
+    scenario.s.game.settings.selection_filter = ThemeFilterData(
+        query="Wakfu", genres=["Rap"], languages=["fr"], year_min=2012, year_max=2012
+    )
+    scenario.s.imported_metadata[ref] = Metadata(
+        title="Wakfu", genres=["Rap"], languages=["fr"], year=2012
+    )
+    store = SnapshotStore(tmp_path, ("synthetic",))
+    store.save(scenario.engine, SessionRegistry(60000), scenario.clock.now())
+    restored = Scenario(players=(), host=None)
+    assert store.restore(restored.engine, SessionRegistry(60000), scenario.clock.now())
+    assert restored.s.game.settings.selection_filter == scenario.s.game.settings.selection_filter
+    assert restored.s.imported_metadata == scenario.s.imported_metadata

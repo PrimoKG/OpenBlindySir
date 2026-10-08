@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-
 import * as cmd from "../app/commands";
-
 import { useGame, useUi } from "../app/hooks";
-
 import { t, tCode, useMessage } from "../i18n";
-
 import { api } from "../net/api";
-
 import type {
   HostView,
   LibraryBridge,
@@ -16,14 +11,11 @@ import type {
   LibraryTrack,
   MusicalMetadata,
 } from "../protocol";
-
 import { Button, ConfirmDialog, Modal } from "../ui/components";
-
 import { MetadataFieldActions } from "../ui/MetadataFieldActions";
-
 import { AliasEditor } from "../ui/ScoringCriteria";
-
 import { PrivatePreview } from "./PrivatePreview";
+import { languageLabel } from "./ThemeSelector";
 
 export function LibraryManager({
   view,
@@ -104,6 +96,10 @@ export function LibraryManager({
   const [tag, setTag] = useState("");
 
   const [linkedTo, setLinkedTo] = useState("");
+  const [genre, setGenre] = useState("");
+  const [language, setTrackLanguage] = useState("");
+  const [yearMin, setYearMin] = useState("");
+  const [yearMax, setYearMax] = useState("");
 
   const [offset, setOffset] = useState(0);
 
@@ -130,6 +126,8 @@ export function LibraryManager({
   const [bulkTags, setBulkTags] = useState("");
 
   const [bulkLinks, setBulkLinks] = useState("");
+  const [bulkGenres, setBulkGenres] = useState("");
+  const [bulkLanguages, setBulkLanguages] = useState("");
 
   const [bulkActivation, setBulkActivation] = useState("");
 
@@ -294,6 +292,17 @@ export function LibraryManager({
     setLoading(true);
 
     const timer = window.setTimeout(() => {
+      if (
+        [yearMin, yearMax].some(
+          (year) => year !== "" && (!/^\d{4}$/.test(year) || Number(year) < 1000),
+        ) ||
+        (yearMin !== "" && yearMax !== "" && Number(yearMin) > Number(yearMax))
+      ) {
+        setLoading(false);
+        setResult(null);
+        setError(() => t("theme.invalidRange"));
+        return;
+      }
       const params = new URLSearchParams({
         q,
 
@@ -313,6 +322,8 @@ export function LibraryManager({
         tag,
 
         linked_to: linkedTo,
+        genre,
+        language,
 
         offset: String(offset),
 
@@ -323,6 +334,8 @@ export function LibraryManager({
         descending: String(descending),
       });
 
+      if (yearMin) params.set("year_min", yearMin);
+      if (yearMax) params.set("year_max", yearMax);
       void api.search(params).then((r) => {
         if (!active) return;
 
@@ -367,6 +380,10 @@ export function LibraryManager({
     tag,
 
     linkedTo,
+    genre,
+    language,
+    yearMin,
+    yearMax,
 
     pageSize,
 
@@ -414,6 +431,12 @@ export function LibraryManager({
         for (const track of tracks) {
           const metadata: MusicalMetadata = {
             ...(bulkTags.trim() ? { tags: [...track.tags, ...split(bulkTags)] } : {}),
+            ...(bulkGenres.trim()
+              ? { genres: [...(track.genres ?? []), ...split(bulkGenres)] }
+              : {}),
+            ...(bulkLanguages.trim()
+              ? { languages: [...(track.languages ?? []), ...split(bulkLanguages)] }
+              : {}),
 
             ...(bulkLinks.trim() ? { linked_to: [...track.linked_to, ...split(bulkLinks)] } : {}),
 
@@ -491,6 +514,10 @@ export function LibraryManager({
     tag,
 
     linkedTo,
+    genre,
+    language,
+    yearMin,
+    yearMax,
   ]);
 
   const filter = (set: (value: string) => void, value: string) => {
@@ -500,6 +527,45 @@ export function LibraryManager({
       setOffset(0);
     });
   };
+
+  const useTheme = () =>
+    guard(() => {
+      const sources = (library?.bridges ?? [])
+        .filter((item) => item.online && (!bridge || item.bridge_id === bridge))
+        .map((item) => ({ bridge_id: item.bridge_id, folder_prefix: folder }));
+      if (
+        game.send(
+          cmd.configure(
+            view,
+            {
+              sources,
+              selection_filter: {
+                query: q,
+                genres: genre ? [genre] : [],
+                languages: language ? [language] : [],
+                tags: tag ? [tag] : [],
+                linked_to: linkedTo ? [linkedTo] : [],
+                year_min: yearMin ? Number(yearMin) : null,
+                year_max: yearMax ? Number(yearMax) : null,
+              },
+              ...(tag === "Génériques"
+                ? {
+                    answer_mode: "title",
+                    answer_fields: ["title"],
+                    clip_seconds: Math.max(
+                      view.host.limits.clip_min_s,
+                      Math.min(view.host.limits.clip_max_s, 12),
+                    ),
+                    instructions: t("theme.cartoonInstructions"),
+                  }
+                : {}),
+            },
+            false,
+          ),
+        )
+      )
+        setOpen(false);
+    });
 
   return (
     <>
@@ -606,7 +672,101 @@ export function LibraryManager({
             </p>
           )}
 
+          <div className="row wrap theme-shortcuts">
+            <Button
+              onClick={() =>
+                guard(() => {
+                  setGenre("");
+                  setTrackLanguage("");
+                  setYearMin("");
+                  setYearMax("");
+                  setTag("Génériques");
+                  setLinkedTo("");
+                  setQuery("");
+                  setOffset(0);
+                })
+              }
+            >
+              {t("theme.cartoons")}
+            </Button>
+            <Button onClick={() => filter(setGenre, "Pop")}>Pop</Button>
+            <Button onClick={() => filter(setGenre, "Rap")}>Rap</Button>
+            <Button onClick={() => filter(setTrackLanguage, "fr")}>{t("theme.french")}</Button>
+            <Button onClick={() => filter(setTrackLanguage, "en")}>{t("theme.english")}</Button>
+            <Button
+              onClick={() =>
+                guard(() => {
+                  setYearMin("2012");
+                  setYearMax("2012");
+                  setOffset(0);
+                })
+              }
+            >
+              2012
+            </Button>
+            <Button
+              onClick={() =>
+                guard(() => {
+                  setGenre("");
+                  setTrackLanguage("");
+                  setYearMin("");
+                  setYearMax("");
+                  setTag("");
+                  setLinkedTo("");
+                  setQuery("");
+                  setOffset(0);
+                })
+              }
+            >
+              {t("theme.clear")}
+            </Button>
+          </div>
           <div className="library-filters">
+            <label>
+              {t("theme.genres")}
+              <select value={genre} onChange={(e) => filter(setGenre, e.target.value)}>
+                <option value="">{t("library.all")}</option>
+                {[...new Set([...(result?.genres ?? []), ...(genre ? [genre] : [])])].map((v) => (
+                  <option value={v} key={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t("theme.languages")}
+              <select value={language} onChange={(e) => filter(setTrackLanguage, e.target.value)}>
+                <option value="">{t("library.all")}</option>
+                {[...new Set([...(result?.languages ?? []), ...(language ? [language] : [])])].map(
+                  (v) => (
+                    <option value={v} key={v}>
+                      {languageLabel(v)}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+            <label>
+              {t("theme.yearFrom")}
+              <input
+                type="number"
+                min={1000}
+                max={9999}
+                value={yearMin}
+                onChange={(e) => filter(setYearMin, e.target.value)}
+              />
+            </label>
+            <label>
+              {t("theme.yearTo")}
+              <input
+                type="number"
+                min={1000}
+                max={9999}
+                value={yearMax}
+                onChange={(e) => filter(setYearMax, e.target.value)}
+              />
+            </label>
+
             <label className="folder-option">
               <input
                 type="checkbox"
@@ -804,11 +964,21 @@ export function LibraryManager({
               {t("flow.sort")}
 
               <select value={sort} onChange={(event) => filter(setSort, event.target.value)}>
-                {["title", "artist", "filename", "folder"].map((value) => (
-                  <option key={value} value={value}>
-                    {t(`library.${value}` as "library.folder")}
-                  </option>
-                ))}
+                {["title", "artist", "filename", "folder", "year", "genre", "language"].map(
+                  (value) => (
+                    <option key={value} value={value}>
+                      {t(
+                        value === "year"
+                          ? "theme.yearSort"
+                          : value === "genre"
+                            ? "theme.genreSort"
+                            : value === "language"
+                              ? "theme.languageSort"
+                              : (`library.${value}` as "library.folder"),
+                      )}
+                    </option>
+                  ),
+                )}
               </select>
             </label>
 
@@ -840,6 +1010,26 @@ export function LibraryManager({
           )}
 
           {result && <p role="status">{t("library.results", { count: result.total })}</p>}
+          {(view.phase === "LOBBY" || view.phase === "FINAL_RESULTS") && (
+            <Button
+              kind="primary"
+              disabled={
+                loading ||
+                mutating ||
+                editorSaving ||
+                !result?.total ||
+                [yearMin, yearMax].some(
+                  (v) =>
+                    v !== "" &&
+                    (!Number.isInteger(Number(v)) || Number(v) < 1000 || Number(v) > 9999),
+                ) ||
+                (yearMin !== "" && yearMax !== "" && Number(yearMin) > Number(yearMax))
+              }
+              onClick={useTheme}
+            >
+              {t("theme.useLibrary")}
+            </Button>
+          )}
 
           {!loading && result?.total === 0 && <p>{t("library.empty")}</p>}
 
@@ -851,6 +1041,24 @@ export function LibraryManager({
             <p className="muted">{t("library.bulkHint")}</p>
 
             <div className="grid">
+              <label>
+                {t("theme.genres")}
+                <input
+                  value={bulkGenres}
+                  maxLength={2048}
+                  placeholder={t("theme.genreExamples")}
+                  onChange={(e) => setBulkGenres(e.target.value)}
+                />
+              </label>
+              <label>
+                {t("theme.languages")}
+                <input
+                  value={bulkLanguages}
+                  maxLength={2048}
+                  placeholder={t("theme.languageExamples")}
+                  onChange={(e) => setBulkLanguages(e.target.value)}
+                />
+              </label>
               <label>
                 {t("library.tags")}
 
@@ -893,7 +1101,11 @@ export function LibraryManager({
                 loading ||
                 editorSaving ||
                 !selectedTracks.size ||
-                (!bulkTags.trim() && !bulkLinks.trim() && !bulkActivation)
+                (!bulkTags.trim() &&
+                  !bulkLinks.trim() &&
+                  !bulkGenres.trim() &&
+                  !bulkLanguages.trim() &&
+                  !bulkActivation)
               }
               onClick={applyBulk}
             >
@@ -987,6 +1199,16 @@ export function LibraryManager({
                       <p className="notice">{t("library.disabledHint")}</p>
                     )}
 
+                    {!!track.genres?.length && (
+                      <p className="track-labels">
+                        {t("theme.genres")} : {track.genres.join(" · ")}
+                      </p>
+                    )}
+                    {!!track.languages?.length && (
+                      <p className="track-labels">
+                        {t("theme.languages")} : {track.languages.map(languageLabel).join(" · ")}
+                      </p>
+                    )}
                     {!!track.tags?.length && (
                       <p className="track-labels">
                         {t("library.tags")} : {track.tags.join(" · ")}
@@ -1494,6 +1716,8 @@ function MetadataEditor({
     year: track.year,
 
     tags: track.tags ?? [],
+    genres: track.genres ?? [],
+    languages: track.languages ?? [],
 
     linked_to: track.linked_to ?? [],
   });
@@ -1506,6 +1730,8 @@ function MetadataEditor({
 
   const [labels, setLabels] = useState({
     tags: (draft.tags ?? []).join(", "),
+    genres: (draft.genres ?? []).join(", "),
+    languages: (draft.languages ?? []).join(", "),
 
     linked_to: (draft.linked_to ?? []).join(", "),
   });
@@ -1547,14 +1773,30 @@ function MetadataEditor({
     >
       <h3>{track.filename}</h3>
 
-      {(["tags", "linked_to"] as const).map((key) => (
+      {(["genres", "languages", "tags", "linked_to"] as const).map((key) => (
         <label key={key}>
-          {t(key === "tags" ? "library.tags" : "library.linkedTo")}
+          {t(
+            key === "genres"
+              ? "theme.genres"
+              : key === "languages"
+                ? "theme.languages"
+                : key === "tags"
+                  ? "library.tags"
+                  : "library.linkedTo",
+          )}
 
           <input
             value={labels[key]}
             maxLength={8192}
-            placeholder={t(key === "tags" ? "library.tagExamples" : "library.linkExamples")}
+            placeholder={t(
+              key === "genres"
+                ? "theme.genreExamples"
+                : key === "languages"
+                  ? "theme.languageExamples"
+                  : key === "tags"
+                    ? "library.tagExamples"
+                    : "library.linkExamples",
+            )}
             onChange={(event) => {
               const value = event.target.value;
 

@@ -1,3 +1,5 @@
+import { selectedCapacity } from "../src/host/SetupPanel";
+import { emptyTheme } from "../src/host/ThemeSelector";
 // Deterministic UI states supplement the real-game tests; no server/game rule is mocked
 // into production. These fixtures contain synthetic names and answers only.
 
@@ -150,7 +152,7 @@ function playerView(): PlayerView {
     kind: "player",
     session: {
       epoch: "example-epoch",
-      protocol: 10,
+      protocol: 11,
       server_version: "0.1.0",
       recovered: false,
       persistence_status: "disabled",
@@ -203,6 +205,8 @@ function manualFixture() {
     ],
   };
   const track: LibraryTrack = {
+    genres: [],
+    languages: [],
     metadata_revision: 0,
     missing_references: [],
     enabled: true,
@@ -379,6 +383,7 @@ function hostView(mc = false): HostView {
     host: {
       commands: ["set_mode", "configure", "kick", "end_session"],
       settings: {
+        selection_filter: emptyTheme(),
         rounds: 20,
         clip_seconds: 25,
         answer_grace_s: 15,
@@ -553,6 +558,31 @@ async function harness(
     route.fulfill({ json: { total: 0, tracks: [] } }),
   );
   await page.route("**/api/host/library", (route) => route.fulfill({ json: library }));
+  await page.route("**/api/host/library/selection", (route) => {
+    const body = route.request().postDataJSON();
+    const selected = new Set<string>(
+      (body.sources ?? []).map(
+        (source: { bridge_id: string; folder_prefix: string }) =>
+          `${source.bridge_id}|${source.folder_prefix}`,
+      ),
+    );
+    const available = selectedCapacity(library, selected, true);
+    const fresh = selectedCapacity(library, selected, false);
+    return route.fulfill({
+      json: {
+        matching: available,
+        available,
+        fresh,
+        unclassified: 0,
+        genres: [],
+        languages: [],
+        tags: [],
+        linked_to: [],
+        years: [],
+        examples: [],
+      },
+    });
+  });
   await page.route("**/api/host/session/access", (route) =>
     route.fulfill({ json: { code: "EXAMPLE2", invitation: "synthetic-invitation", requests: [] } }),
   );
@@ -782,7 +812,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
           bridge_id: first,
           name: "Appareil salon",
           version: "0.5.0.dev0",
-          protocol: 10,
+          protocol: 11,
           state: "ONLINE",
           track_count: 8,
           jobs_in_flight: 0,
@@ -794,7 +824,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
           bridge_id: second,
           name: "Appareil absent",
           version: "0.5.0.dev0",
-          protocol: 10,
+          protocol: 11,
           state: "OFFLINE",
           track_count: 4,
           jobs_in_flight: 0,
@@ -858,7 +888,7 @@ test("V0.5 incompatible client stops reload loops and shows the required range",
     route.fulfill({
       json: {
         server_version: "0.5.0.dev0",
-        protocol: 10,
+        protocol: 11,
         protocol_min: 8,
         protocol_max: 8,
         snapshot_format: 4,
@@ -4035,4 +4065,117 @@ for (const language of ["fr", "en"] as const) {
         .toBe(true);
     });
   }
+}
+
+for (const language of ["fr", "en"] as const) {
+  test(`themed nights combine criteria and configure the actual game (${language})`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize(
+      language === "fr" ? { width: 1093, height: 600 } : { width: 390, height: 844 },
+    );
+    const { view, library, track } = manualFixture();
+    const ui = await harness(page, view, library);
+    const copy = language === "fr" ? fr : en;
+    if (language === "en") await page.getByRole("button", { name: "English", exact: true }).click();
+    const filters: unknown[] = [];
+    await page.route("**/api/host/library/selection", (route) => {
+      filters.push(route.request().postDataJSON().selection_filter);
+      return route.fulfill({
+        json: {
+          matching: 4,
+          available: 4,
+          fresh: 3,
+          unclassified: 0,
+          genres: ["Pop", "Rap"],
+          languages: ["fr", "en"],
+          tags: ["Génériques"],
+          linked_to: ["Wakfu"],
+          years: [2012],
+          examples: [{ ...track, title: "Wakfu" }],
+        },
+      });
+    });
+    await page.getByRole("button", { name: copy["flow.prepare"], exact: true }).click();
+    const dialog = page.locator(".workspace-modal");
+    const theme = dialog.getByRole("region", { name: copy["theme.title"], exact: true });
+    await expect(
+      theme.locator(".theme-examples").getByText("Wakfu", { exact: true }),
+    ).toBeVisible();
+    await theme.getByRole("button", { name: "Rap", exact: true }).click();
+    await theme
+      .getByRole("combobox", { name: copy["theme.languages"], exact: true })
+      .selectOption("fr");
+    await theme.getByLabel(copy["theme.yearFrom"], { exact: true }).fill("2012");
+    await theme.getByLabel(copy["theme.yearTo"], { exact: true }).fill("2012");
+    await expect
+      .poll(() => filters.at(-1))
+      .toMatchObject({ genres: ["Rap"], languages: ["fr"], year_min: 2012, year_max: 2012 });
+    await expect(
+      theme.getByText(copy["theme.count"].replace("{available}", "4").replace("{fresh}", "3"), {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await dialog.getByRole("button", { name: copy["hostui.save"], exact: true }).click();
+    expect(
+      ui.sent.map((raw) => JSON.parse(raw)).find((message) => message.cmd === "configure").args
+        .selection_filter,
+    ).toMatchObject({ genres: ["Rap"], languages: ["fr"], year_min: 2012, year_max: 2012 });
+    await theme.getByRole("button", { name: copy["theme.cartoons"], exact: true }).click();
+    await expect
+      .poll(() => filters.at(-1))
+      .toMatchObject({
+        tags: ["Génériques"],
+        genres: [],
+        languages: [],
+        year_min: null,
+        year_max: null,
+      });
+    await layout(page);
+    await page.screenshot({ path: info.outputPath(`themes-${language}.png`) });
+  });
+
+  test(`library themed filters transfer to game and invalid years stay local (${language})`, async ({
+    page,
+  }) => {
+    const { view, library, track } = manualFixture();
+    const ui = await harness(page, view, library);
+    const copy = language === "fr" ? fr : en;
+    if (language === "en") await page.getByRole("button", { name: "English", exact: true }).click();
+    let requests = 0;
+    await page.route("**/api/host/library/search**", (route) => {
+      requests++;
+      return route.fulfill({
+        json: {
+          total: 1,
+          tracks: [track],
+          tags: [],
+          linked_to: [],
+          genres: ["Rap"],
+          languages: ["fr"],
+          years: [2012],
+        },
+      });
+    });
+    await page.getByRole("button", { name: copy["library.manage"], exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: copy["library.manage"], exact: true });
+    await expect(dialog.locator(".library-tracks > li")).toHaveCount(1);
+    await dialog.getByRole("button", { name: "Rap", exact: true }).click();
+    await dialog.getByRole("button", { name: copy["theme.french"], exact: true }).click();
+    await dialog.getByRole("button", { name: "2012", exact: true }).click();
+    const use = dialog.getByRole("button", { name: copy["theme.useLibrary"], exact: true });
+    await expect(use).toBeEnabled();
+    const before = requests;
+    await dialog.getByLabel(copy["theme.yearFrom"], { exact: true }).fill("2013");
+    await expect(dialog.getByRole("alert")).toContainText(copy["theme.invalidRange"]);
+    expect(requests).toBe(before);
+    await dialog.getByLabel(copy["theme.yearFrom"], { exact: true }).fill("2012");
+    await expect(use).toBeEnabled();
+    await use.click();
+    expect(
+      ui.sent.map((raw) => JSON.parse(raw)).find((message) => message.cmd === "configure").args
+        .selection_filter,
+    ).toMatchObject({ genres: ["Rap"], languages: ["fr"], year_min: 2012, year_max: 2012 });
+    await expect(dialog).toHaveCount(0);
+  });
 }

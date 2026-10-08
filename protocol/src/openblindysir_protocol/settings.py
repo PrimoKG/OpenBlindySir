@@ -7,6 +7,7 @@ from pydantic import Field, StringConstraints, field_validator
 
 from openblindysir_protocol.base import BridgeId, InboundModel, OutboundModel
 from openblindysir_protocol.enums import ClipFormat
+from openblindysir_protocol.themes import ThemeFilter
 
 WS_PLAYER_MAX_BYTES: Final = 16_384
 WS_BRIDGE_MAX_BYTES: Final = 65_536
@@ -51,6 +52,7 @@ class SourceView(OutboundModel):
 
 
 class GameSettings(OutboundModel):
+    selection_filter: ThemeFilter = Field(default_factory=ThemeFilter)
     scoring_mode: str = "manual"
     acceptance_threshold: int = 90
     answer_fields: list[str] = Field(default_factory=lambda: ["title", "artist"])
@@ -81,6 +83,7 @@ class SettingsPatch(InboundModel):
     """Arguments of ``HOST configure``: each given field is set (value semantics)."""
 
     rounds: Annotated[int, Field(ge=1, le=200)] | None = None
+    selection_filter: ThemeFilter | None = None
     # Narrowed to CLIP_MIN_S..CLIP_MAX_S by the core.
     clip_seconds: Annotated[int, Field(ge=5, le=60)] | None = None
     answer_grace_s: Annotated[int, Field(ge=0, le=120)] | None = None

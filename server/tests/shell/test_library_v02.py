@@ -247,7 +247,7 @@ def test_metadata_partial_import_manual_priority_search_and_export(harness: Harn
         found["tracks"][0]["artist"],
     ) == ("Imported", "Album", "Manual")
     exported = harness.client.get("/api/host/metadata", headers=headers).json()
-    assert exported["version"] == 2
+    assert exported["version"] == 3
     assert exported["rows"][0]["featuring"] == "Guest"
     assert (
         harness.client.get("/api/host/library/search?folder=Animes", headers=headers).json()[
@@ -457,7 +457,7 @@ def test_labels_activation_and_partial_edits_preserve_library_and_history(harnes
     )
     assert ref in selection.pool(state)
     exported = harness.client.get("/api/host/metadata", headers=headers).json()
-    assert exported["version"] == 2
+    assert exported["version"] == 3
     assert exported["rows"][0]["enabled"] is True
     assert exported["rows"][0]["tags"] == []
     assert state.journal.events() == ()

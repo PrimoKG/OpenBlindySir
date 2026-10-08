@@ -27,6 +27,8 @@ class MusicalMetadata(InboundModel):
     featuring: Text | None = None
     album: Text | None = None
     year: Annotated[int, Field(ge=1000, le=9999)] | None = None
+    genres: Annotated[list[Text], Field(max_length=32)] | None = None
+    languages: Annotated[list[Text], Field(max_length=32)] | None = None
     tags: Annotated[list[Text], Field(max_length=32)] | None = None
     linked_to: Annotated[list[Text], Field(max_length=32)] | None = None
     enabled: bool | None = None
@@ -38,7 +40,7 @@ class MusicalMetadata(InboundModel):
             return None
         return {key: cls._labels(labels) or [] for key, labels in values.items()}
 
-    @field_validator("tags", "linked_to")
+    @field_validator("tags", "linked_to", "genres", "languages")
     @classmethod
     def _labels(cls, values: list[str] | None) -> list[str] | None:
         if values is None:
@@ -71,5 +73,5 @@ class MetadataRow(MusicalMetadata):
 
 
 class MetadataDocument(InboundModel):
-    version: Literal[1, 2]
+    version: Literal[1, 2, 3]
     rows: Annotated[list[MetadataRow], Field(max_length=10000)]

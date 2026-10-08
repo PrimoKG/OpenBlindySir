@@ -6,6 +6,7 @@ from openblindysir_protocol.enums import BridgeState, GamePhase, RoundState
 from openblindysir_protocol.views import PoolStatus
 from openblindysir_server.game.metadata import musical_metadata
 from openblindysir_server.game.state import SessionState, Slot, TrackRef, current_round
+from openblindysir_server.game.themes import matches_theme
 
 
 def matches(relpath: str, prefix: str) -> bool:
@@ -21,9 +22,11 @@ def pool(s: SessionState) -> list[TrackRef]:
         if catalog is None:
             continue
         for track_id, entry in catalog.entries.items():
+            meta = musical_metadata(s, TrackRef(bridge_id, track_id))
             if (
                 matches(entry.relpath, prefix)
-                and musical_metadata(s, TrackRef(bridge_id, track_id)).enabled is not False
+                and meta.enabled is not False
+                and matches_theme(meta, entry.relpath, s.game.settings.selection_filter)
             ):
                 found.add(TrackRef(bridge_id, track_id))
     return sorted(found - s.game.unavailable)
@@ -118,8 +121,13 @@ def take(s: SessionState) -> TrackRef | None:
         if (
             ref not in s.game.unavailable
             and musical_metadata(s, ref).enabled is not False
-            and ref not in reserved
             and track_exists(s, ref)
+            and matches_theme(
+                musical_metadata(s, ref),
+                s.catalogs[ref.bridge_id].entries[ref.track_id].relpath,
+                s.game.settings.selection_filter,
+            )
+            and ref not in reserved
             and online(s, ref)
             and (s.game.settings.allow_repeats or ref not in s.played)
         ):

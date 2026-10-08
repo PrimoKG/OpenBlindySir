@@ -3,7 +3,7 @@
 [English guide](user-guide.en.md). Une instance accueille une partie à la fois,
 entre amis dans leur navigateur, sur LAN, VPN ou Internet. Aucun compte à créer.
 Préparez [l'hébergement](deployment.md) ou le [lancement Docker](docker.md).
-Mettez à jour serveur, Bridge et interface ensemble : **protocole 9**.
+Mettez à jour serveur, Bridge et interface ensemble : **protocole 11**.
 Aujourd’hui, utilisez Docker ou [l’installation du Bridge depuis le dépôt](bridge-installation.md).
 Le parcours uvx/archive sera disponible après publication.
 
@@ -419,3 +419,7 @@ La bibliothèque s’ouvre sur les morceaux et actualise les données à chaque 
 L’export est un pack ZIP de fichiers JSON limités à 1 Mio et 10 000 lignes. Un pack reste limité à 8 Mio et 10 000 lignes. Si nécessaire, **Télécharger le pack suivant** termine l’export de toute la collection. Chaque pack se réimporte séparément, sans extraire de fichiers sur le disque. Les JSON historiques restent acceptés avec leur limite de 1 Mio. Les imports ZIP chiffrés, les chemins arbitraires et les compressions autres que stockée/Deflate sont refusés.
 
 Le contexte audio fermé peut être recréé après une action de l’utilisateur. Les requêtes obsolètes, sockets remplacés et contrôleurs démontés sont nettoyés. Une erreur provenant d’un ancien morceau ne remplace plus l’état de lecture du morceau courant. L’écoute privée et collective partagent le volume du navigateur. **Tester mon audio** et la récupération restent accessibles pendant le final.
+
+## Soirées à thème
+
+Dans **Préparer la partie → Musique**, composez une sélection par genre, langue, année, tags et univers. Le compteur utilise les mêmes critères que les manches. Les raccourcis génériques, Pop, Rap, français, anglais et 2012 facilitent la préparation ; combinez ensuite les listes et enregistrez votre sélection sous les filtres. Voir [le guide des soirées à thème](themed-nights.md) pour les métadonnées et les exemples.

@@ -1,6 +1,6 @@
 # Automatic scoring and grand finale
 
-[Français](notation-automatique.md). V0.5 development, protocol **9**, snapshot **7**.
+[Français](notation-automatique.md). V0.5 development, protocol **11**, snapshot **9**.
 Update the server, web UI and Bridge together. Older sessions keep manual scoring;
 existing scores are not recalculated during migration.
 

@@ -21,6 +21,7 @@ from openblindysir_protocol.enums import (
 )
 from openblindysir_protocol.metadata import MusicalMetadata
 from openblindysir_protocol.settings import GameSettings, ServerLimits, SourceView
+from openblindysir_protocol.themes import ThemeFilter
 from openblindysir_protocol.version import PROTOCOL_VERSION
 from openblindysir_protocol.views import (
     AdjustmentEntry,
@@ -715,6 +716,7 @@ def _round_mc(
 def _settings(s: SessionState) -> GameSettings:
     settings = s.game.settings
     return GameSettings(
+        selection_filter=ThemeFilter(**asdict(settings.selection_filter)),
         scoring_mode=settings.scoring_mode,
         acceptance_threshold=settings.acceptance_threshold,
         answer_fields=settings.answer_fields,

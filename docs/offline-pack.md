@@ -26,6 +26,6 @@ Avant une mise à jour manuelle, faire une sauvegarde cohérente avec **Sauvegar
 
 Charger le nouveau pack après vérification, copier la configuration privée dans son `.local/docker/`, puis lancer **Démarrer**. Les volumes existants sont réutilisés si le nom de projet Compose reste `openblindysir`. Le pack utilise ce projet via `name: openblindysir` dans compose.
 
-Pour un retour arrière, arrêter les services, restaurer la sauvegarde de l’état compatible avec l’ancien pack dans son volume, puis relancer l’ancien pack et son ancienne configuration. **Le protocole 10 écrit des snapshots 8 et lit les formats 1 à 8. Une image de protocole 9 ne doit pas recevoir un snapshot 8 : restaurer sa sauvegarde de format 7.** Le retour arrière restaure aussi les scores et réponses à la date de la sauvegarde.
+Pour un retour arrière, arrêter les services, restaurer la sauvegarde de l’état compatible avec l’ancien pack dans son volume, puis relancer l’ancien pack et son ancienne configuration. **Le protocole 11 écrit des snapshots 9 et lit les formats 1 à 9. Une image de protocole 10 ne doit pas recevoir un snapshot 9 : restaurer sa sauvegarde de format 8.** Le retour arrière restaure aussi les scores et réponses à la date de la sauvegarde.
 
 La signature d’un installateur natif et la publication automatisée de packs multiarchitectures restent des étapes de release. Aucune publication externe n’est réalisée par `tools/distribution_pack.py`.

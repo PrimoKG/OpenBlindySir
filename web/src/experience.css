@@ -571,3 +571,85 @@ html:has(.final-review) {
     display: none;
   }
 }
+.theme-selector {
+  padding: clamp(1rem, 2vw, 1.5rem);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface, #fff);
+  gap: 0.75rem;
+}
+.theme-selector p {
+  margin: 0;
+}
+.dialog .theme-selector .row,
+.dialog .row.theme-shortcuts {
+  margin-top: 0;
+  justify-content: flex-start;
+}
+
+.theme-selector h3 {
+  margin: 0;
+}
+.theme-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 1rem;
+}
+.theme-category {
+  min-width: 0;
+  gap: 0.4rem;
+}
+.theme-custom input {
+  min-width: 0;
+  flex: 1;
+}
+.theme-custom button {
+  flex: 0 0 auto;
+}
+.theme-chips:empty {
+  display: none;
+}
+.theme-chips button {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+}
+.theme-years > label {
+  flex: 1;
+  min-width: 8rem;
+}
+.theme-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.theme-examples span:not(.muted) {
+  padding: 0.25rem 0.6rem;
+  border-radius: 1rem;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+.theme-shortcuts {
+  gap: 0.4rem;
+}
+.workspace-modal .setup-footer {
+  gap: 0.5rem;
+  padding-block: 0.65rem;
+}
+.workspace-modal .setup-footer p,
+.workspace-modal .setup-actions {
+  margin: 0;
+}
+@media (min-width: 761px) {
+  .workspace-modal .setup-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .workspace-modal .setup-footer > p {
+    grid-column: 1 / -1;
+  }
+  .workspace-modal .setup-actions .btn {
+    flex: 0 1 auto;
+  }
+}

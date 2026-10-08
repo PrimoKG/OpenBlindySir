@@ -55,6 +55,7 @@ from openblindysir_server.game.state import (
     Player,
     SessionState,
     Settings,
+    ThemeFilterData,
     active_players,
     current_round,
 )
@@ -123,8 +124,10 @@ def h_configure(
         require(all(src.bridge_id in known for src in patch.sources), ErrorCode.INVALID_ARGS)
     previous = g.settings
     settings = g.settings.copy()
-    for name in given - {"sources"}:
+    for name in given - {"sources", "selection_filter"}:
         setattr(settings, name, getattr(patch, name))
+    if patch.selection_filter is not None:
+        settings.selection_filter = ThemeFilterData(**patch.selection_filter.model_dump())
     if patch.sources is not None:
         settings.sources = sorted({(src.bridge_id, src.folder_prefix) for src in patch.sources})
     require(_maximum_points(settings) <= 1000, ErrorCode.INVALID_ARGS)

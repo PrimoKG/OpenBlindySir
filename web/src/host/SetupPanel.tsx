@@ -18,6 +18,7 @@ import {
   criterionPoints,
   musicalCriteria,
 } from "../ui/ScoringCriteria";
+import { emptyTheme, readTheme, ThemeSelector, useSelectionPreview } from "./ThemeSelector";
 
 export function selectedCapacity(
   library: LibraryResponse | null,
@@ -39,7 +40,7 @@ export function selectedCapacity(
 }
 
 type Preset = { name: string; settings: GameSettings };
-function loadPresets(): Preset[] {
+export function loadPresets(): Preset[] {
   try {
     const value = JSON.parse(readLocal("selections") ?? "[]");
     return Array.isArray(value)
@@ -53,10 +54,18 @@ function loadPresets(): Preset[] {
                 (s: { bridge_id?: unknown; folder_prefix?: unknown } | null) =>
                   s && typeof s.bridge_id === "string" && typeof s.folder_prefix === "string",
               ) &&
+              readTheme(p.settings.selection_filter) !== null &&
               ["rounds", "clip_seconds", "answer_grace_s"].every(
                 (field) => typeof p.settings[field] === "number",
               ),
           )
+          .map((preset) => ({
+            ...preset,
+            settings: {
+              ...preset.settings,
+              selection_filter: readTheme(preset.settings.selection_filter),
+            },
+          }))
           .slice(0, 20)
       : [];
   } catch {
@@ -70,7 +79,15 @@ export function settingsKey(settings: GameSettings): string {
   );
   return JSON.stringify(
     Object.fromEntries(
-      Object.entries({ ...settings, sources }).sort(([a], [b]) => a.localeCompare(b)),
+      Object.entries({
+        ...settings,
+        sources,
+        selection_filter: {
+          ...emptyTheme(),
+          ...settings.selection_filter,
+          query: (settings.selection_filter?.query ?? "").trim(),
+        },
+      }).sort(([a], [b]) => a.localeCompare(b)),
     ),
   );
 }
@@ -144,11 +161,21 @@ export function SetupPanel({
   const set = <K extends keyof GameSettings>(field: K, value: GameSettings[K]) =>
     setDraft((old) => ({ ...old, [field]: value }));
   const selected = new Set(draft.sources.map((s) => `${s.bridge_id}|${s.folder_prefix}`));
-  const capacity = selectedCapacity(library, selected, draft.allow_repeats);
-  const fresh = selectedCapacity(library, selected, false);
+  const preview = useSelectionPreview(draft, key);
+  const capacity =
+    preview.loading || preview.error
+      ? 0
+      : ((draft.allow_repeats ? preview.result?.available : preview.result?.fresh) ?? 0);
+  const fresh = preview.result?.fresh ?? 0;
   const tooMany = !draft.allow_repeats && draft.rounds > capacity;
   const limits = view.host.limits;
   const valid =
+    (draft.selection_filter?.year_min == null ||
+      draft.selection_filter?.year_max == null ||
+      draft.selection_filter.year_min <= draft.selection_filter.year_max) &&
+    [draft.selection_filter?.year_min, draft.selection_filter?.year_max].every(
+      (year) => year == null || (Number.isInteger(year) && year >= 1000 && year <= 9999),
+    ) &&
     Number.isInteger(draft.rounds) &&
     draft.rounds >= 1 &&
     draft.rounds <= 200 &&
@@ -435,6 +462,44 @@ export function SetupPanel({
             : t("hostui.bridgeOffline")}
         </p>
         <p className="muted">{t("hostui.libraryHint")}</p>
+        <Button
+          onClick={() =>
+            set(
+              "sources",
+              library?.bridges
+                .filter((bridge) => bridge.online)
+                .map((bridge) => ({ bridge_id: bridge.bridge_id, folder_prefix: "" })) ?? [],
+            )
+          }
+        >
+          {t("theme.allFolders")}
+        </Button>
+        <ThemeSelector
+          value={draft.selection_filter ?? emptyTheme()}
+          facets={preview.result}
+          loading={preview.loading}
+          error={preview.error}
+          onChange={(filter) => set("selection_filter", filter)}
+          onQuickTheme={(filter, cartoons) =>
+            setDraft((old) => ({
+              ...old,
+              selection_filter: filter,
+              sources: old.sources.length
+                ? old.sources
+                : (library?.bridges
+                    .filter((bridge) => bridge.online)
+                    .map((bridge) => ({ bridge_id: bridge.bridge_id, folder_prefix: "" })) ?? []),
+              ...(cartoons
+                ? {
+                    answer_mode: "title",
+                    answer_fields: ["title"],
+                    clip_seconds: Math.max(limits.clip_min_s, Math.min(limits.clip_max_s, 12)),
+                    instructions: t("theme.cartoonInstructions"),
+                  }
+                : {}),
+            }))
+          }
+        />
         <Button type="button" onClick={() => setRetry((n) => n + 1)}>
           {t("library.refresh")}
         </Button>
@@ -468,6 +533,59 @@ export function SetupPanel({
           <strong>{t("ux.capacity", { count: fresh, rounds: draft.rounds })}</strong>
           <p className="muted">{t("ux.sessionNoRepeat")}</p>
         </div>
+        <details className="disclosure">
+          <summary>{t("ux.presets")}</summary>
+          <div className="stack">
+            <label>
+              {t("ux.presetName")}
+              <input
+                maxLength={40}
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+              />
+            </label>
+            <Button
+              disabled={!presetName.trim() || !valid}
+              onClick={() => {
+                const next = [
+                  ...presets.filter((p) => p.name !== presetName.trim()),
+                  { name: presetName.trim(), settings: draft },
+                ].slice(-20);
+                setPresets(next);
+                writeLocal("selections", JSON.stringify(next));
+                setPresetName("");
+              }}
+            >
+              {t("ux.savePreset")}
+            </Button>
+            <p className="muted">{t("ux.presetLocal")}</p>
+            {presets.map((preset) => (
+              <div className="row wrap" key={preset.name}>
+                <Button
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      ...preset.settings,
+                      selection_filter: preset.settings.selection_filter ?? emptyTheme(),
+                    } as GameSettings)
+                  }
+                >
+                  {preset.name}
+                </Button>
+                <Button
+                  aria-label={t("ux.deletePreset", { name: preset.name })}
+                  onClick={() => {
+                    const next = presets.filter((p) => p.name !== preset.name);
+                    setPresets(next);
+                    writeLocal("selections", JSON.stringify(next));
+                  }}
+                >
+                  ×
+                </Button>
+              </div>
+            ))}
+          </div>
+        </details>
         {checkbox("allow_repeats", t("hostui.allowRepeats"))}
         {tooMany && capacity > 0 && (
           <div className="notice">
@@ -506,51 +624,6 @@ export function SetupPanel({
             </ul>
           </details>
         )}
-        <details className="disclosure">
-          <summary>{t("ux.presets")}</summary>
-          <div className="stack">
-            <label>
-              {t("ux.presetName")}
-              <input
-                maxLength={40}
-                value={presetName}
-                onChange={(e) => setPresetName(e.target.value)}
-              />
-            </label>
-            <Button
-              disabled={!presetName.trim() || !valid}
-              onClick={() => {
-                const next = [
-                  ...presets.filter((p) => p.name !== presetName.trim()),
-                  { name: presetName.trim(), settings: draft },
-                ].slice(-20);
-                setPresets(next);
-                writeLocal("selections", JSON.stringify(next));
-                setPresetName("");
-              }}
-            >
-              {t("ux.savePreset")}
-            </Button>
-            <p className="muted">{t("ux.presetLocal")}</p>
-            {presets.map((preset) => (
-              <div className="row wrap" key={preset.name}>
-                <Button onClick={() => setDraft({ ...draft, ...preset.settings } as GameSettings)}>
-                  {preset.name}
-                </Button>
-                <Button
-                  aria-label={t("ux.deletePreset", { name: preset.name })}
-                  onClick={() => {
-                    const next = presets.filter((p) => p.name !== preset.name);
-                    setPresets(next);
-                    writeLocal("selections", JSON.stringify(next));
-                  }}
-                >
-                  ×
-                </Button>
-              </div>
-            ))}
-          </div>
-        </details>
         {advanced}
       </section>
       <section
@@ -574,13 +647,19 @@ export function SetupPanel({
         </p>
       )}
       {view.host.start_blockers
-        .filter((b) => (b !== "no_sources" && b !== "pool_exhausted") || (!dirty && capacity === 0))
+        .filter(
+          (b) =>
+            (b !== "no_sources" && b !== "pool_exhausted") ||
+            (!dirty && !preview.loading && !preview.error && capacity === 0),
+        )
         .map((b) => (
           <p className="notice" key={b}>
             {tCode("blocker", b)}
           </p>
         ))}
-      {capacity === 0 && library && <p className="notice">{t("ux.noPlayableTracks")}</p>}
+      {capacity === 0 && library && !preview.loading && !preview.error && (
+        <p className="notice">{t("ux.noPlayableTracks")}</p>
+      )}
       <div className="setup-footer stack">
         <strong>
           {t("flow.summary", {

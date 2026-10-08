@@ -10,6 +10,8 @@ import type {
   LibraryResponse,
   LibrarySearch,
   MetadataEdit,
+  SelectionPreview,
+  SelectionPreviewRequest,
   SessionResponse,
 } from "../protocol";
 
@@ -108,6 +110,8 @@ export const api = {
   diagnostics: () => request<DiagnosticsResponse>("GET", "/api/host/diagnostics"),
   search: (params: URLSearchParams) =>
     request<LibrarySearch>("GET", `/api/host/library/search?${params}`),
+  selectionPreview: (body: SelectionPreviewRequest, signal?: AbortSignal) =>
+    request<SelectionPreview>("POST", "/api/host/library/selection", body, signal),
   sources: (bridge_id: string, folders: string[] | null) =>
     request<{ ok: true; scan_revision: number }>("POST", "/api/host/library/sources", {
       bridge_id,
@@ -126,7 +130,7 @@ export const api = {
       "/api/host/metadata/import-archive",
       body,
     ),
-  metadata: () => request<{ version: 1 | 2; rows: unknown[] }>("GET", "/api/host/metadata"),
+  metadata: () => request<{ version: 1 | 2 | 3; rows: unknown[] }>("GET", "/api/host/metadata"),
   recoveryCode: () => request<{ code: string }>("POST", "/api/session/recovery-code", {}),
   recover: (password: string, code: string) =>
     request<SessionResponse>("POST", "/api/session/recover", { password, code }),

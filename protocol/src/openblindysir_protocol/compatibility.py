@@ -11,7 +11,7 @@ class Compatibility(OutboundModel):
     protocol: int = PROTOCOL_VERSION
     protocol_min: int = PROTOCOL_MIN
     protocol_max: int = PROTOCOL_MAX
-    snapshot_format: int = 8
+    snapshot_format: int = 9
     history_format: int = 2
 
 

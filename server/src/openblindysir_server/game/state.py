@@ -187,6 +187,8 @@ class Metadata:
     featuring: str | None = None
     album: str | None = None
     year: int | None = None
+    genres: list[str] | None = None
+    languages: list[str] | None = None
     tags: list[str] | None = None
     linked_to: list[str] | None = None
     enabled: bool | None = None
@@ -281,7 +283,19 @@ class AssetRecord:
 
 
 @dataclass(slots=True)
+class ThemeFilterData:
+    query: str = ""
+    genres: list[str] = field(default_factory=list)
+    languages: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    linked_to: list[str] = field(default_factory=list)
+    year_min: int | None = None
+    year_max: int | None = None
+
+
+@dataclass(slots=True)
 class Settings:
+    selection_filter: ThemeFilterData = field(default_factory=ThemeFilterData)
     scoring_mode: str = "manual"
     acceptance_threshold: int = 90
     answer_fields: list[str] = field(default_factory=lambda: ["title", "artist"])
@@ -309,6 +323,15 @@ class Settings:
 
     def copy(self) -> "Settings":
         return Settings(
+            selection_filter=ThemeFilterData(
+                query=self.selection_filter.query,
+                genres=list(self.selection_filter.genres),
+                languages=list(self.selection_filter.languages),
+                tags=list(self.selection_filter.tags),
+                linked_to=list(self.selection_filter.linked_to),
+                year_min=self.selection_filter.year_min,
+                year_max=self.selection_filter.year_max,
+            ),
             scoring_mode=self.scoring_mode,
             acceptance_threshold=self.acceptance_threshold,
             answer_fields=list(self.answer_fields),

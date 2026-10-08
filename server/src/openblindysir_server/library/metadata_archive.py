@@ -12,7 +12,7 @@ ROW_LIMIT = 10000
 
 def document(rows: list[dict]) -> bytes:
     return json.dumps(
-        {"version": 2, "rows": rows}, ensure_ascii=False, separators=(",", ":")
+        {"version": 3, "rows": rows}, ensure_ascii=False, separators=(",", ":")
     ).encode("utf-8")
 
 
@@ -78,11 +78,11 @@ def unpack(raw: bytes) -> dict:
                 not isinstance(doc, dict)
                 or set(doc) != {"version", "rows"}
                 or type(doc["version"]) is not int
-                or doc["version"] not in {1, 2}
+                or doc["version"] not in {1, 2, 3}
                 or not isinstance(doc["rows"], list)
             ):
                 raise ValueError("invalid document")
             rows.extend(doc["rows"])
             if len(rows) > ROW_LIMIT:
                 raise ValueError("row limit")
-    return {"version": 2, "rows": rows}
+    return {"version": 3, "rows": rows}

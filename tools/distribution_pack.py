@@ -57,7 +57,7 @@ def main() -> None:
                 "from openblindysir_protocol.version import PROTOCOL_VERSION; "
                 "print(PROTOCOL_VERSION)",
             )
-            if protocol != "10":
+            if protocol != "11":
                 raise ValueError("Incompatible image protocol")
         manifest["images"][service] = {
             "reference": reference,
@@ -99,6 +99,10 @@ def main() -> None:
         "docs/audits/2026-10-07-implementation.en.md",
         "docs/audits/2026-10-08-autofix.md",
         "docs/audits/2026-10-08-autofix.en.md",
+        "docs/audits/2026-10-08-themed-nights.md",
+        "docs/audits/2026-10-08-themed-nights.en.md",
+        "docs/themed-nights.md",
+        "docs/themed-nights.en.md",
         "LICENSE",
     ]:
         destination = target / relative
@@ -127,6 +131,8 @@ def main() -> None:
         "- [Audit FR](docs/audits/2026-10-08-autofix.md) / "
         "[Audit EN](docs/audits/2026-10-08-autofix.en.md)\n"
         "- [Installation FR](docs/offline-pack.md) / [Installation EN](docs/offline-pack.en.md)\n\n"
+        "- [Soirées à thème FR](docs/themed-nights.md) / "
+        "[Themed nights EN](docs/themed-nights.en.md)\n\n"
         "Windows: `powershell -File .\\tools\\load-pack.ps1`, then / puis "
         "`powershell -File .\\tools\\party-assistant.ps1`.\n\n"
         "Linux/macOS: `sh tools/load-pack.sh`, then follow the guide / suivre le guide.\n",

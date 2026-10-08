@@ -25,6 +25,8 @@ from openblindysir_protocol.http import (
     OkResponse,
     RecoveryCode,
     RecoveryRequest,
+    SelectionPreview,
+    SelectionPreviewRequest,
     SessionResponse,
     SourceUpdate,
 )
@@ -65,6 +67,8 @@ WEB_ROOTS: Final[dict[str, tuple[Any, Mode]]] = {
     "DiagnosticsResponse": (DiagnosticsResponse, "serialization"),
     "HealthResponse": (HealthResponse, "serialization"),
     "LibrarySearch": (LibrarySearch, "serialization"),
+    "SelectionPreview": (SelectionPreview, "serialization"),
+    "SelectionPreviewRequest": (SelectionPreviewRequest, "validation"),
     "MetadataEdit": (MetadataEdit, "validation"),
     "SourceUpdate": (SourceUpdate, "validation"),
     "RecoveryCode": (RecoveryCode, "serialization"),

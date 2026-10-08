@@ -2145,3 +2145,43 @@ image scannée déployée : mêmes identités, scores, réponses, métadonnées,
 accès partagé, montages et certificat ; deux joueurs, 12 archives, 68 morceaux.
 Guides FR/EN, README et rapports du 8 octobre actualisés. La validation sur
 téléphones physiques, machine vierge et restauration indépendante reste ouverte.
+
+
+## 2026-10-08 — soirées à thème et préparation de la bibliothèque de génériques
+
+Filtres persistés sources + genres/langues/années/tags/univers et recherche à mots
+normalisés, même moteur pour aperçu privé, recherche et sélection réelle. Raccourcis,
+facettes bornées, tris année/genre/langue, compteurs jouables/inédits, six exemples,
+transfert de recherche et presets locaux avec migration des anciens filtres absents.
+Les modifications thématiques sont interdites en IN_GAME. HTTP et travail différé
+conservent les contrôles de rôle, Origin, époque et quota. Genres/langues s'éditent
+individuellement ou par lot ; des tags anciens exacts offrent un repli seulement
+sans liste structurée. Correction des titres confirmés contenant un tiret : ils
+restent la référence automatique au lieu d'être séparés en artiste et titre.
+
+Protocole 11, snapshot 9 (lecture 1–9), exports JSON 3 (lecture 1/2/3). Documentation
+FR/EN, guides d'installation/opérations, README et générateur de pack mis à jour.
+Les paramètres fixes prennent moins de hauteur sur petits PC ; les filtres se
+répartissent horizontalement lorsque l'écran le permet.
+
+Bibliothèque réelle : 232 fichiers sondés et empreintés ; 211 retenus, 21 exclusions
+réversibles dont huit copies exactes. Titres, séries et alias corrigés, langues sur
+indices explicites uniquement. Aucun artiste ou millésime inventé, nom d'uploader
+exclu des références. Aucun fichier musical modifié/déplacé/renommé. Source ajoutée
+en lecture seule avec un point de montage vide dans la racine existante : le premier
+démarrage du Bridge a montré que Docker ne peut pas créer ce sous-dossier dans le
+parent déjà monté en lecture seule. Création ciblée du point vide puis reprise.
+
+Sauvegarde native format 2 et empreintes vérifiées, anciennes images conservées.
+Import validé réalisé hors ligne, services reconstruits/relancés ; 300 pistes dont
+211 génériques prêts pour la prochaine partie, titre seul, extraits de 12 s. Deux
+joueurs, 12 archives, scores/réponses/cookies/accès et certificat conservés. Le premier
+contrôle d'archives comparait le JSON brut avant/après : les valeurs par défaut
+ajoutées à la migration nécessitent une validation de schéma avant comparaison.
+Comparaison normalisée réussie ; aucune nouvelle partie lancée automatiquement.
+
+Validation : 1 190 tests Python distincts réussis (1 179 généraux + 11 intégrations),
+53 tests unitaires Web, types/build/lint/format/Pyright/schéma vérifiés. Huit nouveaux
+parcours FR/EN passent sur Chromium/WebKit en petit écran/mobile, ainsi qu'une
+régression de notation sur les deux moteurs. Détails et limites dans les rapports
+[FR](audits/2026-10-08-themed-nights.md) / [EN](audits/2026-10-08-themed-nights.en.md).

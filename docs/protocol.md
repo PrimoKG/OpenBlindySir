@@ -1,4 +1,4 @@
-# OpenBlindySir — Protocole réseau 8 — V0.5 développement
+# OpenBlindySir — Protocole réseau 11 — V0.5 développement
 
 Ce document fait autorité pour le §8 de l'architecture. Le paquet Pydantic est
 la définition exécutable ; `protocol/schema.lock.json` et le TypeScript généré
@@ -22,8 +22,9 @@ mutations navigateur. Les messages entrants sont stricts, `extra=forbid`.
 | `GET /api/audio/{asset_id}` | Cookie ; seulement asset current/next servable, sinon 404. |
 | `GET /api/host/library` | Hôte hors IN_GAME ou MC ; arborescence, sources scannées/erreur, disponibilités. |
 | `GET /api/host/library/search` | Hôte hors IN_GAME ou MC ; `q`, `bridge`, `folder`, `ext`, `availability`, `activation=all|active|disabled`, `tag`, `linked_to`, `offset`, `limit` (1–100), `sort` (titre/artiste/fichier/dossier) et `descending` ; tri global avant pagination, 5/10/20 par page selon la hauteur et la largeur de l’interface. |
+| `POST /api/host/library/selection` | Cookie hôte + Origin, même confidentialité que la recherche ; `{sources,selection_filter}`, ≤64 Kio ; aperçu borné, limitation de débit et recontrôle du rôle et de l’époque après traitement. |
 | `POST /api/host/library/sources` | Hôte, `{bridge_id,folders}` ; 202 demande asynchrone, 503 Bridge hors ligne. `null` rescane les dossiers actuels, `[]` retire tous les dossiers, `""` désigne la racine. |
-| `POST /api/host/metadata/import` | Permissions bibliothèque ; JSON versions 1/2, ≤1 Mio/10 000 lignes ; diagnostic par ligne. |
+| `POST /api/host/metadata/import` | Permissions bibliothèque ; JSON versions 1/2/3, ≤1 Mio/10 000 lignes ; diagnostic par ligne. |
 | `GET /api/host/metadata` | Permissions bibliothèque ; export des champs fusionnés et chemins connus. |
 | `PUT /api/host/metadata` | Permissions bibliothèque ; `{bridge_id,track_id,metadata}`. |
 | `GET /api/host/review/{round_id}/audio` | Hôte uniquement, FINAL_SCORE_REVIEW/FINAL_RESULTS et manche entendue ; `mode=excerpt|full`, offset fini ≥0 et avant fin de source. |
@@ -56,7 +57,7 @@ le transfert concerné sans attendre le délai maximal ni un second message d'é
 
 ## 8.2 WebSocket joueur `/api/ws`
 
-Cookie + Origin. `HELLO {client_version,protocol:10}` reçoit un `STATE` filtré.
+Cookie + Origin. `HELLO {client_version,protocol:11}` reçoit un `STATE` filtré.
 `PING {c}` reçoit `PONG {c,s}`. `AUDIO_STATUS` et `PLAYBACK_REPORT` sont des
 diagnostics, sans influence sur la notation.
 
@@ -143,7 +144,7 @@ L'identité est revérifiée après HELLO, chaque trame et les corps HTTP stream
 
 | Sens | Message |
 |---|---|
-| B → S | HELLO avec bridge_id, name, version, protocol=10, catalog_hash, track_count, formats, allow_full_review (false par défaut). |
+| B → S | HELLO avec bridge_id, name, version, protocol=11, catalog_hash, track_count, formats, allow_full_review (false par défaut). |
 | S → B | WELCOME avec clip_format, bitrate, limits, catalog_needed, catalog_upload_token si nécessaire, compatibility. |
 | B → S | CATALOG_CHANGED ; provoque WELCOME + nouveau jeton, même si seul le choix de dossiers a changé. |
 | S → B | SCAN_SOURCES `{folders:null|list}` ; sous-dossiers relatifs NFC autorisés localement uniquement. |
@@ -170,7 +171,7 @@ Logiciel `0.5.0.dev0`, `PROTOCOL_VERSION=7`, minimum/maximum admis 7/7.
 `Compatibility` décrit version, protocole, plage et formats (snapshot 8, historique 2),
 dans WELCOME, erreurs de protocole joueur, diagnostics et `/api/compatibility`.
 Le Bridge refuse avec le code 4 et une plage numérique extraite du motif borné
-`protocol_mismatch;required=10..10` ; aucun texte distant arbitraire n'est réaffiché.
+`protocol_mismatch;required=11..11` ; aucun texte distant arbitraire n'est réaffiché.
 Le client web recharge au plus une fois automatiquement, puis affiche une action
 de mise à jour ; une connexion STATE réussie réinitialise ce garde-fou.
 La dérive des schémas est vérifiée par `tools/gen_ts_types.py --check`.
@@ -342,3 +343,26 @@ et conserve la progression des vagues ; les anciennes sessions restent manuelles
 ## Références et packs — protocole 10
 
 `cleared_fields` distingue héritage et suppression des références. `ReviewRound.scoring_reference` est privé à l’hôte et décrit la référence automatique figée ; `reference_changed` signale une modification non réévaluée. `expected_revision` protège les éditions de métadonnées, en HTTP et par commande de manche. `LibraryTrack` expose une révision et les références manquantes. Le filtre HTTP `quality=all|ready|missing` et `pool_only` prépare la correction. Les exports JSON utilisent `X-Next-Offset` lorsque la limite de réimport est atteinte. `/api/host/metadata/export` fournit des packs ZIP ; `/api/host/metadata/import-archive` accepte un pack de 8 Mio au maximum, 16 fichiers, 10 000 lignes, avec recontrôle de rôle et d’époque après le travail asynchrone. Aucun membre n’est extrait. Le snapshot 8 lit également le format 7 ; un retour à une ancienne image impose sa sauvegarde compatible.
+
+
+## Soirées à thème — protocole 11
+
+`GameSettings.selection_filter` et `SettingsPatch.selection_filter` contiennent
+`query`, `genres`, `languages`, `tags`, `linked_to`, `year_min`, `year_max`.
+Les listes acceptent 16 choix de 128 caractères ; mots-clés limités à 256 caractères,
+années 1000–9999 dans l'ordre, sans contrôles. OU entre valeurs d'un champ, ET
+entre champs. La recherche et le tirage partagent la normalisation et le moteur
+thématique. Les filtres musicaux restent immuables pendant IN_GAME.
+
+`LibraryTrack` ajoute `genres` et `languages`. `LibrarySearch` fournit les facettes
+`genres`, `languages`, `years`. La recherche accepte `genre`, `language`,
+`year_min`, `year_max` et les tris `year`, `genre`, `language`. `SelectionPreview`
+fournit matching/available/fresh/unclassified, les facettes des dossiers choisis
+et six exemples au maximum. Les listes de facettes sont bornées à 512 valeurs ;
+un choix personnalisé peut sélectionner une valeur absente de la liste.
+Aucun aperçu privé n'est transmis aux joueurs avant révélation.
+
+`MetadataDocument` exporte la version 3 et continue de lire 1/2/3 ; genres et
+langues sont facultatifs, 32 libellés de 256 caractères chacun. Le snapshot 9
+lit 1–9 et ajoute les filtres et catégories ; les anciens paramètres restaurés
+reçoivent un filtre vide. Pour un downgrade, restaurer le backup compatible.

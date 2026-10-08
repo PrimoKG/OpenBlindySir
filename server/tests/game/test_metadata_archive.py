@@ -69,7 +69,7 @@ def test_archive_refuses_traversal_oversized_inflation_and_bad_documents(filenam
 def test_empty_export_is_reimportable():
     raw, offset = pack([], 0)
     assert offset == 0
-    assert unpack(raw) == {"version": 2, "rows": []}
+    assert unpack(raw) == {"version": 3, "rows": []}
 
 
 @pytest.mark.parametrize("compression", [zipfile.ZIP_BZIP2, zipfile.ZIP_LZMA])

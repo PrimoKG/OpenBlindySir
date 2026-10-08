@@ -3,7 +3,7 @@
 [Guide français](guide-utilisateur.md). One server hosts one game at a time, on a
 LAN, private VPN or the Internet. Players use a browser without creating an account.
 See [hosting](deployment.md) or [Docker](docker.md). Update server, Bridge and web
-UI together: **protocol 9**. [Install the Bridge from source](bridge-installation.en.md)
+UI together: **protocol 11**. [Install the Bridge from source](bridge-installation.en.md)
 or use Docker today; uvx and release archives require publication first.
 
 Quick access: [join and sound](#join-audio-and-recovery), [host setup](#host-setup),
@@ -369,3 +369,7 @@ The library opens on tracks and refreshes data each time it opens; source manage
 Export produces ZIP packs of JSON files limited to 1 MiB and 10,000 rows. Each pack is bounded to 8 MiB and 10,000 rows. **Download next pack** completes larger collections; packs are independently importable without filesystem extraction. Legacy JSON imports keep their 1 MiB limit. Encrypted members, arbitrary paths and compression other than stored/Deflate are rejected.
 
 A permanently closed audio context can be recreated after a user gesture. Obsolete requests, replaced sockets and unmounted controllers are cleaned up. An old track's failure cannot replace the current playing state. Private and shared playback use the browser's volume. Audio testing and recovery remain accessible during the finale.
+
+## Themed nights
+
+In **Prepare game → Music**, combine genre, language, year, tags and universes. The counter uses the same criteria as actual rounds. Cartoon themes, Pop, Rap, French, English and 2012 shortcuts get you started; combine further choices and save the selection below the filters. See [themed nights](themed-nights.en.md) for metadata and examples.

@@ -14,6 +14,7 @@ from openblindysir_protocol.settings import SettingsPatch
 from openblindysir_server.auth.sessions import SessionRegistry
 from openblindysir_server.game import GameEngine, Instant, SecretIds, auto_scoring
 from openblindysir_server.game.auto_scoring import match_answer
+from openblindysir_server.game.rounds import build_auto_reference
 from openblindysir_server.game.state import Metadata, Settings, TrackRef
 from openblindysir_server.persistence import SnapshotStore
 
@@ -403,3 +404,16 @@ def test_alternative_word_at_reference_boundary_is_part_of_the_reference(title):
         "Adele " + title, Metadata(title=title, artist="Adele"), replace(RULES, answer_mode="both")
     )
     assert all(row.status == "matched" for row in evidence.values())
+
+
+def test_confirmed_series_title_with_a_hyphen_is_not_split_into_an_artist():
+    sc = Scenario(rounds=1)
+    for bid, catalog in sc.s.catalogs.items():
+        for tid in catalog.entries:
+            sc.s.imported_metadata[TrackRef(bid, tid)] = Metadata(
+                title="Avengers - L'équipe des super héros", cleared_fields=["artist"]
+            )
+    r = sc.to_open()
+    reference = build_auto_reference(sc.s, r)
+    assert reference.title == "Avengers - L'équipe des super héros"
+    assert reference.artist is None

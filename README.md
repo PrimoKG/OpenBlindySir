@@ -1,7 +1,7 @@
 # OpenBlindySir
 ⚠️ Early development — API/protocol may change.
 
-Current step: **V0.5** (`0.5.0.dev0`, protocol **10**, snapshots **8**).
+Current step: **V0.5** (`0.5.0.dev0`, protocol **11**, snapshots **9**).
 Separate Bridge credentials, private history and recovery/accessibility checks
 are implemented in source. [V0.5 EN](docs/v0.5.en.md) / [V0.5 FR](docs/v0.5.md).
 This development version does not freeze the protocol or announce a release.
@@ -15,6 +15,10 @@ game only through the OpenBlindySir Bridge.
 It is built for **one private game at a time**, with friends playing on the same
 local network or **remotely**: everyone listens in their own browser, usually with a voice chat on the
 side, types a free-text answer, and chooses host scoring or optional automatic matching.
+
+Prepare themed nights with combined genre, language, year, tag and universe filters,
+live playable-track counts and reusable selections. [Themed nights EN](docs/themed-nights.en.md)
+/ [Soirées à thème FR](docs/themed-nights.md).
 
 ## What it is not
 
@@ -188,7 +192,7 @@ Roadmap:
 | **v0.1** | A real game night | First playable version: password join, host playing or hosting as MC, synchronised playback, free-text answers, server-side timing, manual scoring, mandatory final score review, Bridge CLI with a demo mode, Docker + Caddy. French UI. Validated by an actual game night with friends. |
 | **v0.2** | Comfort and robustness | Implemented in source: global review/private replay, audio from video, dynamic multi-Bridge sources, search/metadata, pause, manual latency, silence/loudness, snapshots, join lock/recovery codes, exports, FR/EN, teams/spectators, folder balancing and live MC answers. Real-device/acoustic validation remains. |
 | **v0.3** | Distribution | Implemented in source: standalone uvx package, masked wizard/private backups, safe diagnostics, MC manual selection, native onedir build/checksums and validation/tag-only OIDC release workflows. PyPI setup, all-platform runner execution, signing/real-device checks remain before publication. |
-| **v0.5** | Private sources and durable nights | Implemented: UUID-bound revocable credentials, per-Bridge status/capabilities, offline recovery, host history with deletion and 50-game/90-day/16-MiB retention, protocol 10/snapshot 8 migrations, keyboard/reflow/security checks. Screen readers, real devices and all native runners remain manual validation. |
+| **v0.5** | Private sources and durable nights | Implemented: UUID-bound revocable credentials, per-Bridge status/capabilities, offline recovery, host history with deletion and 50-game/90-day/16-MiB retention, protocol 11/snapshot 9 migrations, keyboard/reflow/security checks. Screen readers, real devices and all native runners remain manual validation. |
 | **v1.0** | Stable | Future release decision, supported compatibility policy, platform/accessibility acceptance and removal of the early-development banner after validation. Protocol is not frozen in V0.5. |
 
 Real progress is recorded in [docs/DEVLOG.md](docs/DEVLOG.md).

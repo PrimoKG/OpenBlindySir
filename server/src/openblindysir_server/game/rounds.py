@@ -294,6 +294,9 @@ def build_auto_reference(s: SessionState, r: Round) -> Metadata:
         else meta.artist or (asset.artist if asset else None),
         "",
     )
+    # Explicit host/imported references are authoritative; a series title may
+    # contain a spaced hyphen without being an "artist - title" filename.
+    title, artist = meta.title or title, meta.artist or artist
     return Metadata(
         title=None if "title" in (meta.cleared_fields or []) else title or None,
         artist=None if "artist" in (meta.cleared_fields or []) else artist,

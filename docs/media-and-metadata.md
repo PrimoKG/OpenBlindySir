@@ -39,11 +39,11 @@ sur vrais appareils avant une release.
 ## Métadonnées facultatives
 
 Dans **Sources et recherche de bibliothèque**, exportez d'abord le modèle pour retrouver UUID et
-chemins exacts. Importez ensuite un fichier UTF-8 JSON, version 2 (les imports version 1 restent acceptés) :
+chemins exacts. Importez ensuite un fichier UTF-8 JSON, version 3 (les imports versions 1 et 2 restent acceptés) :
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "rows": [
     {
       "bridge_id": "12345678-1234-1234-1234-123456789abc",
@@ -53,6 +53,8 @@ chemins exacts. Importez ensuite un fichier UTF-8 JSON, version 2 (les imports v
       "featuring": "Example guest",
       "album": "Example soundtrack",
       "year": 2026,
+      "genres": ["Pop"],
+      "languages": ["en"],
       "tags": ["Jeux vidéo", "Années 2020"],
       "linked_to": ["Example game"],
       "enabled": false
@@ -66,7 +68,7 @@ plus 256 caractères, sans contrôles ; année entière de 1000 à 9999. Chemins
 NFC, sans `..`, `:`, chemin absolu, antislash ou segment vide. Le chemin inclut
 l'extension. Deux Bridges portant les mêmes chemins ont des clés différentes.
 
-Les catégories `tags` et les œuvres `linked_to` acceptent chacune 32 libellés
+Les genres `genres`, langues `languages`, catégories `tags` et œuvres `linked_to` acceptent chacune 32 libellés
 de 256 caractères, sans contrôles. Les doublons sont regroupés sans distinction
 de casse. Une liste vide efface ces catégories ; un champ omis conserve sa valeur.
 `enabled: false` exclut le morceau des prochaines sélections, sans supprimer le
@@ -106,3 +108,7 @@ moins de 8 s, même si ce fichier reste trop court pour une manche normale.
 [formats audio pour le Web](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Audio_codecs).
 Décisions : [ADR 0011](adr/0011-global-review-and-private-replay.md),
 [ADR 0012](adr/0012-dynamic-sources-and-metadata.md).
+
+## Soirées à thème
+
+[Préparer une sélection réutilisable](themed-nights.md) / [English guide](themed-nights.en.md). Les filtres genre, langue, année, tags et univers pilotent le tirage réel, en plus des dossiers. Les valeurs inconnues sont exclues lorsqu’un filtre porte sur le champ concerné.

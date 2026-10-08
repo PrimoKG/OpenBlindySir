@@ -1,6 +1,6 @@
 # Notation automatique et grand final
 
-[English](automatic-scoring.en.md). Développement V0.5, protocole **9**, snapshots **7**.
+[English](automatic-scoring.en.md). Développement V0.5, protocole **11**, snapshots **9**.
 Mettre à jour ensemble serveur, interface et Bridge. Les anciennes sessions sont
 migrées avec la notation manuelle par défaut ; aucun ancien score n'est recalculé.
 

@@ -6,7 +6,7 @@ import json
 import math
 import os
 from collections import deque
-from dataclasses import MISSING, fields, is_dataclass
+from dataclasses import MISSING, asdict, fields, is_dataclass
 from enum import Enum
 from functools import cache
 from pathlib import Path
@@ -24,6 +24,7 @@ from openblindysir_protocol.enums import (
     RoundState,
     ScoreKind,
 )
+from openblindysir_protocol.themes import ThemeFilter
 from openblindysir_server.auth.sessions import SessionRegistry
 from openblindysir_server.game import GameEngine, Instant, auto_scoring, rounds
 from openblindysir_server.game import state as models
@@ -39,7 +40,7 @@ from openblindysir_server.private_files import (
     unique_json_object,
 )
 
-FORMAT = 8
+FORMAT = 9
 MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 
 
@@ -222,6 +223,7 @@ class SnapshotStore:
                     5,
                     6,
                     7,
+                    8,
                     FORMAT,
                 }:
                     raise SnapshotVersionError(
@@ -260,6 +262,7 @@ class SnapshotStore:
                     decoded["metadata"] = migrated
                 _validate_fields(models.SessionState, decoded)
                 game = decoded["game"]
+                ThemeFilter.model_validate(asdict(game.settings.selection_filter))
                 if game.current_index is not None and not 0 <= game.current_index < len(
                     game.rounds
                 ):

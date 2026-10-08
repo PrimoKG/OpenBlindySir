@@ -1,7 +1,33 @@
 import { describe, expect, it } from "vitest";
 import { selectedCapacity, settingsKey } from "../src/host/SetupPanel";
+import { emptyTheme, readTheme } from "../src/host/ThemeSelector";
 import { recapCsv } from "../src/player/Recap";
 import type { GameRecord, GameSettings, LibraryResponse } from "../src/protocol";
+
+describe("theme presets", () => {
+  it("migrates old presets and rejects damaged filter values", () => {
+    expect(readTheme(undefined)).toEqual(emptyTheme());
+    expect(
+      readTheme({ genres: ["Rap"], languages: ["fr"], year_min: 2012, year_max: 2012 }),
+    ).toEqual({
+      ...emptyTheme(),
+      genres: ["Rap"],
+      languages: ["fr"],
+      year_min: 2012,
+      year_max: 2012,
+    });
+    for (const value of [
+      null,
+      [],
+      { genres: "Rap" },
+      { languages: [null] },
+      { query: "bad\u0000" },
+      { year_min: 2013, year_max: 2012 },
+      { year_min: 20 },
+    ])
+      expect(readTheme(value)).toBeNull();
+  });
+});
 
 describe("library preflight", () => {
   const library: LibraryResponse = {
@@ -49,6 +75,7 @@ describe("library preflight", () => {
   });
   it("accepts a server echo that reorders selected folders", () => {
     const settings: GameSettings = {
+      selection_filter: emptyTheme(),
       rounds: 2,
       clip_seconds: 25,
       answer_grace_s: 15,
