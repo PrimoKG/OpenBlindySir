@@ -8,8 +8,8 @@
 >
 > Licence : MIT.
 
-État courant : **V0.5 développement**, logiciel `0.5.0.dev0`, protocole 13
-(plage 13 à 13), snapshot 10, historique 3. Identités/secrets Bridge distincts,
+État courant : **V0.5 développement**, logiciel `0.5.0.dev0`, protocole 14
+(plage 14 à 14), snapshot 11, historique 3. Identités/secrets Bridge distincts,
 archives privées bornées et passe clavier/focus sont implémentés. Les décisions
 et limites opératoires sont détaillées en [V0.5](v0.5.md) / [English](v0.5.en.md)
 et [ADR 0015](adr/0015-v05-private-bridges-history-compatibility.md).

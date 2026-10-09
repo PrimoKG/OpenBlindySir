@@ -14,6 +14,7 @@ from openblindysir_bridge import ffmpeg
 from openblindysir_bridge.catalog import LocalCatalog
 from openblindysir_bridge.clip import ClipRequest
 from openblindysir_bridge.jobs import JobRunner
+from openblindysir_bridge.metadata_scan import enrich_catalog
 from openblindysir_bridge.sandbox import Sandbox
 from openblindysir_bridge.scanner import scan
 from openblindysir_protocol.bridge import JobDone, JobFailed, Prepare
@@ -251,3 +252,36 @@ def test_private_preview_is_centered_and_short_tracks_remain_listenable(
     assert done.clip_duration == pytest.approx(duration, abs=0.2)
     assert uploads
     assert not list(tmp_path.glob("replay-*"))
+
+
+@pytest.mark.parametrize("extension", ["mp3", "mp4", "flac"])
+def test_catalog_discovers_rich_tags_before_any_game_job(tmp_path, extension):
+
+    root = tmp_path / "music"
+    lavfi(
+        root / f"tagged.{extension}",
+        "sine=frequency=300:duration=1",
+        "-metadata",
+        "title=Confirmed Title",
+        "-metadata",
+        "artist=Confirmed Artist",
+        "-metadata",
+        "album=Confirmed Album",
+        "-metadata",
+        "date=2015",
+    )
+    lavfi(root / "untagged.flac", "sine=frequency=310:duration=1")
+    catalog = LocalCatalog.from_scan(scan(root))
+    cache = {}
+    enriched = asyncio.run(enrich_catalog(catalog, Sandbox(str(root)), ffmpeg.discover(), cache))
+    tid = next(tid for tid, entry in catalog.entries.items() if entry.relpath.startswith("tagged."))
+    assert enriched.metadata[tid].title == "Confirmed Title"
+    assert enriched.metadata[tid].artist == "Confirmed Artist"
+    assert enriched.metadata[tid].album == "Confirmed Album"
+    assert enriched.metadata[tid].year == 2015
+    missing = next(
+        tid for tid, entry in catalog.entries.items() if entry.relpath == "untagged.flac"
+    )
+    assert enriched.metadata[missing].title is None
+    again = asyncio.run(enrich_catalog(catalog, Sandbox(str(root)), ffmpeg.discover(), cache))
+    assert again.metadata == enriched.metadata

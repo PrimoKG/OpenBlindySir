@@ -155,6 +155,7 @@ function Header(props: { readonly view: AnyView }) {
 }
 
 function AudioTest() {
+  const [tested, setTested] = useState(false);
   const game = useGame();
   const engine = useEngine();
   const [error, setError] = useState(false);
@@ -164,8 +165,10 @@ function AudioTest() {
     setBusy(true);
     try {
       await game.engine.unlock();
-      if (game.engine.unlocked) game.engine.testBeep();
-      else setError(true);
+      if (game.engine.unlocked) {
+        game.engine.testBeep();
+        setTested(true);
+      } else setError(true);
     } catch {
       setError(true);
     } finally {
@@ -174,6 +177,7 @@ function AudioTest() {
   };
   return (
     <div className="audio-test">
+      {tested && !error && <small role="status">{t("repair.audioTestSent")}</small>}
       <Button
         kind={engine.heardConfirmed ? "secondary" : "primary"}
         disabled={busy}

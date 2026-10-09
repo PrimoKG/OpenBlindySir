@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { t } from "../i18n";
 import type { MusicalMetadata } from "../protocol";
 import { Button } from "./components";
@@ -14,6 +15,7 @@ export function MetadataFieldActions({
   readonly draft: MusicalMetadata;
   readonly onChange: (draft: MusicalMetadata) => void;
 }) {
+  const [advanced, setAdvanced] = useState(false);
   const cleared = draft.cleared_fields?.includes(field);
   const change = (remove: boolean) =>
     onChange({
@@ -26,9 +28,16 @@ export function MetadataFieldActions({
     });
   return (
     <span className="metadata-field-actions">
-      <small>{t(cleared ? "library.referenceCleared" : "library.emptyInherits")}</small>
-      <Button onClick={() => change(false)}>{t("library.inherit")}</Button>
-      <Button onClick={() => change(true)}>{t("library.clearReference")}</Button>
+      <Button aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}>
+        {t("repair.referenceOptions")}
+      </Button>
+      {advanced && (
+        <>
+          <small>{t(cleared ? "library.referenceCleared" : "library.emptyInherits")}</small>
+          <Button onClick={() => change(false)}>{t("library.inherit")}</Button>
+          <Button onClick={() => change(true)}>{t("library.clearReference")}</Button>
+        </>
+      )}
     </span>
   );
 }

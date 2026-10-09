@@ -2,10 +2,10 @@
 
 import gzip
 import posixpath
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from openblindysir_bridge.scanner import LocalEntry, ScanResult
-from openblindysir_protocol.bridge import CatalogEntry, CatalogUpload
+from openblindysir_protocol.bridge import CatalogEntry, CatalogUpload, Tags
 from openblindysir_protocol.catalog_rules import compute_catalog_hash, compute_track_id
 from openblindysir_protocol.settings import check_relative_path
 
@@ -18,6 +18,7 @@ class LocalCatalog:
     scanned_folders: tuple[str, ...] = ("",)
     source_error: str | None = None
     ambiguous_paths: tuple[str, ...] = ()
+    metadata: dict[str, Tags] = field(default_factory=dict)
 
     @classmethod
     def from_scan(cls, result: ScanResult) -> "LocalCatalog":
@@ -63,6 +64,7 @@ class LocalCatalog:
                     folder=posixpath.dirname(entry.relpath),
                     ext=posixpath.splitext(entry.relpath)[1].lower(),
                     size=entry.size,
+                    tags=self.metadata.get(tid),
                 )
                 for tid, entry in sorted(self.entries.items())
             ],

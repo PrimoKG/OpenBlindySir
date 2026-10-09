@@ -29,6 +29,7 @@ export function ScoreScroll({
   const previous = useRef<{ scope: string; rows: readonly ScrollRow[] }>({ scope, rows });
   const [auto, setAuto] = useState(() => readLocal("autoScoreScroll") !== "false");
   const [manual, setManual] = useState(false);
+  const activeRow = useRef<string | null>(null);
   const rowNodes = useCallback(
     () => Array.from(pane.current?.querySelectorAll<HTMLElement>("[data-scroll-id]") ?? []),
     [],
@@ -64,10 +65,11 @@ export function ScoreScroll({
       if (intersecting) visible.current = [intersecting.node.dataset.scrollId || ""];
     }
   }, [ranking, rowNodes]);
-  const move = (id: string) => {
+  const move = (id: string, explicit = false) => {
     const container = pane.current;
     const node = rowNodes().find((item) => item.dataset.scrollId === id);
     if (!container || !node) return;
+    activeRow.current = id;
     const wasInside = container.contains(document.activeElement);
     container.scrollTo({
       top:
@@ -76,7 +78,8 @@ export function ScoreScroll({
         container.getBoundingClientRect().top,
       behavior: "instant",
     });
-    if (wasInside && document.activeElement?.matches("button"))
+    if (explicit) node.scrollIntoView({ block: "nearest", behavior: "instant" });
+    if (explicit || (wasInside && document.activeElement?.matches("button")))
       node
         .querySelector<HTMLButtonElement>("button:not(:disabled)")
         ?.focus({ preventScroll: true });
@@ -162,6 +165,7 @@ export function ScoreScroll({
     if (scope !== before.scope) {
       pane.current?.scrollTo({ top: 0 });
       setManual(false);
+      activeRow.current = null;
       remember();
       return;
     }
@@ -200,13 +204,17 @@ export function ScoreScroll({
                 writeLocal("autoScoreScroll", String(event.target.checked));
               }}
             />
-            {t("scroll.auto")}
+            {t(auto && manual ? "repair.scrollPaused" : "scroll.auto")}
           </label>
           {auto && manual && <Button onClick={() => setManual(false)}>{t("scroll.resume")}</Button>}
           <Button
             onClick={() => {
-              const row = rows.find((item) => !item.reviewed);
-              if (row) move(row.id);
+              const currentId = activeRow.current ?? visible.current[0];
+              const index = rows.findIndex((item) => item.id === currentId);
+              const row = [...rows.slice(index + 1), ...rows.slice(0, index + 1)].find(
+                (item) => !item.reviewed,
+              );
+              if (row) move(row.id, true);
               setManual(false);
             }}
             disabled={rows.every((row) => row.reviewed)}
@@ -217,14 +225,21 @@ export function ScoreScroll({
       )}
       <section
         className="score-scroll"
+        data-compact={!ranking && rows.length <= 2 ? "true" : undefined}
+        onFocusCapture={(event) => {
+          const row = (event.target as HTMLElement).closest<HTMLElement>("[data-scroll-id]");
+          if (row) activeRow.current = row.dataset.scrollId ?? null;
+        }}
         aria-label={t(ranking ? "standings.title" : "finale.answers")}
         ref={pane}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users must be able to scroll this named region.
         tabIndex={0}
-        onWheel={() => {
+        onWheel={(event) => {
+          if ((event.target as HTMLElement).closest(".auto-assessment")) return;
           if (auto && !ranking && pane.current?.dataset.overflow === "true") setManual(true);
         }}
-        onTouchMove={() => {
+        onTouchMove={(event) => {
+          if ((event.target as HTMLElement).closest(".auto-assessment")) return;
           if (auto && !ranking && pane.current?.dataset.overflow === "true") setManual(true);
         }}
         onKeyDown={(event) => {

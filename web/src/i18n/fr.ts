@@ -1,5 +1,34 @@
 // French dictionary and canonical message keys for the bilingual interface.
 export const fr = {
+  "repair.scoringRound": "Manche {number} · Attribution des points",
+  "repair.missingHint":
+    "Certaines références manquent. Complète-les, ou neutralise ces critères pour tous. Une référence absente n’est pas une erreur du joueur.",
+  "repair.neutralize": "Neutraliser les critères sans référence",
+  "repair.neutralizeConfirm":
+    "Pour cette manche, {fields} ne rapporteront aucun point, pour tous les joueurs. Les autres critères et les totaux saisis manuellement seront conservés. Tu pourras réactiver ces critères.",
+  "repair.neutralized": "Critères neutralisés pour cette manche : {fields}.",
+  "repair.restoreCriteria": "Réactiver",
+  "repair.draftPoints": "{points} points proposés · Réponse non validée",
+  "repair.audioTestSent": "Signal de test lancé",
+  "repair.roundRecap":
+    "Manche {number} : {answers} réponses à terminer · {references} références absentes · {drafts} brouillons",
+  "repair.scoringComplete": "Attribution complète",
+  "repair.acceptProposal": "Accepter les éléments reconnus",
+  "repair.regradeHint":
+    "Recalcule les réponses avec ces références. Chaque décision manuelle est conservée ; les autres critères sont réévalués. Les points déjà affichés peuvent changer.",
+  "repair.saveRegrade": "Enregistrer et recalculer cette manche",
+  "repair.saveFuture": "Enregistrer sans recalculer les points",
+  "repair.readyOnly": "Jouer uniquement les morceaux prêts pour ces critères",
+  "repair.referencePreparation":
+    "Les tags du fichier et tes corrections servent de références. Un nom de fichier est une suggestion : confirme-le dans la bibliothèque avant de jouer. Actualise après l’analyse des fichiers.",
+  "repair.scrollPaused": "Avance automatique en pause",
+  "repair.referenceOptions": "Options de référence",
+  "repair.privateNavigation": "Corriger une autre manche en privé",
+  "repair.finishRoundFirst": "Terminer les attributions de cette manche",
+  "repair.nextRound": "Passer à la manche {number}",
+  "repair.audioControls": "Réglages de réécoute",
+  "auto.neutralized": "Neutralisé pour tous",
+
   "polish.partialAward": "{name} : {points} points · attribution à terminer",
   "polish.requested": "À reconnaître :",
   "polish.reviewRules": "Revoir la consigne",

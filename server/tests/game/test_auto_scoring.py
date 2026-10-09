@@ -12,7 +12,7 @@ from openblindysir_protocol.enums import GamePhase
 from openblindysir_protocol.metadata import MusicalMetadata
 from openblindysir_protocol.settings import SettingsPatch
 from openblindysir_server.auth.sessions import SessionRegistry
-from openblindysir_server.game import GameEngine, Instant, SecretIds, auto_scoring
+from openblindysir_server.game import GameEngine, Instant, SecretIds, auto_scoring, selection
 from openblindysir_server.game.auto_scoring import match_answer
 from openblindysir_server.game.rounds import build_auto_reference
 from openblindysir_server.game.state import Metadata, Settings, TrackRef
@@ -242,16 +242,14 @@ def test_auto_scores_references_and_progress_survive_snapshot(tmp_path):
 
 
 def test_pathological_matching_has_a_deterministic_work_budget(monkeypatch):
-    original = auto_scoring.DamerauLevenshtein.normalized_similarity
+    original = auto_scoring.Indel.normalized_similarity
     calls = []
 
     def counted(expected, segment, **kwargs):
         calls.append(len(expected) * len(segment))
         return original(expected, segment, **kwargs)
 
-    monkeypatch.setattr(
-        auto_scoring, "DamerauLevenshtein", SimpleNamespace(normalized_similarity=counted)
-    )
+    monkeypatch.setattr(auto_scoring, "Indel", SimpleNamespace(normalized_similarity=counted))
     metadata = Metadata(
         title="a" * 256,
         artist="b" * 256,
@@ -417,3 +415,114 @@ def test_confirmed_series_title_with_a_hyphen_is_not_split_into_an_artist():
     reference = build_auto_reference(sc.s, r)
     assert reference.title == "Avengers - L'équipe des super héros"
     assert reference.artist is None
+
+
+def test_title_variant_keeps_short_names_and_years_strict():
+    cfg = replace(RULES, answer_mode="title")
+    result = matched("validé", Metadata(title="validée"), cfg)["title"]
+    assert result.status == "matched"
+    assert result.similarity == 92.308
+    assert (
+        matched("validé", Metadata(title="validée"), replace(cfg, acceptance_threshold=95))[
+            "title"
+        ].status
+        == "near_threshold"
+    )
+    assert matched("AIR", Metadata(title="ART"), cfg)["title"].status == "not_found"
+
+
+def test_manual_criterion_survives_while_other_criteria_regrade():
+    sc, r, pid = automatic_game()
+    sc.submit(pid, EXAMPLE)
+    sc.to_review()
+    assert (
+        sc.host(
+            "score_draft",
+            round_id=r.id,
+            args={
+                "player_id": pid,
+                "points": 3,
+                "expected_revision": r.score_revisions[pid],
+                "judgement": "criteria",
+                "title_correct": False,
+                "artist_correct": True,
+                "album_correct": True,
+                "year_correct": True,
+            },
+        ).error
+        is None
+    )
+    assert r.manual_criteria[pid] == {"title_correct"}
+    assert (
+        sc.host(
+            "track_metadata", round_id=r.id, args={"artist": "Other Artist", "regrade_auto": True}
+        ).error
+        is None
+    )
+    assert r.judgements[pid]["title_correct"] is False
+    assert r.judgements[pid]["artist_correct"] is False
+    assert r.score_draft[pid] == 2
+    assert pid not in r.auto_overrides
+
+
+def test_missing_criteria_can_be_neutralized_and_restored_with_revision_guard():
+    sc, r, pid = automatic_game()
+    sc.s.metadata[r.slot.track_ref] = replace(REFERENCE, album=None)
+    r.auto_reference = build_auto_reference(sc.s, r)
+    sc.submit(pid, "Sapés comme jamais Maitre Gims 2015")
+    sc.to_review()
+    assert pid not in r.score_reviewed
+    revision = r.metadata_revision
+    assert (
+        sc.host(
+            "neutralize_missing",
+            round_id=r.id,
+            args={"fields": ["title"], "expected_revision": revision},
+        ).error
+        is not None
+    )
+    assert (
+        sc.host(
+            "neutralize_missing",
+            round_id=r.id,
+            args={"fields": ["album"], "expected_revision": revision},
+        ).error
+        is None
+    )
+    assert r.score_draft[pid] == 3
+    assert pid in r.score_reviewed
+    assert next(e for e in r.auto_evidence[pid] if e.criterion == "album").status == "neutralized"
+    assert (
+        sc.host(
+            "neutralize_missing", round_id=r.id, args={"fields": [], "expected_revision": revision}
+        ).error
+        is not None
+    )
+    assert (
+        sc.host(
+            "neutralize_missing",
+            round_id=r.id,
+            args={"fields": [], "expected_revision": r.metadata_revision},
+        ).error
+        is None
+    )
+    assert pid not in r.score_reviewed
+
+
+def test_ready_only_excludes_missing_references_without_using_filenames():
+
+    sc = Scenario(rounds=1)
+    candidates = selection.pool(sc.s)
+    assert candidates
+    assert sc.configure(scoring_mode="auto", ready_only=True, answer_mode="both").error is None
+    assert selection.pool(sc.s) == []
+    target = candidates[0]
+    entries = sc.s.catalogs[target.bridge_id].entries
+    entries[target.track_id] = replace(
+        entries[target.track_id], tags=Metadata(title="Confirmed", artist="Artist")
+    )
+    assert selection.pool(sc.s) == [target]
+    sc.s.metadata[target] = Metadata(cleared_fields=["artist"])
+    assert selection.pool(sc.s) == []
+    assert sc.configure(ready_only=False).error is None
+    assert target in selection.pool(sc.s)

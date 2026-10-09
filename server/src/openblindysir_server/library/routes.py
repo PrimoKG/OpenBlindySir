@@ -19,7 +19,7 @@ from openblindysir_protocol.bridge import (
 from openblindysir_protocol.catalog_rules import compute_catalog_hash, compute_track_id
 from openblindysir_protocol.errors import ErrorCode
 from openblindysir_server.game import commands as c
-from openblindysir_server.game.state import CatalogEntryData
+from openblindysir_server.game.state import CatalogEntryData, Metadata
 from openblindysir_server.library.management import host_access
 from openblindysir_server.logging import get, log_event
 from openblindysir_server.security import UPLOAD_TIMEOUT_S, error
@@ -127,7 +127,11 @@ async def _receive_catalog(request: Request, active: ActiveBridge) -> Response:
             log_event(LOG, "catalog_rejected", reason="track_id")
             return error(400, ErrorCode.INVALID_MESSAGE)
         entries[entry.track_id] = CatalogEntryData(
-            entry.relpath, entry.folder, entry.ext, entry.size
+            entry.relpath,
+            entry.folder,
+            entry.ext,
+            entry.size,
+            Metadata(**entry.tags.model_dump()) if entry.tags else None,
         )
     if compute_catalog_hash(upload.entries) != upload.catalog_hash:
         log_event(LOG, "catalog_rejected", reason="hash")

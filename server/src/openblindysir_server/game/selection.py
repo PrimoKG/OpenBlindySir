@@ -4,14 +4,25 @@ from collections import deque
 
 from openblindysir_protocol.enums import BridgeState, GamePhase, RoundState
 from openblindysir_protocol.views import PoolStatus
-from openblindysir_server.game.metadata import measured_tracks, selection_metadata
-from openblindysir_server.game.state import SessionState, Slot, TrackRef, current_round
+from openblindysir_server.game.auto_scoring import criteria
+from openblindysir_server.game.metadata import measured_tracks, scoring_metadata, selection_metadata
+from openblindysir_server.game.state import AssetRecord, SessionState, Slot, TrackRef, current_round
 from openblindysir_server.game.themes import matches_theme
 
 
 def matches(relpath: str, prefix: str) -> bool:
     """True when the track lies under the checked folder (by whole path segments)."""
     return prefix in ("", relpath) or relpath.startswith(prefix + "/")
+
+
+def ready(s: SessionState, ref: TrackRef, measured: dict[TrackRef, AssetRecord]) -> bool:
+    cfg = s.game.settings
+    if not cfg.ready_only or cfg.scoring_mode != "auto" or cfg.answer_mode == "custom":
+        return True
+    reference = scoring_metadata(s, ref, measured.get(ref))
+    return all(
+        getattr(reference, key, None) or (reference.aliases or {}).get(key) for key in criteria(cfg)
+    )
 
 
 def pool(s: SessionState) -> list[TrackRef]:
@@ -28,6 +39,7 @@ def pool(s: SessionState) -> list[TrackRef]:
             if (
                 matches(entry.relpath, prefix)
                 and meta.enabled is not False
+                and ready(s, ref, measured)
                 and matches_theme(meta, entry.relpath, s.game.settings.selection_filter)
             ):
                 found.add(TrackRef(bridge_id, track_id))
@@ -125,6 +137,7 @@ def take(s: SessionState) -> TrackRef | None:
         if (
             ref not in s.game.unavailable
             and meta.enabled is not False
+            and ready(s, ref, measured)
             and track_exists(s, ref)
             and matches_theme(
                 meta,

@@ -26,11 +26,12 @@ from openblindysir_bridge.config import (
 )
 from openblindysir_bridge.demo import materialize_demo_library
 from openblindysir_bridge.jobs import Faults, JobRunner
+from openblindysir_bridge.metadata_scan import enrich_catalog
 from openblindysir_bridge.sandbox import Sandbox
 from openblindysir_bridge.scanner import scan
 from openblindysir_bridge.sources import scan_sources
 from openblindysir_bridge.urls import InvalidServerUrlError, ServerUrl, validate_server_url
-from openblindysir_protocol.bridge import JobDone, JobFailed, JobProgress
+from openblindysir_protocol.bridge import JobDone, JobFailed, JobProgress, Tags
 from openblindysir_protocol.version import PROTOCOL_VERSION
 
 EXIT_USAGE = 2
@@ -348,6 +349,7 @@ async def _run(
     tmpdir = tempdirs.create()
     holder: dict[str, BridgeClient] = {}
     scan_lock = asyncio.Lock()
+    tag_cache: dict[tuple[str, int, int], Tags | None] = {}
 
     async def upload(path: str, token: str, file: Path, sha256: str, mime: str) -> int:
         return await holder["client"].upload(path, token, file, sha256, mime)
@@ -378,6 +380,9 @@ async def _run(
             selected = tuple(folders) if folders is not None else current_catalog.scanned_folders
             try:
                 updated = await asyncio.to_thread(scan_sources, music_dir, selected, cfg.extensions)
+                for key in [key for key, value in tag_cache.items() if value is None]:
+                    del tag_cache[key]
+                updated = await enrich_catalog(updated, runner.sandbox, tools, tag_cache)
                 values = read_config(cfg.config_path)
                 values["scanned_folders_json"] = json.dumps(selected)
                 write_config(cfg.config_path, values)
@@ -397,41 +402,67 @@ async def _run(
         rescan=rescan,
     )
     holder["client"] = client
-    tasks = [asyncio.create_task(runner.run()), asyncio.create_task(client.run_forever())]
+
+    async def initial_tags() -> None:
+        async with scan_lock:
+            state["catalog"] = await enrich_catalog(catalog, runner.sandbox, tools, tag_cache)
+            client.notify_rescan(force=True)
+
+    tasks = [
+        asyncio.create_task(runner.run()),
+        asyncio.create_task(client.run_forever()),
+        asyncio.create_task(initial_tags()),
+    ]
+    try:
+        return await _console_loop(
+            cfg=cfg,
+            ns=ns,
+            music_dir=music_dir,
+            state=state,
+            client=client,
+            runner=runner,
+            connection_task=tasks[1],
+            rescan=rescan,
+            server=server,
+        )
+    finally:
+        await _shutdown(tasks, client, tmpdir)
+
+
+async def _console_loop(
+    *, cfg, ns, music_dir, state, client, runner, connection_task, rescan, server
+) -> int:
     folder = (
         "démo synthétique" if ns.demo else str(music_dir) if ns.verbose_paths else "racine privée"
     )
     last_print = -STATUS_EVERY_S
-    try:
-        while True:
-            await asyncio.sleep(0.5)
-            if _connection_stopped(tasks[1]):
-                return EXIT_CONNECTION
-            key = console.read_key()
-            if key == "q":
-                return 0
-            if key == "r":
-                client.status.state = "SCANNING"
-                await rescan(None)
-            loop_time = asyncio.get_running_loop().time()
-            if key is not None or loop_time - last_print >= STATUS_EVERY_S:
-                last_print = loop_time
-                line = console.StatusLine(
-                    name=cfg.name,
-                    server=server.base(),
-                    folder=folder,
-                    tracks=len(state["catalog"].entries),  # type: ignore[union-attr]
-                    scan_s=float(state["scan_s"]),  # type: ignore[arg-type]
-                    state=client.status.state,
-                    replaced=client.status.replaced,
-                    ok=runner.stats.ok,
-                    failed=runner.stats.failed,
-                    last_track=runner.stats.last_track,
-                    last_seconds=runner.stats.last_seconds,
-                )
-                print(console.render(line), flush=True)
-    finally:
-        await _shutdown(tasks, client, tmpdir)
+    while True:
+        await asyncio.sleep(0.5)
+        if _connection_stopped(connection_task):
+            return EXIT_CONNECTION
+        key = console.read_key()
+        if key == "q":
+            return 0
+        if key == "r":
+            client.status.state = "SCANNING"
+            await rescan(None)
+        loop_time = asyncio.get_running_loop().time()
+        if key is not None or loop_time - last_print >= STATUS_EVERY_S:
+            last_print = loop_time
+            line = console.StatusLine(
+                name=cfg.name,
+                server=server.base(),
+                folder=folder,
+                tracks=len(state["catalog"].entries),  # type: ignore[union-attr]
+                scan_s=float(state["scan_s"]),  # type: ignore[arg-type]
+                state=client.status.state,
+                replaced=client.status.replaced,
+                ok=runner.stats.ok,
+                failed=runner.stats.failed,
+                last_track=runner.stats.last_track,
+                last_seconds=runner.stats.last_seconds,
+            )
+            print(console.render(line), flush=True)
 
 
 async def _shutdown(tasks: list[asyncio.Task[None]], client: BridgeClient, tmpdir: Path) -> None:

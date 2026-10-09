@@ -173,11 +173,18 @@ export function SetupPanel({
   const missingReferences =
     (preview.result?.reference_eligible ?? 0) - (preview.result?.reference_ready ?? 0);
   const needsReferenceAcknowledgement =
-    draft.scoring_mode === "auto" && missingReferences > 0 && acceptedReferenceKey !== referenceKey;
+    draft.scoring_mode === "auto" &&
+    !draft.ready_only &&
+    missingReferences > 0 &&
+    acceptedReferenceKey !== referenceKey;
   const capacity =
     preview.loading || preview.error
       ? 0
-      : ((draft.allow_repeats ? preview.result?.available : preview.result?.fresh) ?? 0);
+      : ((draft.scoring_mode === "auto" && draft.ready_only
+          ? preview.result?.reference_ready
+          : draft.allow_repeats
+            ? preview.result?.available
+            : preview.result?.fresh) ?? 0);
   const fresh = preview.result?.fresh ?? 0;
   const tooMany = !draft.allow_repeats && draft.rounds > capacity;
   const limits = view.host.limits;
@@ -708,7 +715,17 @@ export function SetupPanel({
                   total: preview.result.reference_eligible ?? 0,
                 })}
               </strong>
-              {missingReferences > 0 && (
+              <label className="folder-option">
+                <input
+                  type="checkbox"
+                  checked={draft.ready_only ?? false}
+                  onChange={(e) => set("ready_only", e.target.checked)}
+                />
+                {t("repair.readyOnly")}
+              </label>
+              <p>{t("repair.referencePreparation")}</p>
+              <Button onClick={() => preview.retry()}>{t("library.refresh")}</Button>
+              {missingReferences > 0 && !draft.ready_only && (
                 <>
                   <p>{t("polish.referenceMissing")}</p>
                   <p>

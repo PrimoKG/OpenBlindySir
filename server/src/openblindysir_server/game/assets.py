@@ -177,6 +177,9 @@ def handle_job_done(s: SessionState, cmd: c.JobDoneIn, at: Instant, fx: EffectSi
     if msg.tags is not None:
         asset.title = sanitize_tag(msg.tags.title)
         asset.artist = sanitize_tag(msg.tags.artist)
+        asset.album = sanitize_tag(msg.tags.album)
+        asset.featuring = sanitize_tag(msg.tags.featuring)
+        asset.year = msg.tags.year
     s.touched = True
     wake_waiting_slots(s, asset.track_ref.bridge_id)
     fx.log("asset_stored", job_id=msg.job_id, bytes=msg.bytes)

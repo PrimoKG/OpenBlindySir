@@ -8,10 +8,10 @@ from openblindysir_protocol.version import PROTOCOL_VERSION
 
 def test_compatibility_versions_and_close_reason_are_consistent():
     info = Compatibility(server_version="0.5.0.dev0")
-    assert info.protocol_min == info.protocol_max == PROTOCOL_VERSION == 13
+    assert info.protocol_min == info.protocol_max == PROTOCOL_VERSION == 14
     assert info.history_format == 3
-    assert info.snapshot_format == 10
-    assert required_range(mismatch_reason()) == (13, 13)
+    assert info.snapshot_format == 11
+    assert required_range(mismatch_reason()) == (14, 14)
 
 
 @pytest.mark.parametrize(

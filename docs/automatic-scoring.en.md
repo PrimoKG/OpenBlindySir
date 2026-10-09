@@ -1,6 +1,6 @@
 # Automatic scoring and grand finale
 
-[Français](notation-automatique.md). V0.5 development, protocol **13**, snapshot **10**.
+[Français](notation-automatique.md). V0.5 development, protocol **14**, snapshot **11**.
 Update the server, web UI and Bridge together. Older sessions keep manual scoring;
 existing scores are not recalculated during migration.
 
@@ -23,9 +23,10 @@ configured points; a correct title cannot compensate for an incorrect year.
 ## Matching and limitations
 
 Local matching ignores case, accents, punctuation and word spacing. It identifies
-candidate fragments and computes `100 × (1 − distance / maximum length)` using
-Damerau–Levenshtein distance. Insertions, deletions, substitutions and adjacent
-letter transpositions each cost one operation. Similarity is not a probability
+candidate fragments and computes `100 × (1 − Indel distance / sum of lengths)`
+(matcher version 2). Insertions and deletions cost one, substitutions cost two.
+“validé” / “validée” reaches 92.308%: accepted at 90%, reviewed at 95%.
+Names of three characters or fewer and years still require exact matches. Similarity is not a probability
 that an answer is correct. No external AI service receives answers.
 
 - At or above threshold: award the criterion automatically.
@@ -71,7 +72,7 @@ data is never invented.
 
 Rules, weights, threshold, references and aliases freeze when playback first starts.
 Library edits do not silently regrade a round. In the finale, edit references and
-select **Recalculate this round with the new references** for an explicit regrade
+select **Save and recalculate this round** for an explicit regrade
 of that round only. Manual overrides are preserved. Already revealed points can
 change. Host-only evidence shows the reference actually used, matched fragment,
 percentage, threshold and review status; an override retains the earlier analysis
@@ -117,3 +118,38 @@ Filename display fallbacks never become automatic references, including on expli
 regrading. JSON version 2 exports preserve aliases so export/import round trips retain
 accepted variants. These fixes apply to new evaluations; updating does not recalculate
 existing evidence or replace manual corrections.
+
+## Easier preparation and corrections (10 October 2026)
+
+The Bridge reads local title, artist, album, date/year and featuring tags before
+play, in the background (two concurrent probes, five seconds per file, size/mtime
+cache). Music files are never modified. Refresh the library after analysis.
+Explicit corrections and cleared fields take precedence; answers never supply
+missing reference artists.
+
+In automatic mode, **Only play tracks ready for these criteria** excludes incomplete
+tracks. A requested but absent featuring counts as a missing reference: choose
+criteria that suit the evening.
+
+In the finale, **Save and recalculate this round** closes the editor after server
+acknowledgement and recalculates automatic criteria. **Save without recalculating scores**
+preserves existing scores. Manual decisions are protected per criterion; manually
+entered totals stay fully protected, as do legacy whole-answer overrides.
+
+Recognised drafts show proposed points with **Accept recognized information**.
+Missing criteria can be **neutralised for everyone** in a round after confirmation:
+zero points for these criteria without blocking the others. **Restore** includes
+them again. Manually entered totals stay unchanged; check their consistency before
+publication.
+
+Two answers appear side by side on desktop in a small game. The next-player action
+advances from the current player. Manual scroll pauses are explicit; reading an
+automatic explanation does not suspend advance. Private correction also identifies
+the round players currently see. Before incomplete publication, the recap links to
+rounds with outstanding answers, drafts and references. Audio testing stays available
+in the finale and confirms that a signal was started, not that physical speakers
+were audible.
+
+Compatibility: protocol 14, snapshot 11, history 3. Update server, web and Bridge
+together. Back up stopped volumes before deployment; rollback to an older image
+requires restoring its compatible backup.

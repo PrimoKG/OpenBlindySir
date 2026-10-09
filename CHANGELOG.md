@@ -8,6 +8,14 @@ the version is 0.x, the API and protocol may change between minor versions.
 
 ## [Unreleased]
 
+- 2026-10-10: protocol 14 / snapshot 11 / history 3. Background local tag discovery
+  includes album, year and featuring before play; opt-in ready-only selection.
+- Per-criterion manual protections during regrading, explicit missing-criterion
+  neutralisation, draft score proposals and calibrated Indel similarity (matcher 2).
+- Compact reference editor with save-and-regrade, two-player desktop cards,
+  relative next-player navigation, clearer private/public round context, actionable
+  incomplete-publication recap and audio-test feedback. FR/EN guides updated.
+
 ### V0.5 — development, 0.5.0.dev0
 
 - Continuous server-driven rounds (2-second default), pause/resume intermissions,

@@ -292,7 +292,13 @@ class JobRunner:
             raise JobError(JobFailureCode.INVALID_UPLOAD, f"upload : {type(exc).__name__}") from exc
         if not 200 <= status < 300:
             raise JobError(JobFailureCode.INVALID_UPLOAD, f"upload refusé ({status})")
-        tags = Tags(title=probe.title, artist=probe.artist) if probe.title or probe.artist else None
+        tags = Tags(
+            title=probe.title,
+            artist=probe.artist,
+            album=probe.album,
+            year=probe.year,
+            featuring=probe.featuring,
+        )
         return JobDone(
             t="JOB_DONE",
             job_id=prepare.job_id,

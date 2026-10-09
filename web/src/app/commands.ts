@@ -31,6 +31,18 @@ export function publish(view: AnyView, confirm = false): Host {
   };
 }
 
+export function neutralizeMissing(roundId: string, fields: string[], revision: number): Host {
+  return {
+    t: "HOST",
+    cmd: "neutralize_missing",
+    round_id: roundId,
+    args: {
+      fields: fields as ("title" | "artist" | "album" | "year" | "featuring")[],
+      expected_revision: revision,
+    },
+  };
+}
+
 export function trackMetadata(
   roundId: string,
   metadata: MusicalMetadata,

@@ -781,7 +781,7 @@ function FinalReview(props: { readonly view: HostView }) {
             </nav>
             <div className="stack">
               <div className="preparation-choice">
-                <label htmlFor="prepare-round">{t("experience.prepare")}</label>
+                <label htmlFor="prepare-round">{t("repair.privateNavigation")}</label>
                 <select
                   id="prepare-round"
                   value={active?.round_id ?? ""}
@@ -972,6 +972,10 @@ function FinalReview(props: { readonly view: HostView }) {
             kind="primary"
             disabled={saving}
             onClick={() => {
+              if (active?.answers.some((answer) => !answer.reviewed)) {
+                focusPending();
+                return;
+              }
               const next = unshown[0];
               if (next) {
                 choose(next.round_id);
@@ -979,7 +983,12 @@ function FinalReview(props: { readonly view: HostView }) {
               }
             }}
           >
-            {t("finale.reveal", { number: unshown[0]?.number ?? 1 })}
+            {t(
+              active?.answers.some((answer) => !answer.reviewed)
+                ? "repair.finishRoundFirst"
+                : "repair.nextRound",
+              { number: unshown[0]?.number ?? 1 },
+            )}
           </Button>
         ) : null}
         {unchecked > 0 && (
@@ -1023,6 +1032,45 @@ function FinalReview(props: { readonly view: HostView }) {
           >
             {t("finale.publishCurrent")}
           </Button>
+        )}
+        {unchecked > 0 && (
+          <ul className="publication-checklist">
+            {rounds
+              .filter((round) => round.included && round.answers.some((answer) => !answer.reviewed))
+              .map((round) => {
+                const missing = new Set(
+                  round.answers.flatMap((answer) =>
+                    answer.auto_evidence
+                      .filter((item) => item.status === "missing_reference")
+                      .map((item) => item.criterion),
+                  ),
+                );
+                return (
+                  <li key={round.round_id}>
+                    <Button
+                      onClick={() => {
+                        choose(round.round_id);
+                        setConfirm(false);
+                        requestAnimationFrame(() =>
+                          document
+                            .querySelector(".review-target")
+                            ?.scrollIntoView({ block: "start" }),
+                        );
+                      }}
+                    >
+                      {t("repair.roundRecap", {
+                        number: round.number,
+                        answers: round.answers.filter((answer) => !answer.reviewed).length,
+                        references: missing.size,
+                        drafts: round.answers.filter(
+                          (answer) => !answer.reviewed && answer.status === "CAPTURED",
+                        ).length,
+                      })}
+                    </Button>
+                  </li>
+                );
+              })}
+          </ul>
         )}
         <table className="table podium-confirmation">
           <caption>{t("final.title")}</caption>

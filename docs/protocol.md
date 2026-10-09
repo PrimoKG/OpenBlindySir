@@ -1,4 +1,4 @@
-# OpenBlindySir — Protocole réseau 13 — V0.5 développement
+# OpenBlindySir — Protocole réseau 14 — V0.5 développement
 
 Ce document fait autorité pour le §8 de l'architecture. Le paquet Pydantic est
 la définition exécutable ; `protocol/schema.lock.json` et le TypeScript généré
@@ -6,6 +6,18 @@ doivent correspondre. Mettre à jour serveur, Bridge et client ensemble. Toute
 modification ultérieure de schéma impose un nouveau `PROTOCOL_VERSION`.
 
 ## 8.1 HTTP
+
+### Évolutions du protocole 14
+
+Le catalogue Bridge transmet désormais les tags titre, artiste, album, année et
+featuring avant le premier extrait. `ready_only` filtre la sélection sur les
+références fiables requises par la notation automatique. La commande hôte
+`neutralize_missing` exige la révision attendue et ne peut exclure que les critères
+sans référence de la manche ; `neutralized_fields` est exposé dans sa revue privée.
+Les snapshots **11** conservent ces exclusions et les décisions manuelles par
+critère. Lecture des snapshots 1–11, historique 3 inchangé. Revenir à un serveur
+plus ancien exige la sauvegarde antérieure à la migration. Mettre à jour tous les
+composants ensemble.
 
 ### Évolutions du protocole 13
 
@@ -184,7 +196,7 @@ ou identité refusés sans consommer le bon jeton. Les noms ne vont jamais aux j
 ## 8.4 Compatibilité et persistance
 
 Logiciel `0.5.0.dev0`, `PROTOCOL_VERSION=13`, minimum/maximum admis 13/13.
-`Compatibility` décrit version, protocole, plage et formats (snapshot 10, historique 3),
+`Compatibility` décrit version, protocole, plage et formats (snapshot 11, historique 3),
 dans WELCOME, erreurs de protocole joueur, diagnostics et `/api/compatibility`.
 Le Bridge refuse avec le code 4 et une plage numérique extraite du motif borné
 `protocol_mismatch;required=13..13` ; aucun texte distant arbitraire n'est réaffiché.

@@ -1,6 +1,6 @@
 # Notation automatique et grand final
 
-[English](automatic-scoring.en.md). Développement V0.5, protocole **13**, snapshots **10**.
+[English](automatic-scoring.en.md). Développement V0.5, protocole **14**, snapshots **11**.
 Mettre à jour ensemble serveur, interface et Bridge. Les anciennes sessions sont
 migrées avec la notation manuelle par défaut ; aucun ancien score n'est recalculé.
 
@@ -26,8 +26,10 @@ par un bon titre. Les points de chaque critère réussi s'additionnent.
 
 Le moteur local ignore la casse, les accents, la ponctuation et les espaces entre
 les mots. Il repère des fragments correspondant à chaque référence, puis calcule
-`100 × (1 − distance / longueur maximale)` avec la distance Damerau-Levenshtein.
-Une suppression, insertion, substitution ou inversion de lettres coûte une opération.
+`100 × (1 − distance Indel / somme des longueurs)` (moteur version 2).
+Une insertion ou suppression coûte une opération ; une substitution en coûte deux.
+Ainsi « validé » / « validée » atteint 92,308 %, accepté à 90 %, à vérifier à 95 %.
+Les références de trois caractères maximum et les années restent exactes.
 Ce pourcentage mesure la ressemblance du texte, **pas une probabilité de vérité**.
 Il n'y a ni service d'IA externe ni envoi de réponses pour la notation.
 
@@ -122,3 +124,39 @@ recherchées dans tout le champ. L'affectation examine au maximum 4 096 combinai
 de fragments ; le contrôle des informations supplémentaires est également borné.
 Les corrections du moteur s'appliquent aux nouvelles évaluations ; les analyses
 existantes et les corrections manuelles ne sont pas recalculées à la mise à jour.
+
+## Préparer et corriger plus simplement (10 octobre 2026)
+
+Le Bridge lit localement les tags titre, artiste, album, date/année et featuring
+avant la partie, en arrière-plan (deux lectures simultanées, cinq secondes maximum
+par fichier, cache par taille/date). Aucun fichier musical n'est modifié. Actualiser
+la bibliothèque après l'analyse ; les corrections explicites et les champs effacés
+restent prioritaires. Aucun artiste n'est déduit d'une réponse de joueur.
+
+En notation automatique, **Jouer uniquement les morceaux prêts pour ces critères**
+exclut les morceaux incomplets de la sélection. Un featuring demandé mais absent
+compte comme référence manquante : choisir uniquement les critères adaptés à la soirée.
+
+Au final, **Enregistrer et recalculer cette manche** ferme le formulaire après
+confirmation du serveur et recalcule les critères automatiques. **Enregistrer sans
+recalculer les points** conserve les notes actuelles. Les décisions manuelles sont
+protégées par critère ; un total numérique manuel reste entièrement protégé. Les
+anciennes corrections globales restent protégées après migration.
+
+Un brouillon reconnu propose ses points, avec **Accepter les éléments reconnus**.
+Les critères sans référence peuvent être **neutralisés pour tous les joueurs** de
+la manche, après confirmation : zéro point pour ces critères, sans bloquer les autres.
+**Réactiver** remet ces critères dans la notation. Les totaux saisis manuellement
+restent inchangés ; vérifier leur cohérence avant publication.
+
+Les deux réponses d'une petite partie s'affichent côte à côte sur ordinateur.
+Le bouton « Prochain joueur à noter » avance depuis le joueur consulté. Une pause
+manuelle du défilement est explicite ; lire un diagnostic ne suspend pas cette avance.
+La correction privée indique aussi la manche visible des joueurs. Avant un podium
+incomplet, le récapitulatif donne accès aux manches, brouillons et références à terminer.
+Le bouton de test audio reste accessible pendant le final et confirme le lancement du
+signal. Cette confirmation ne prouve pas que le haut-parleur de l'appareil est audible.
+
+Compatibilité : protocole 14, snapshot 11, historique 3. Mettre à jour ensemble
+serveur, interface et Bridge. Sauvegarder les volumes à l'arrêt avant mise à jour ;
+un retour à une ancienne image exige de restaurer sa sauvegarde compatible.

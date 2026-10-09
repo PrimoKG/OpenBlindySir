@@ -188,55 +188,58 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
           else setPlaying(false);
         }}
       />
-      <label>
-        {t("review.progress")}
-        <input
-          type="range"
-          min={0}
-          max={Math.max(0, duration / 1000 - 0.05)}
-          step={0.1}
-          value={Math.min(position, duration / 1000)}
-          aria-valuetext={`${clock(position)} / ${clock(duration / 1000)}`}
-          disabled={!loaded || loading}
-          onChange={(e) => {
-            seeking.current = true;
-            setPosition(Number(e.target.value));
-          }}
-          onPointerUp={(e) => {
-            seeking.current = false;
-            seek(Number(e.currentTarget.value));
-          }}
-          onKeyUp={(e) => {
-            seeking.current = false;
-            seek(Number(e.currentTarget.value));
-          }}
-          onBlur={(e) => {
-            if (seeking.current) {
+      <details className="replay-controls" open={loaded || undefined}>
+        <summary>{t("repair.audioControls")}</summary>
+        <label>
+          {t("review.progress")}
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, duration / 1000 - 0.05)}
+            step={0.1}
+            value={Math.min(position, duration / 1000)}
+            aria-valuetext={`${clock(position)} / ${clock(duration / 1000)}`}
+            disabled={!loaded || loading}
+            onChange={(e) => {
+              seeking.current = true;
+              setPosition(Number(e.target.value));
+            }}
+            onPointerUp={(e) => {
               seeking.current = false;
               seek(Number(e.currentTarget.value));
-            }
-          }}
-        />
-      </label>
-      <p className="muted">
-        {clock(position)} / {clock(duration / 1000)}
-      </p>
-      <label>
-        {t("audio.volume")}
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.05}
-          value={volume}
-          onChange={(e) => {
-            const value = Number(e.target.value);
-            latestVolume.current = value;
-            game.engine.setVolume(value);
-            if (audio.current) audio.current.volume = value;
-          }}
-        />
-      </label>
+            }}
+            onKeyUp={(e) => {
+              seeking.current = false;
+              seek(Number(e.currentTarget.value));
+            }}
+            onBlur={(e) => {
+              if (seeking.current) {
+                seeking.current = false;
+                seek(Number(e.currentTarget.value));
+              }
+            }}
+          />
+        </label>
+        <p className="muted">
+          {clock(position)} / {clock(duration / 1000)}
+        </p>
+        <label>
+          {t("audio.volume")}
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={volume}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              latestVolume.current = value;
+              game.engine.setVolume(value);
+              if (audio.current) audio.current.volume = value;
+            }}
+          />
+        </label>
+      </details>
       {loading && <p role="status">{t("app.loading")}</p>}
       {error && (
         <p role="alert" className="error">
@@ -252,7 +255,12 @@ export function ReviewAudio({ round }: { readonly round: ReviewRound }) {
         </p>
       )}
       {!round.bridge_online && <p className="notice">{t("flow.audioOffline")}</p>}
-      {!round.full_review_allowed && <p className="muted">{t("flow.fullUnavailable")}</p>}
+      {!round.full_review_allowed && (
+        <details>
+          <summary>{t("review.full")}</summary>
+          <p className="muted">{t("flow.fullUnavailable")}</p>
+        </details>
+      )}
       {mode === "full" && <p className="muted">{t("review.fullHint")}</p>}
     </section>
   );

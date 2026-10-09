@@ -49,7 +49,7 @@ def start_blockers(s: SessionState) -> list[StartBlocker]:
     elif not s.game.settings.allow_repeats and all(t in s.played for t in selection.pool(s)):
         blockers.append(StartBlocker.POOL_EXHAUSTED)
     selected_bridges = {bridge_id for bridge_id, _ in s.game.settings.sources}
-    if not any(
+    if selected_bridges and not any(
         b.state is BridgeState.ONLINE and b.bridge_id in selected_bridges
         for b in s.bridges.values()
     ):
@@ -194,6 +194,7 @@ HOST_RULES: dict[str, Predicate] = {
     "score_draft": _phase(GamePhase.FINAL_SCORE_REVIEW),
     "publish": lambda s, issuer: False,
     "track_metadata": _phase(GamePhase.FINAL_SCORE_REVIEW),
+    "neutralize_missing": _phase(GamePhase.FINAL_SCORE_REVIEW),
     "undo_publish": lambda s, issuer: False,
     "adjust": lambda s, issuer: False,
     "to_final_review": _to_final_review,

@@ -2,6 +2,35 @@
 import type { MessageKey } from "./fr";
 
 export const en: { readonly [K in MessageKey]: string } = {
+  "repair.scoringRound": "Round {number} · Award points",
+  "repair.missingHint":
+    "Some references are missing. Complete them, or exclude those criteria for everyone. A missing reference is not a wrong answer.",
+  "repair.neutralize": "Exclude criteria with no reference",
+  "repair.neutralizeConfirm":
+    "For this round, {fields} will award no points to anyone. Other criteria and manually entered totals will be preserved. You can restore these criteria.",
+  "repair.neutralized": "Criteria excluded for this round: {fields}.",
+  "repair.restoreCriteria": "Restore",
+  "repair.draftPoints": "{points} proposed points · Unsubmitted answer",
+  "repair.audioTestSent": "Test signal started",
+  "repair.roundRecap":
+    "Round {number}: {answers} answers to finish · {references} missing references · {drafts} drafts",
+  "repair.scoringComplete": "Scoring complete",
+  "repair.acceptProposal": "Accept recognized information",
+  "repair.regradeHint":
+    "Recalculate answers using these references. Each manual decision is preserved; other criteria are reassessed. Scores already displayed may change.",
+  "repair.saveRegrade": "Save and recalculate this round",
+  "repair.saveFuture": "Save without recalculating scores",
+  "repair.readyOnly": "Only play tracks ready for these criteria",
+  "repair.referencePreparation":
+    "File tags and your corrections provide references. A filename is a suggestion: confirm it in the library before playing. Refresh after files have been analyzed.",
+  "repair.scrollPaused": "Automatic advance paused",
+  "repair.referenceOptions": "Reference options",
+  "repair.privateNavigation": "Review another round privately",
+  "repair.finishRoundFirst": "Finish scoring this round",
+  "repair.nextRound": "Go to round {number}",
+  "repair.audioControls": "Replay controls",
+  "auto.neutralized": "Excluded for everyone",
+
   "polish.partialAward": "{name}: {points} points · scoring in progress",
   "polish.requested": "Identify:",
   "polish.reviewRules": "Review the instructions",

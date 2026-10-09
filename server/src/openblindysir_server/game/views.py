@@ -495,7 +495,7 @@ def _review_rows(s: SessionState, r: Round) -> list[ReviewRow]:
                 auto_evidence=[
                     AutoMatchInfo(**asdict(row)) for row in r.auto_evidence.get(pid, [])
                 ],
-                auto_overridden=pid in r.auto_overrides,
+                auto_overridden=pid in r.auto_overrides or bool(r.manual_criteria.get(pid)),
                 player_id=pid,
                 text=answer.text if status is not AnswerStatus.NONE else None,
                 status=status,
@@ -723,6 +723,7 @@ def _settings(s: SessionState) -> GameSettings:
     return GameSettings(
         selection_filter=ThemeFilter(**asdict(settings.selection_filter)),
         scoring_mode=settings.scoring_mode,
+        ready_only=settings.ready_only,
         acceptance_threshold=settings.acceptance_threshold,
         answer_fields=settings.answer_fields,
         album_points=settings.album_points,
@@ -1009,6 +1010,7 @@ def _review_rounds(s: SessionState, *, only_id: str | None = None) -> list[Revie
         reason = r.cancel_reason or r.close_reason
         result.append(
             ReviewRound(
+                neutralized_fields=sorted(r.neutralized_fields),
                 scoring_reference=MusicalMetadata.model_validate(asdict(r.auto_reference))
                 if r.auto_reference
                 else None,

@@ -10,7 +10,7 @@ import unicodedata
 from dataclasses import replace
 from itertools import product
 
-from rapidfuzz.distance import DamerauLevenshtein
+from rapidfuzz.distance import Indel
 
 from openblindysir_protocol.enums import AnswerStatus
 from openblindysir_server.game.state import AutoMatch, Metadata, Round, SessionState, Settings
@@ -19,7 +19,7 @@ FIELDS = ("title", "artist", "album", "year", "featuring")
 WORDS = re.compile(r"[^\W_]+", re.UNICODE)
 ALTERNATIVES = re.compile(r"(?<!\S)(?:ou|or)(?!\S)", re.IGNORECASE)
 FEATURE_MARKERS = {"ft", "feat", "featuring"}
-MATCHER_VERSION = 1
+MATCHER_VERSION = 2
 MAX_DISTANCE_WORK = 2_000_000
 
 
@@ -74,8 +74,8 @@ def _candidates(
         effective = 100 if len(expected) <= 3 else threshold
         # Include a ten-point review band; length bounds exclude impossible candidates.
         floor = max(1, effective - 10) / 100
-        minimum = max(1, int(len(expected) * floor))
-        maximum = int(len(expected) / floor)
+        minimum = max(1, int(len(expected) * floor / (2 - floor)))
+        maximum = int(len(expected) * (2 - floor) / floor)
         for start in range(len(tokens)):
             low = max(start + 1, bisect.bisect_left(ends, ends[start] + minimum))
             high = bisect.bisect_right(ends, ends[start] + maximum)
@@ -86,7 +86,7 @@ def _candidates(
                     exhausted = True
                     break
                 budget[0] -= work
-                similarity = 100 * DamerauLevenshtein.normalized_similarity(
+                similarity = 100 * Indel.normalized_similarity(
                     expected, segment, score_cutoff=floor
                 )
                 key = (tokens[start].start(), tokens[end - 1].end())
@@ -346,6 +346,16 @@ def grade_round(
             else False
             for row in evidence
         }
+        previous = r.judgements.get(pid, {})
+        for key in r.manual_criteria.get(pid, set()):
+            if key in decisions:
+                decisions[key] = previous.get(key)
+        for key in r.neutralized_fields:
+            decisions[f"{key}_correct"] = False
+        evidence = [
+            replace(row, status="neutralized") if row.criterion in r.neutralized_fields else row
+            for row in evidence
+        ]
         points = sum(
             getattr(cfg, f"{key.removesuffix('_correct')}_points")
             for key, accepted in decisions.items()

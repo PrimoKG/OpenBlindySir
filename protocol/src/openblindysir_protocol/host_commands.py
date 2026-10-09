@@ -128,6 +128,13 @@ class TrackMetadataArgs(MusicalMetadata):
     regrade_auto: bool = False
 
 
+class NeutralizeArgs(InboundModel):
+    fields: Annotated[
+        list[Literal["title", "artist", "album", "year", "featuring"]], Field(max_length=5)
+    ]
+    expected_revision: Annotated[int, Field(ge=0)]
+
+
 class JoinLockArgs(InboundModel):
     locked: bool
 
@@ -252,6 +259,12 @@ class HostTrackMetadata(_Host):
     args: TrackMetadataArgs
 
 
+class HostNeutralize(_Host):
+    cmd: Literal["neutralize_missing"]
+    round_id: RoundId
+    args: NeutralizeArgs
+
+
 class HostUndoPublish(_Host):
     """``round_id`` is the most recent REVEALED round (``host.undo_round_id``), not the
     current round once ``next`` was clicked (spec §6.5 window)."""
@@ -354,6 +367,7 @@ HostCommandVariant = (
     | HostScoreDraft
     | HostPublish
     | HostTrackMetadata
+    | HostNeutralize
     | HostUndoPublish
     | HostAdjust
     | HostToFinalReview
@@ -400,6 +414,7 @@ HOST_COMMAND_EXAMPLES: Final[Mapping[str, dict[str, Any]]] = {
     "close": {"round_id": _ROUND, "args": {}},
     "score_draft": {"round_id": _ROUND, "args": {"player_id": _PLAYER, "points": 2}},
     "publish": {"round_id": _ROUND, "args": {}},
+    "neutralize_missing": {"round_id": _ROUND, "args": {"fields": [], "expected_revision": 0}},
     "track_metadata": {"round_id": _ROUND, "args": {"title": "Example", "artist": "Example"}},
     "undo_publish": {"round_id": _ROUND, "args": {}},
     "adjust": {

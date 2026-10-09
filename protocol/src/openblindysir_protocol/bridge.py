@@ -135,6 +135,9 @@ class JobProgress(InboundModel):
 class Tags(InboundModel):
     title: Annotated[str, StringConstraints(max_length=200)] | None = None
     artist: Annotated[str, StringConstraints(max_length=200)] | None = None
+    album: Annotated[str, StringConstraints(max_length=200)] | None = None
+    featuring: Annotated[str, StringConstraints(max_length=200)] | None = None
+    year: Annotated[int, Field(ge=1000, le=9999)] | None = None
 
 
 class JobDone(InboundModel):
@@ -176,6 +179,7 @@ ServerToBridge = Annotated[
 
 
 class CatalogEntry(InboundModel):
+    tags: Tags | None = None
     track_id: TrackId
     relpath: Annotated[str, StringConstraints(min_length=1, max_length=1024)]
     folder: Annotated[str, StringConstraints(max_length=1024)]

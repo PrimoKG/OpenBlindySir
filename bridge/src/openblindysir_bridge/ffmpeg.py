@@ -76,6 +76,9 @@ class ProbeResult:
     has_audio: bool
     title: str | None
     artist: str | None
+    album: str | None = None
+    featuring: str | None = None
+    year: int | None = None
 
 
 def discover(ffmpeg: str | None = None, ffprobe: str | None = None) -> FfmpegTools:
@@ -178,7 +181,7 @@ def probe_argv(tools: FfmpegTools, real_path: str) -> list[str]:
         *_input_options(real_path),
         "-select_streams", "a:0",
         "-show_entries",
-        "format=duration:format_tags=title,artist:stream=codec_type,duration:stream_tags=title,artist",
+        "format=duration:format_tags=title,artist,album,date,year,featuring:stream=codec_type,duration:stream_tags=title,artist,album,date,year,featuring",
         "-of", "json",
         "file:" + real_path,
     ]  # fmt: skip
@@ -364,7 +367,21 @@ def parse_probe(stdout: bytes) -> ProbeResult | None:
             title = title or _tag(s.get("tags"), "title")
             artist = artist or _tag(s.get("tags"), "artist")
             break
-    return ProbeResult(duration_s=duration, has_audio=has_audio, title=title, artist=artist)
+
+    def value(name: str) -> str | None:
+        return _tag(fmt_tags, name) or _tag((first_audio or {}).get("tags"), name)
+
+    date = value("date") or value("year") or ""
+    year = int(date[:4]) if len(date) >= 4 and date[:4].isascii() and date[:4].isdigit() else None
+    return ProbeResult(
+        duration_s=duration,
+        has_audio=has_audio,
+        title=title,
+        artist=artist,
+        album=value("album"),
+        featuring=value("featuring"),
+        year=year if year and 1000 <= year <= 9999 else None,
+    )
 
 
 def parse_duration(stdout: bytes) -> float | None:

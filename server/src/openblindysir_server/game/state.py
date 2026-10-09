@@ -63,6 +63,7 @@ class CatalogEntryData:
     folder: str
     ext: str
     size: int
+    tags: "Metadata | None" = None
 
 
 @dataclass(slots=True)
@@ -249,6 +250,8 @@ class Round:
     auto_reference: Metadata | None = None
     auto_evidence: dict[str, list[AutoMatch]] = field(default_factory=dict)
     auto_overrides: set[str] = field(default_factory=set)
+    manual_criteria: dict[str, set[str]] = field(default_factory=dict)
+    neutralized_fields: set[str] = field(default_factory=set)
     matcher_version: int = 1
     finale_awarded: set[str] | None = None
     finale_wave_at: int | None = None
@@ -279,6 +282,9 @@ class AssetRecord:
     error: AssetFailureCode | None = None
     input_duration_s: float | None = None
     source_revision: str | None = None
+    album: str | None = None
+    featuring: str | None = None
+    year: int | None = None
     normalize_audio: bool = True
 
 
@@ -297,6 +303,7 @@ class ThemeFilterData:
 class Settings:
     selection_filter: ThemeFilterData = field(default_factory=ThemeFilterData)
     scoring_mode: str = "manual"
+    ready_only: bool = False
     acceptance_threshold: int = 90
     answer_fields: list[str] = field(default_factory=lambda: ["title", "artist"])
     album_points: int = 1
@@ -333,6 +340,7 @@ class Settings:
                 year_max=self.selection_filter.year_max,
             ),
             scoring_mode=self.scoring_mode,
+            ready_only=self.ready_only,
             acceptance_threshold=self.acceptance_threshold,
             answer_fields=list(self.answer_fields),
             album_points=self.album_points,

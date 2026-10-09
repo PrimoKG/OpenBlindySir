@@ -117,11 +117,11 @@ def test_bridge_protocol_mismatch_reports_supported_range(harness: Harness, prot
         with pytest.raises(WebSocketDisconnect) as closed:
             bridge.receive_json()
         assert closed.value.code == 1008
-        assert closed.value.reason == "protocol_mismatch;required=13..13"
+        assert closed.value.reason == "protocol_mismatch;required=14..14"
     assert not harness.runtime.bridge.connections
     info = harness.client.get("/api/compatibility").json()
-    assert info["protocol_min"] == info["protocol_max"] == 13
-    assert info["snapshot_format"] == 10
+    assert info["protocol_min"] == info["protocol_max"] == 14
+    assert info["snapshot_format"] == 11
 
 
 def test_player_protocol_mismatch_has_actionable_structured_range(harness: Harness):
@@ -130,7 +130,7 @@ def test_player_protocol_mismatch_has_actionable_structured_range(harness: Harne
         ws.send_json({"t": "HELLO", "client_version": "0.3.0", "protocol": 4})
         error = ws.receive_json()
         assert error["code"] == "protocol_mismatch"
-        assert error["compatibility"]["protocol_min"] == 13
+        assert error["compatibility"]["protocol_min"] == 14
         with pytest.raises(WebSocketDisconnect):
             ws.receive_json()
 

@@ -152,7 +152,7 @@ function playerView(): PlayerView {
     kind: "player",
     session: {
       epoch: "example-epoch",
-      protocol: 13,
+      protocol: 14,
       server_version: "0.1.0",
       recovered: false,
       persistence_status: "disabled",
@@ -395,6 +395,7 @@ function hostView(mc = false): HostView {
         prefetch_depth: 1,
         allow_repeats: false,
         scoring_mode: "manual",
+        ready_only: false,
         acceptance_threshold: 90,
         answer_fields: ["title", "artist"],
         album_points: 1,
@@ -515,6 +516,7 @@ function globalReview(
               }
             : null,
           reference_changed: false,
+          neutralized_fields: [],
           played: true,
           round_id: roundId,
           number: 1,
@@ -813,7 +815,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
           bridge_id: first,
           name: "Appareil salon",
           version: "0.5.0.dev0",
-          protocol: 13,
+          protocol: 14,
           state: "ONLINE",
           track_count: 8,
           jobs_in_flight: 0,
@@ -825,7 +827,7 @@ test("V0.5 separate Bridges expose readable states and revoke only the chosen id
           bridge_id: second,
           name: "Appareil absent",
           version: "0.5.0.dev0",
-          protocol: 13,
+          protocol: 14,
           state: "OFFLINE",
           track_count: 4,
           jobs_in_flight: 0,
@@ -889,7 +891,7 @@ test("V0.5 incompatible client stops reload loops and shows the required range",
     route.fulfill({
       json: {
         server_version: "0.5.0.dev0",
-        protocol: 13,
+        protocol: 14,
         protocol_min: 8,
         protocol_max: 8,
         snapshot_format: 4,
@@ -951,7 +953,9 @@ test("local score editing waits for acknowledgement and confirms unchecked answe
   );
   ui.show(review);
   await expect(
-    page.getByRole("heading", { name: "Titre privé exemple", exact: true }),
+    page
+      .locator(".review-heading")
+      .getByRole("heading", { name: "Titre privé exemple", exact: true }),
   ).toBeVisible();
   const input = page.getByLabel(`Points pour ${players[0].nickname}`, { exact: true });
   await page.locator(".manual-score > summary").first().click();
@@ -1119,7 +1123,7 @@ test("metadata clearing waits for the server revision and restores the fallback"
   await page.getByRole("button", { name: "Corriger les informations du morceau" }).click();
   const editor = page.locator(".metadata-editor");
   await editor.getByLabel("Titre", { exact: true }).fill("");
-  await editor.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  await editor.getByRole("button", { name: fr["repair.saveRegrade"], exact: true }).click();
   await expect(editor.getByRole("button", { name: "Enregistrement…", exact: true })).toBeDisabled();
   ui.show(review);
   await expect(editor.getByRole("button", { name: "Enregistrement…", exact: true })).toBeDisabled();
@@ -1134,9 +1138,15 @@ test("metadata clearing waits for the server revision and restores the fallback"
       })),
     },
   });
+  await expect(editor).toHaveCount(0); // close only after server acknowledgement
+  await page.locator(".track-options > summary").click();
+  await page
+    .getByRole("button", { name: "Corriger les informations du morceau", exact: true })
+    .click();
   await expect(editor.getByLabel("Titre", { exact: true })).toHaveValue("Titre importé");
-  await expect(editor.getByRole("button", { name: "Enregistrer", exact: true })).toBeEnabled();
-  await expect(editor.getByRole("status")).toContainText("Enregistré");
+  await expect(
+    editor.getByRole("button", { name: fr["repair.saveRegrade"], exact: true }),
+  ).toBeEnabled();
 });
 
 test("private replay downloads only on demand and exposes an accessible retry", async ({
@@ -2502,9 +2512,9 @@ test("host preparation stays separate from the presented round and shared replay
     host: { ...review.host, review_rounds: [...review.host.review_rounds, second] },
   };
   ui.show(state);
-  await page.getByLabel("Choisir une manche à présenter").selectOption(second.round_id);
+  await page.getByLabel("Corriger une autre manche en privé").selectOption(second.round_id);
   await expect(page.locator(".finale-track h2")).toHaveText("La kiffance");
-  await expect(page.locator(".review-heading h2")).toHaveText("Aïcha");
+  await expect(page.locator(".review-heading > h2")).toHaveText("Aïcha");
   await page.getByRole("button", { name: "Présenter la manche 2", exact: true }).click();
   await expect
     .poll(() =>
@@ -2601,6 +2611,7 @@ for (const viewport of [
         rules: {
           answer_max_chars: 1000,
           scoring_mode: "manual",
+          ready_only: false,
           acceptance_threshold: 90,
           answer_fields: ["title", "artist"],
           album_points: 1,
@@ -2703,6 +2714,7 @@ for (const viewport of [
         rules: {
           answer_max_chars: 1000,
           scoring_mode: "manual",
+          ready_only: false,
           acceptance_threshold: 90,
           answer_fields: ["title", "artist"],
           album_points: 1,
@@ -2880,7 +2892,7 @@ test("absent answers stay compact and zero waits for the revision acknowledgemen
   await expect(page.getByText("2 participants sur cette manche", { exact: true })).toBeVisible(); // late/non-participating third player is not an absent answer
   await expect(page.locator(".expected-answer")).toContainText("Référence manquante : à vérifier");
   await page.locator(".expected-answer").getByRole("button").click();
-  await expect(page.locator(".track-options")).toHaveAttribute("open", "");
+  await expect(page.getByRole("dialog", { name: fr["ux.editTrack"], exact: true })).toBeVisible();
   await page
     .locator(".metadata-editor")
     .getByRole("button", { name: "Annuler", exact: true })
@@ -3538,7 +3550,7 @@ test("last two finale rounds can be presented again after navigating backward", 
   for (const number of [2, 3, 1, 2, 3]) {
     const id = `r_revisit${number}`;
     await page
-      .getByRole("combobox", { name: "Choisir une manche à présenter", exact: true })
+      .getByRole("combobox", { name: "Corriger une autre manche en privé", exact: true })
       .selectOption(id);
     const button = page.getByRole("button", {
       name: `${visited.has(id) ? "Représenter" : "Présenter"} la manche ${number}`,
@@ -4015,8 +4027,7 @@ for (const language of ["fr", "en"] as const) {
         exact: true,
       })
       .fill("Gims");
-    await editor.getByRole("checkbox", { name: new RegExp(messages["auto.regrade"]) }).check();
-    await editor.getByRole("button", { name: messages["hostui.save"], exact: true }).click();
+    await editor.getByRole("button", { name: messages["repair.saveRegrade"], exact: true }).click();
     expect(
       ui.sent
         .map((raw) => JSON.parse(raw))

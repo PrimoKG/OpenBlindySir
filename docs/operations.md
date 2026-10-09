@@ -74,7 +74,7 @@ reste en dehors de l'archive. Vérifier `--version`, `doctor`, puis registration
 hors partie. Démarrer le serveur et les Bridges, recharger les onglets joueurs,
 tester le son et une manche synthétique avant d'inviter.
 
-**Compatibilité :** V0.5 = logiciel `0.5.0.dev0`, protocole 13 et plage 13 à 13.
+**Compatibilité :** V0.5 = logiciel `0.5.0.dev0`, protocole 14 et plage 14 à 14.
 Le serveur publie `/api/compatibility` et renvoie ses formats lors d'un refus de
 connexion. Recharger un ancien onglet puis mettre à jour les trois composants.
 Le Bridge/protocole Python portent une version exacte commune. Pas de downgrade
@@ -82,7 +82,7 @@ automatique ou de protocole mixte. Cette V0.5 n'est pas publiée et ne fige pas 
 
 ## Sauvegardes et retour arrière
 
-V0.5 écrit le **snapshot 10** et lit 1/2/3/4/5/6/7/8/9/10 ; l'historique **3** migre les records
+V0.5 écrit le **snapshot 11** et lit 1/2/3/4/5/6/7/8/9/10/11 ; l'historique **3** migre les records
 anciens/versions 1 et 2. Un format futur inconnu arrête le démarrage : préserver les
 fichiers et utiliser la version capable de les lire. Ce refus ne retombe pas sur un
 backup plus ancien. Une corruption connue tente `session.previous.json` ; si les
@@ -126,4 +126,4 @@ Pour approuver l’autorité HTTPS locale sur Windows/iOS/Android, voir
 [certificat-local.md](certificat-local.md). Partager uniquement le certificat public
 `root.crt`, jamais ses clés. Le mode LAN est conservé.
 La [notation automatique](notation-automatique.md) nécessite de mettre à jour
-serveur, Bridge et interface ensemble (protocole 13, snapshot 10), après sauvegarde privée.
+serveur, Bridge et interface ensemble (protocole 14, snapshot 11), après sauvegarde privée.

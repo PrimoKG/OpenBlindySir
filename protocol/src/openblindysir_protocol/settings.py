@@ -54,6 +54,7 @@ class SourceView(OutboundModel):
 class GameSettings(OutboundModel):
     selection_filter: ThemeFilter = Field(default_factory=ThemeFilter)
     scoring_mode: str = "manual"
+    ready_only: bool = False
     acceptance_threshold: int = 90
     answer_fields: list[str] = Field(default_factory=lambda: ["title", "artist"])
     album_points: int = 1
@@ -96,6 +97,7 @@ class SettingsPatch(InboundModel):
     allow_repeats: bool | None = None
     answer_mode: Literal["title", "artist", "both", "custom", "fields"] | None = None
     scoring_mode: Literal["manual", "auto"] | None = None
+    ready_only: bool | None = None
     acceptance_threshold: Annotated[int, Field(ge=80, le=100)] | None = None
     answer_fields: (
         Annotated[

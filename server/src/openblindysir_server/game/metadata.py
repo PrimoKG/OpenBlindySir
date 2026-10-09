@@ -29,7 +29,7 @@ def selection_metadata(s: SessionState, ref: TrackRef, asset: AssetRecord | None
             key: None
             if key in (meta.cleared_fields or [])
             else getattr(meta, key) or getattr(asset, key)
-            for key in ("title", "artist")
+            for key in ("title", "artist", "album", "year", "featuring")
         },
     )
 
@@ -42,9 +42,9 @@ def scoring_metadata(s: SessionState, ref: TrackRef, asset: AssetRecord | None) 
     return Metadata(
         title=None if "title" in (meta.cleared_fields or []) else meta.title or title or None,
         artist=None if "artist" in (meta.cleared_fields or []) else meta.artist or artist,
-        album=meta.album,
-        year=meta.year,
-        featuring=meta.featuring,
+        album=resolved.album,
+        year=resolved.year,
+        featuring=resolved.featuring,
         aliases=deepcopy(meta.aliases),
     )
 
@@ -53,6 +53,17 @@ def musical_metadata(s: SessionState, ref: TrackRef) -> Metadata:
     """Inherit absent values; an explicit clear also blocks tag/filename fallbacks."""
     manual = s.metadata.get(ref, Metadata())
     imported = s.imported_metadata.get(ref, Metadata())
+    catalog = s.catalogs.get(ref.bridge_id)
+    entry = catalog.entries.get(ref.track_id) if catalog else None
+    embedded = entry.tags if entry and entry.tags else Metadata()
+    imported = replace(
+        imported,
+        **{
+            key: getattr(imported, key) or getattr(embedded, key)
+            for key in ("title", "artist", "album", "year", "featuring")
+            if key not in (imported.cleared_fields or [])
+        },
+    )
     cleared = set(manual.cleared_fields or []) | {
         key for key in imported.cleared_fields or [] if not getattr(manual, key, None)
     }

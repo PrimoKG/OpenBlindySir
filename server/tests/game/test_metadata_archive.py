@@ -84,6 +84,7 @@ def test_complex_compression_is_rejected_before_reading(compression):
 def test_clear_blocks_import_and_alias_then_inherit_restores_it():
     ref = TrackRef("bridge", "track")
     state = SimpleNamespace(
+        catalogs={},
         metadata={},
         imported_metadata={ref: Metadata(title="Imported", aliases={"title": ["Alias"]})},
     )
@@ -99,6 +100,7 @@ def test_clear_blocks_import_and_alias_then_inherit_restores_it():
 def test_manual_replacement_can_override_imported_clear():
     ref = TrackRef("bridge", "track")
     state = SimpleNamespace(
+        catalogs={},
         metadata={ref: Metadata(title="Confirmed")},
         imported_metadata={ref: Metadata(cleared_fields=["title"])},
     )

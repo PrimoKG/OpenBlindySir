@@ -104,6 +104,7 @@ describe("library preflight", () => {
       prefetch_depth: 1,
       allow_repeats: false,
       scoring_mode: "manual",
+      ready_only: false,
       acceptance_threshold: 90,
       answer_fields: ["title", "artist"],
       album_points: 1,

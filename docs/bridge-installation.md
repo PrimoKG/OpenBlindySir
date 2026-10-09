@@ -202,7 +202,7 @@ mainteneur. Ne désactivez pas ces protections ; le parcours uvx est une alterna
 
 ## Versions et mises à jour
 
-V0.5 utilise le **protocole 13**, plage admise 13 à 13. Bridge, serveur et build web doivent annoncer
+V0.5 utilise le **protocole 14**, plage admise 14 à 14. Bridge, serveur et build web doivent annoncer
 exactement ce protocole ; les protocoles antérieurs sont refusés. Le paquet Bridge dépend
 de la **même version exacte** du paquet protocole. Les versions `.dev` du dépôt ne
 sont pas des releases. Pour garder une release précise, après publication,

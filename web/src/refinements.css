@@ -1,3 +1,9 @@
+.metadata-field-actions .btn {
+  font-size: 0.8rem;
+}
+.metadata-save-actions .btn {
+  flex: 1 1 12rem;
+}
 .score-scroll-section {
   min-width: 0;
   width: 100%;
@@ -433,4 +439,190 @@ html:has(.is-finale) {
 }
 .action-progress strong {
   font-size: 0.85rem;
+}
+
+/* The finale is a scoring workspace: context above, answers at full useful width. */
+@media (min-width: 701px) {
+  .app.with-host.is-finale {
+    max-width: 1800px;
+    width: 100%;
+    padding-inline: clamp(1rem, 3vw, 3rem);
+  }
+  .is-finale .review-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .review-section > .review-context {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    width: 100%;
+    position: static;
+    gap: 0.8rem;
+  }
+  .review-context .review-heading {
+    grid-column: 1 / -1;
+  }
+  .review-section > :not(.review-context) {
+    width: 100%;
+  }
+  .review-context .expected-answer dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+  .review-section
+    :is(
+      .criterion,
+      .criterion .btn,
+      .score-scroll-tools,
+      .score-scroll-tools .btn,
+      .expected-answer,
+      .score-preview
+    ) {
+    font-size: 0.95rem;
+  }
+  .review-context .metadata-editor {
+    max-height: none;
+    overflow: visible;
+  }
+  .review-section .score-scroll[data-compact="true"] {
+    max-height: none;
+    overflow: visible;
+  }
+  .review-section .score-scroll[data-compact="true"] .answer-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+.review-heading h2 {
+  margin: 0.2rem 0;
+}
+.review-heading .eyebrow {
+  margin: 0.2rem 0;
+}
+.review-heading .track-artist {
+  margin: 0.25rem 0;
+}
+.review-context .expected-answer {
+  margin: 0;
+}
+.review-section .auto-assessment {
+  margin-top: 0.75rem;
+  max-height: 14rem;
+  overflow: auto;
+}
+.review-section .auto-match {
+  padding: 0.35rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.review-section .auto-match small {
+  flex-basis: 100%;
+}
+.review-section .answer-text {
+  font-size: 1.1rem;
+}
+.draft-proposal {
+  padding: 0.75rem;
+  background: var(--cream, #f5eee0);
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.review-target {
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.75rem;
+  border-left: 4px solid var(--accent);
+  background: var(--surface, white);
+}
+.review-section .workspace-modal {
+  width: min(760px, calc(100vw - 2rem));
+}
+.review-section .workspace-modal .metadata-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: none;
+  overflow: visible;
+}
+.review-section .workspace-modal .metadata-editor > :is(details, p, button, .folder-option) {
+  grid-column: 1 / -1;
+}
+.metadata-field-actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+@media (max-width: 700px) {
+  .review-section .workspace-modal .metadata-editor {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* Keep the reference editor usable on short laptop screens. */
+.review-section .workspace-modal {
+  width: min(880px, calc(100vw - 2rem));
+  padding: 1.25rem;
+}
+.review-section .workspace-modal .metadata-editor {
+  gap: 0.65rem 1rem;
+}
+.review-section .workspace-modal .metadata-editor input {
+  min-height: 44px;
+  padding: 0.6rem 0.8rem;
+}
+.metadata-field-actions > .btn:first-child {
+  padding: 0.25rem 0;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+}
+.metadata-save-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  position: sticky;
+  bottom: -1.25rem;
+  padding: 0.75rem 0;
+  background: white;
+}
+@media (min-width: 701px) {
+  .with-host .finale-banner {
+    align-items: center;
+  }
+  .with-host .finale-banner > div {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+  }
+  .with-host .finale-banner .eyebrow {
+    display: none;
+  }
+  .with-host .finale-banner h1 {
+    font-size: 2rem;
+    margin: 0;
+  }
+  .with-host .finale-track {
+    min-height: 0;
+    padding: 1rem 1.25rem;
+  }
+  .with-host .finale-host-controls {
+    gap: 0.6rem;
+  }
+  .with-host .finale-present-controls {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .with-host .scene-context {
+    margin: 0;
+  }
+  .with-host .finale-pace {
+    margin: 0;
+  }
 }

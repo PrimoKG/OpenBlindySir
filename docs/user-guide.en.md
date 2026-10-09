@@ -3,7 +3,7 @@
 [Guide français](guide-utilisateur.md). One server hosts one game at a time, on a
 LAN, private VPN or the Internet. Players use a browser without creating an account.
 See [hosting](deployment.md) or [Docker](docker.md). Update server, Bridge and web
-UI together: **protocol 13**. [Install the Bridge from source](bridge-installation.en.md)
+UI together: **protocol 14**. [Install the Bridge from source](bridge-installation.en.md)
 or use Docker today; uvx and release archives require publication first.
 
 Quick access: [join and sound](#join-audio-and-recovery), [host setup](#host-setup),
@@ -391,3 +391,38 @@ A permanently closed audio context can be recreated after a user gesture. Obsole
 ## Themed nights
 
 In **Prepare game → Music**, combine genre, language, year, tags and universes. The counter uses the same criteria as actual rounds. Cartoon themes, Pop, Rap, French, English and 2012 shortcuts get you started; combine further choices and save the selection below the filters. See [themed nights](themed-nights.en.md) for metadata and examples.
+
+## Easier preparation and corrections (10 October 2026)
+
+The Bridge reads local title, artist, album, date/year and featuring tags before
+play, in the background (two concurrent probes, five seconds per file, size/mtime
+cache). Music files are never modified. Refresh the library after analysis.
+Explicit corrections and cleared fields take precedence; answers never supply
+missing reference artists.
+
+In automatic mode, **Only play tracks ready for these criteria** excludes incomplete
+tracks. A requested but absent featuring counts as a missing reference: choose
+criteria that suit the evening.
+
+In the finale, **Save and recalculate this round** closes the editor after server
+acknowledgement and recalculates automatic criteria. **Save without recalculating scores**
+preserves existing scores. Manual decisions are protected per criterion; manually
+entered totals stay fully protected, as do legacy whole-answer overrides.
+
+Recognised drafts show proposed points with **Accept recognized information**.
+Missing criteria can be **neutralised for everyone** in a round after confirmation:
+zero points for these criteria without blocking the others. **Restore** includes
+them again. Manually entered totals stay unchanged; check their consistency before
+publication.
+
+Two answers appear side by side on desktop in a small game. The next-player action
+advances from the current player. Manual scroll pauses are explicit; reading an
+automatic explanation does not suspend advance. Private correction also identifies
+the round players currently see. Before incomplete publication, the recap links to
+rounds with outstanding answers, drafts and references. Audio testing stays available
+in the finale and confirms that a signal was started, not that physical speakers
+were audible.
+
+Compatibility: protocol 14, snapshot 11, history 3. Update server, web and Bridge
+together. Back up stopped volumes before deployment; rollback to an older image
+requires restoring its compatible backup.

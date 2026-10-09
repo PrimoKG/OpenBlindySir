@@ -304,7 +304,6 @@ for (const viewport of [
     });
     const playerPlays = alice.frames.filter((raw) => JSON.parse(raw).t === "PLAY").length;
     const privatePlayer = h.getByRole("region", { name: "Réécoute privée" });
-    await h.locator(".track-options > summary").click();
     expect(replayRequests).toHaveLength(0);
     await privatePlayer.getByRole("button", { name: "Écouter", exact: true }).click();
     await expect(privatePlayer.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
@@ -324,7 +323,7 @@ for (const viewport of [
       [1, { Alice: 2, Bob: 1, Hote: 0 }],
       [2, { Alice: 1, Bob: 0, Hote: 3 }],
     ] as const) {
-      await h.getByLabel("Choisir une manche à présenter").selectOption({ index: number - 1 });
+      await h.getByLabel("Corriger une autre manche en privé").selectOption({ index: number - 1 });
       await h.getByRole("button", { name: `Présenter la manche ${number}`, exact: true }).click();
       await expect(alice.page.locator(".finale-track .eyebrow")).toContainText(`Manche ${number}`);
       if (number === 1) {
@@ -510,7 +509,7 @@ async function endTestSession(page: Page): Promise<void> {
     );
     await new Promise<void>((resolve, reject) => {
       ws.onopen = () =>
-        ws.send(JSON.stringify({ t: "HELLO", client_version: "0.3.0", protocol: 13 }));
+        ws.send(JSON.stringify({ t: "HELLO", client_version: "0.3.0", protocol: 14 }));
       ws.onmessage = (event) => {
         const msg = JSON.parse(String(event.data));
         if (msg.t === "ERROR") reject(new Error(`Room reset failed: ${msg.code}`));

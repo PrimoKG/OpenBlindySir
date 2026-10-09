@@ -3,7 +3,7 @@
 [English guide](user-guide.en.md). Une instance accueille une partie à la fois,
 entre amis dans leur navigateur, sur LAN, VPN ou Internet. Aucun compte à créer.
 Préparez [l'hébergement](deployment.md) ou le [lancement Docker](docker.md).
-Mettez à jour serveur, Bridge et interface ensemble : **protocole 13**.
+Mettez à jour serveur, Bridge et interface ensemble : **protocole 14**.
 Aujourd’hui, utilisez Docker ou [l’installation du Bridge depuis le dépôt](bridge-installation.md).
 Le parcours uvx/archive sera disponible après publication.
 
@@ -228,7 +228,7 @@ victoire. Après le podium, les actions de nouvelle partie et de fin de session
 précèdent les classements détaillés.
 
 La dernière manche ouvre **Le grand final**, partagé avec
-les joueurs. L’hôte utilise **Choisir une manche à présenter** pour sa préparation privée, puis
+les joueurs. L’hôte utilise **Corriger une autre manche en privé** pour sa préparation privée, puis
 **Présenter la manche N** dans la barre d’action persistante. Tous voient alors le morceau, les réponses et leur
 notation en direct. Naviguer seul ne change pas la scène publique.
 
@@ -443,3 +443,39 @@ Le contexte audio fermé peut être recréé après une action de l’utilisateu
 ## Soirées à thème
 
 Dans **Préparer la partie → Musique**, composez une sélection par genre, langue, année, tags et univers. Le compteur utilise les mêmes critères que les manches. Les raccourcis génériques, Pop, Rap, français, anglais et 2012 facilitent la préparation ; combinez ensuite les listes et enregistrez votre sélection sous les filtres. Voir [le guide des soirées à thème](themed-nights.md) pour les métadonnées et les exemples.
+
+## Préparer et corriger plus simplement (10 octobre 2026)
+
+Le Bridge lit localement les tags titre, artiste, album, date/année et featuring
+avant la partie, en arrière-plan (deux lectures simultanées, cinq secondes maximum
+par fichier, cache par taille/date). Aucun fichier musical n'est modifié. Actualiser
+la bibliothèque après l'analyse ; les corrections explicites et les champs effacés
+restent prioritaires. Aucun artiste n'est déduit d'une réponse de joueur.
+
+En notation automatique, **Jouer uniquement les morceaux prêts pour ces critères**
+exclut les morceaux incomplets de la sélection. Un featuring demandé mais absent
+compte comme référence manquante : choisir uniquement les critères adaptés à la soirée.
+
+Au final, **Enregistrer et recalculer cette manche** ferme le formulaire après
+confirmation du serveur et recalcule les critères automatiques. **Enregistrer sans
+recalculer les points** conserve les notes actuelles. Les décisions manuelles sont
+protégées par critère ; un total numérique manuel reste entièrement protégé. Les
+anciennes corrections globales restent protégées après migration.
+
+Un brouillon reconnu propose ses points, avec **Accepter les éléments reconnus**.
+Les critères sans référence peuvent être **neutralisés pour tous les joueurs** de
+la manche, après confirmation : zéro point pour ces critères, sans bloquer les autres.
+**Réactiver** remet ces critères dans la notation. Les totaux saisis manuellement
+restent inchangés ; vérifier leur cohérence avant publication.
+
+Les deux réponses d'une petite partie s'affichent côte à côte sur ordinateur.
+Le bouton « Prochain joueur à noter » avance depuis le joueur consulté. Une pause
+manuelle du défilement est explicite ; lire un diagnostic ne suspend pas cette avance.
+La correction privée indique aussi la manche visible des joueurs. Avant un podium
+incomplet, le récapitulatif donne accès aux manches, brouillons et références à terminer.
+Le bouton de test audio reste accessible pendant le final et confirme le lancement du
+signal. Cette confirmation ne prouve pas que le haut-parleur de l'appareil est audible.
+
+Compatibilité : protocole 14, snapshot 11, historique 3. Mettre à jour ensemble
+serveur, interface et Bridge. Sauvegarder les volumes à l'arrêt avant mise à jour ;
+un retour à une ancienne image exige de restaurer sa sauvegarde compatible.

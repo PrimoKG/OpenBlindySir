@@ -18,6 +18,7 @@ from openblindysir_protocol.host_commands import (
     HostAddTime,
     HostClose,
     HostForceStart,
+    HostNeutralize,
     HostNext,
     HostPause,
     HostPublish,
@@ -478,6 +479,32 @@ def h_track_metadata(
     s.touched = True
 
 
+def h_neutralize_missing(
+    s: SessionState, issuer: Player, msg: HostNeutralize, at: Instant, fx: EffectSink
+) -> None:
+    del at, fx
+    require_rule("neutralize_missing", s, issuer)
+    r = review_by_key(s, msg.round_id)
+    require(r.included and r.auto_config is not None, ErrorCode.INVALID_ARGS)
+    require(msg.args.expected_revision == r.metadata_revision, ErrorCode.STALE_COMMAND)
+    reference = build_auto_reference(s, r)
+    require(reference == r.auto_reference, ErrorCode.STALE_COMMAND)
+    assert r.auto_config is not None
+    fields: set[str] = set(msg.args.fields)
+    require(fields <= set(auto_scoring.criteria(r.auto_config)), ErrorCode.INVALID_ARGS)
+    require(
+        all(
+            not getattr(reference, key) and not (reference.aliases or {}).get(key) for key in fields
+        ),
+        ErrorCode.INVALID_ARGS,
+    )
+    r.neutralized_fields = fields
+    r.auto_reference = reference
+    r.metadata_revision += 1
+    auto_scoring.grade_round(s, r, regrade=True)
+    s.touched = True
+
+
 def h_skip(s: SessionState, issuer: Player, msg: HostSkip, at: Instant, fx: EffectSink) -> None:
     """Cancel the allocated round; its track remains consumed even before playback."""
     r = current_by_key(s, msg.round_id)
@@ -555,6 +582,16 @@ def h_score_draft(
         }
         points = sum(weights[key] for key, correct in decisions.items() if correct is True)
         require(msg.args.points == points, ErrorCode.INVALID_ARGS)
+        for key in r.neutralized_fields:
+            require(decisions.get(f"{key}_correct") is not True, ErrorCode.INVALID_ARGS)
+        previous = r.judgements.get(pid, {})
+        locks = r.manual_criteria.setdefault(pid, set())
+        for key, value in decisions.items():
+            if value is None:
+                locks.discard(key)
+            elif value != previous.get(key):
+                locks.add(key)
+        r.auto_overrides.discard(pid)
         r.judgements[pid] = decisions
         if all(value is not None for value in decisions.values()):
             r.score_reviewed.add(pid)
@@ -564,7 +601,8 @@ def h_score_draft(
         r.judgements.pop(pid, None)
         r.score_reviewed.add(pid)
     r.score_revisions[pid] = revision + 1
-    r.auto_overrides.add(pid)
+    if msg.args.judgement != "criteria":
+        r.auto_overrides.add(pid)
     if msg.args.points == 0:
         r.score_draft.pop(msg.args.player_id, None)
     else:

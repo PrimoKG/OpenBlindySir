@@ -63,6 +63,7 @@ HOST_HANDLERS: dict[str, HostHandler] = {
     "score_draft": rounds.h_score_draft,
     "publish": rounds.h_publish,
     "track_metadata": rounds.h_track_metadata,
+    "neutralize_missing": rounds.h_neutralize_missing,
     "undo_publish": rounds.h_undo_publish,
     "adjust": game_flow.h_adjust,
     "to_final_review": game_flow.h_to_final_review,

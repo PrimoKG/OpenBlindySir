@@ -257,6 +257,7 @@ class ReviewRow(OutboundModel):
 
 
 class ReviewRound(OutboundModel):
+    neutralized_fields: list[str] = Field(default_factory=list)
     scoring_reference: MusicalMetadata | None = None
     reference_changed: bool = False
     played: bool = False

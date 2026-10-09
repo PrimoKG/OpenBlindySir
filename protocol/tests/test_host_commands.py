@@ -40,6 +40,7 @@ SPEC_COMMANDS = {
     "pause",
     "resume",
     "track_metadata",
+    "neutralize_missing",
     "participation",
     "join_lock",
 }
@@ -49,8 +50,8 @@ def host(cmd: str, **fields: object) -> object:
     return CLIENT.validate_json(json.dumps({"t": "HOST", "cmd": cmd, **fields}))
 
 
-def test_union_has_exactly_the_31_spec_commands() -> None:
-    assert len(HOST_COMMAND_NAMES) == 31
+def test_union_has_exactly_the_32_spec_commands() -> None:
+    assert len(HOST_COMMAND_NAMES) == 32
     assert set(HOST_COMMAND_NAMES) == SPEC_COMMANDS
 
 

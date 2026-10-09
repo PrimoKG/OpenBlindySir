@@ -2224,3 +2224,29 @@ Corrections V01–V17 et réserves détaillées dans le [rapport de livraison](a
 Protocole 13, snapshot 10 et historique 3 : migration des anciens formats vérifiée ; retour arrière avec sauvegarde compatible. Déploiement LAN après sauvegarde privée à l'arrêt. Vérification des images, du build servi, de TLS et de la conservation de la partie, des scores, cookies, métadonnées et montages (3 joueurs, 14 archives, 300 morceaux).
 
 Exécuté localement : 1 200 tests Python réussis (2 exclusions Windows), 11 intégrations réelles, 55 tests unitaires web, 117 scénarios UI Chromium après les dernières corrections ; les 5 parcours de jeu complets ont également réussi. Ruff, Pyright, Biome, TypeScript, génération de protocole et hygiène réussis. Partie Computer Use isolée à deux navigateurs jusqu'au podium puis à la relance ; partie AAC avec les images Linux candidates en lecture seule/non-root. La capture publiée est synthétique. La CI distante n'est pas comptée dans ces résultats. Écoute sur téléphones physiques et portes de publication officielles encore à valider.
+
+
+## 2026-10-10 — Correction du parcours filmé et vérification hôte/joueur
+
+F01–F15 traités : tags musicaux collectés en amont, filtre des morceaux prêts,
+tolérance Indel, brouillons avec proposition, sauvegarde/recalcul explicites,
+neutralisation collective et décisions manuelles par critère. Revue à deux cartes,
+éditeur élargi, boutons accessibles, navigation relative et séparation privé/public.
+Le résumé après neutralisation et un faux blocage Bridge sans source sélectionnée
+ont aussi été corrigés. FR/EN et guides utilisateur/exploitation mis à jour.
+
+Computer Use débloqué via le navigateur intégré pris en charge. Deux sessions
+réelles FR/EN vérifiées jusqu'au podium complet, retour au salon et reconnexion,
+puis filtre des références, geste audio après recharge et retour de test dans le
+final. Captures synthétiques, aucun contournement d'avertissement TLS.
+
+1 213 tests Python, 11 intégrations, 55 tests unitaires web, 117 tests UI et cinq
+parcours de jeu Chrome réussis. Ruff, Pyright, Biome, schéma et build validés.
+Test Docker Linux AAC isolé non-root/lecture seule réussi. Bundle JS >500 ko :
+avertissement non bloquant conservé. Téléphones physiques et acoustique à vérifier.
+
+Déploiement après sauvegarde privée à l'arrêt : protocole 14, snapshot 11,
+historique 3. Hashes des images et du bundle servi vérifiés, TLS valide via CA
+locale, Bridge connecté. Quatre joueurs, 15 archives, 300 morceaux, scores,
+métadonnées manuelles, cookies et montages conservés. Rapports :
+[FR](audits/2026-10-10-video-fixes.md), [EN](audits/2026-10-10-video-fixes.en.md).
