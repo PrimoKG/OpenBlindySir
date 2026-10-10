@@ -36,6 +36,10 @@ def test_checkout_build_excludes_local_artifacts(tmp_path: Path) -> None:
     context = Path(result.stdout.strip())
     assert (context / "Dockerfile").is_file()
     assert (context / "web/package-lock.json").is_file()
+    for lock in ("go.mod", "go.sum"):
+        assert (context / "deploy/proxy" / lock).read_bytes() == (
+            ROOT / "deploy/proxy" / lock
+        ).read_bytes()
     for package in ("protocol", "server", "bridge"):
         assert (context / package / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
     assert (context / "bridge/README.md").is_file()

@@ -136,6 +136,12 @@ URL only: share the game password separately.
 
 ## Sources, search and metadata
 
+Search and sorting remain visible on opening. Expand **Filters and themes** for
+Cartoons/Pop/Rap/2012 shortcuts, languages and every detailed filter. The counter
+shows active filters. **Clear filters** also resets source, folder, format,
+availability, activation, quality and the selected-source restriction; sorting
+is preserved. Pagination sits below tracks without covering their controls.
+
 Three distinct choices: the locally authorized root or Docker mount, subfolders
 scanned by a Bridge, and folders selected for a game. **Library sources and search**
 adds/removes relative subfolders and requests a rescan. An empty root path includes

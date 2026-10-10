@@ -1,6 +1,17 @@
 # Base images are fixed by multi-platform digest; application dependencies use lockfiles.
+FROM golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 AS proxy-build
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local
+WORKDIR /proxy
+# Keep the upstream Caddy release while applying the Go and x/net security fixes.
+COPY deploy/proxy/go.mod deploy/proxy/go.sum ./
+RUN go mod download \
+    && go build -mod=readonly -trimpath \
+        -ldflags '-X github.com/caddyserver/caddy/v2.CustomVersion=v2.11.7-openblindysir.1' \
+        -o /caddy github.com/caddyserver/caddy/v2/cmd/caddy
+
 FROM caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f AS proxy
 RUN apk add --no-cache zlib=1.3.2-r1
+COPY --from=proxy-build /caddy /usr/bin/caddy
 
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS web-build
 WORKDIR /web

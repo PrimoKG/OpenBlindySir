@@ -101,6 +101,22 @@ export function LibraryManager({
   const [yearMin, setYearMin] = useState("");
   const [yearMax, setYearMax] = useState("");
 
+  const activeFilters = [
+    q,
+    genre,
+    language,
+    yearMin || yearMax,
+    tag,
+    linkedTo,
+    bridge,
+    folder,
+    ext,
+    availability !== "all",
+    activation !== "all",
+    quality !== "all",
+    poolOnly,
+  ].filter(Boolean).length;
+
   const [offset, setOffset] = useState(0);
 
   const [revision, setRevision] = useState(0);
@@ -590,7 +606,7 @@ export function LibraryManager({
       >
         {view.kind === "host_player" && <p className="notice">{t("flow.spoiler")}</p>}
 
-        <div className="stack">
+        <div className="stack library-workspace">
           {manualAllowed && (
             <section className="stack manual-picker" aria-label={t("manual.heading")}>
               <strong>{t("manual.heading")}</strong>
@@ -666,178 +682,13 @@ export function LibraryManager({
             <p className="muted">{t("library.mountHint")}</p>
           </details>
 
-          {view.phase === "LOBBY" && (
+          {view.phase === "LOBBY" && (view.host.auto_missing_references ?? 0) > 0 && (
             <p className="notice">
               {t("library.preflight", { count: view.host.auto_missing_references ?? 0 })}
             </p>
           )}
 
-          <div className="row wrap theme-shortcuts">
-            <Button
-              onClick={() =>
-                guard(() => {
-                  setGenre("");
-                  setTrackLanguage("");
-                  setYearMin("");
-                  setYearMax("");
-                  setTag("Génériques");
-                  setLinkedTo("");
-                  setQuery("");
-                  setOffset(0);
-                })
-              }
-            >
-              {t("theme.cartoons")}
-            </Button>
-            <Button onClick={() => filter(setGenre, "Pop")}>Pop</Button>
-            <Button onClick={() => filter(setGenre, "Rap")}>Rap</Button>
-            <Button onClick={() => filter(setTrackLanguage, "fr")}>{t("theme.french")}</Button>
-            <Button onClick={() => filter(setTrackLanguage, "en")}>{t("theme.english")}</Button>
-            <Button
-              onClick={() =>
-                guard(() => {
-                  setYearMin("2012");
-                  setYearMax("2012");
-                  setOffset(0);
-                })
-              }
-            >
-              2012
-            </Button>
-            <Button
-              onClick={() =>
-                guard(() => {
-                  setGenre("");
-                  setTrackLanguage("");
-                  setYearMin("");
-                  setYearMax("");
-                  setTag("");
-                  setLinkedTo("");
-                  setQuery("");
-                  setOffset(0);
-                })
-              }
-            >
-              {t("theme.clear")}
-            </Button>
-          </div>
-          <div className="library-filters">
-            <label>
-              {t("theme.genres")}
-              <select value={genre} onChange={(e) => filter(setGenre, e.target.value)}>
-                <option value="">{t("library.all")}</option>
-                {[...new Set([...(result?.genres ?? []), ...(genre ? [genre] : [])])].map((v) => (
-                  <option value={v} key={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("theme.languages")}
-              <select value={language} onChange={(e) => filter(setTrackLanguage, e.target.value)}>
-                <option value="">{t("library.all")}</option>
-                {[...new Set([...(result?.languages ?? []), ...(language ? [language] : [])])].map(
-                  (v) => (
-                    <option value={v} key={v}>
-                      {languageLabel(v)}
-                    </option>
-                  ),
-                )}
-              </select>
-            </label>
-            <label>
-              {t("theme.yearFrom")}
-              <input
-                type="number"
-                min={1000}
-                max={9999}
-                value={yearMin}
-                onChange={(e) => filter(setYearMin, e.target.value)}
-              />
-            </label>
-            <label>
-              {t("theme.yearTo")}
-              <input
-                type="number"
-                min={1000}
-                max={9999}
-                value={yearMax}
-                onChange={(e) => filter(setYearMax, e.target.value)}
-              />
-            </label>
-
-            <label className="folder-option">
-              <input
-                type="checkbox"
-                checked={poolOnly}
-                onChange={(e) => {
-                  const value = e.target.checked;
-                  guard(() => {
-                    setPoolOnly(value);
-                    setOffset(0);
-                  });
-                }}
-              />
-              {t("library.selectedSources")}
-            </label>
-            <label>
-              {t("library.quality")}
-              <select value={quality} onChange={(e) => filter(setQuality, e.target.value)}>
-                {["all", "ready", "missing"].map((value) => (
-                  <option key={value} value={value}>
-                    {t(`library.quality.${value}` as "library.quality.all")}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              {t("library.activation")}
-
-              <select
-                value={activation}
-                onChange={(event) => filter(setActivation, event.target.value)}
-              >
-                {["all", "active", "disabled"].map((value) => (
-                  <option value={value} key={value}>
-                    {t(`library.${value}` as "library.all")}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              {t("library.tags")}
-
-              <select value={tag} onChange={(event) => filter(setTag, event.target.value)}>
-                <option value="">{t("library.all")}</option>
-
-                {result?.tags?.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              {t("library.linkedTo")}
-
-              <select
-                value={linkedTo}
-                onChange={(event) => filter(setLinkedTo, event.target.value)}
-              >
-                <option value="">{t("library.all")}</option>
-
-                {result?.linked_to?.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </label>
-
+          <div className="library-primary-search">
             <label>
               {t("library.search")}
 
@@ -849,117 +700,6 @@ export function LibraryManager({
               />
             </label>
 
-            <label>
-              {t("library.bridge")}
-
-              <select value={bridge} onChange={(e) => filter(setBridge, e.target.value)}>
-                <option value="">{t("library.all")}</option>
-
-                {library?.bridges.map((b) => (
-                  <option key={b.bridge_id} value={b.bridge_id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              {t("library.folder")}
-
-              <input
-                value={folder}
-                maxLength={1024}
-                onChange={(e) => filter(setFolder, e.target.value)}
-              />
-            </label>
-
-            <label>
-              {t("library.type")}
-
-              <select value={ext} onChange={(e) => filter(setExt, e.target.value)}>
-                <option value="">{t("library.all")}</option>
-
-                {[
-                  ".mp3",
-
-                  ".flac",
-
-                  ".wav",
-
-                  ".m4a",
-
-                  ".aac",
-
-                  ".ogg",
-
-                  ".oga",
-
-                  ".opus",
-
-                  ".aiff",
-
-                  ".aif",
-
-                  ".wma",
-
-                  ".mp4",
-
-                  ".mov",
-
-                  ".m4v",
-
-                  ".3gp",
-
-                  ".mkv",
-
-                  ".mka",
-
-                  ".webm",
-
-                  ".avi",
-
-                  ".wmv",
-
-                  ".asf",
-                ].map((e) => (
-                  <option key={e}>{e}</option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              {t("library.availability")}
-
-              <select
-                value={availability}
-                onChange={(e) => filter(setAvailability, e.target.value)}
-              >
-                {[
-                  "all",
-
-                  "available",
-
-                  "unavailable",
-
-                  "online",
-
-                  "offline",
-
-                  "fresh",
-
-                  "used",
-
-                  "reserved",
-                ].map((value) => (
-                  <option value={value} key={value}>
-                    {t(`library.${value}` as "library.all")}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="row wrap">
             <label>
               {t("flow.sort")}
 
@@ -1001,6 +741,292 @@ export function LibraryManager({
             </label>
           </div>
 
+          <details className="disclosure library-extra-filters">
+            <summary>{t("library.moreFilters", { count: activeFilters })}</summary>
+            <div className="row wrap theme-shortcuts">
+              <Button
+                onClick={() =>
+                  guard(() => {
+                    setGenre("");
+                    setTrackLanguage("");
+                    setYearMin("");
+                    setYearMax("");
+                    setTag("Génériques");
+                    setLinkedTo("");
+                    setQuery("");
+                    setOffset(0);
+                  })
+                }
+              >
+                {t("theme.cartoons")}
+              </Button>
+              <Button onClick={() => filter(setGenre, "Pop")}>Pop</Button>
+              <Button onClick={() => filter(setGenre, "Rap")}>Rap</Button>
+              <Button onClick={() => filter(setTrackLanguage, "fr")}>{t("theme.french")}</Button>
+              <Button onClick={() => filter(setTrackLanguage, "en")}>{t("theme.english")}</Button>
+              <Button
+                onClick={() =>
+                  guard(() => {
+                    setYearMin("2012");
+                    setYearMax("2012");
+                    setOffset(0);
+                  })
+                }
+              >
+                2012
+              </Button>
+              <Button
+                onClick={() =>
+                  guard(() => {
+                    setGenre("");
+                    setTrackLanguage("");
+                    setYearMin("");
+                    setYearMax("");
+                    setTag("");
+                    setLinkedTo("");
+                    setQuery("");
+                    setBridge("");
+                    setFolder("");
+                    setExt("");
+                    setAvailability("all");
+                    setActivation("all");
+                    setQuality("all");
+                    setPoolOnly(false);
+                    setOffset(0);
+                  })
+                }
+              >
+                {t("theme.clear")}
+              </Button>
+            </div>
+            <div className="library-filters">
+              <label>
+                {t("theme.genres")}
+                <select value={genre} onChange={(e) => filter(setGenre, e.target.value)}>
+                  <option value="">{t("library.all")}</option>
+                  {[...new Set([...(result?.genres ?? []), ...(genre ? [genre] : [])])].map((v) => (
+                    <option value={v} key={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t("theme.languages")}
+                <select value={language} onChange={(e) => filter(setTrackLanguage, e.target.value)}>
+                  <option value="">{t("library.all")}</option>
+                  {[
+                    ...new Set([...(result?.languages ?? []), ...(language ? [language] : [])]),
+                  ].map((v) => (
+                    <option value={v} key={v}>
+                      {languageLabel(v)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t("theme.yearFrom")}
+                <input
+                  type="number"
+                  min={1000}
+                  max={9999}
+                  value={yearMin}
+                  onChange={(e) => filter(setYearMin, e.target.value)}
+                />
+              </label>
+              <label>
+                {t("theme.yearTo")}
+                <input
+                  type="number"
+                  min={1000}
+                  max={9999}
+                  value={yearMax}
+                  onChange={(e) => filter(setYearMax, e.target.value)}
+                />
+              </label>
+
+              <label className="folder-option">
+                <input
+                  type="checkbox"
+                  checked={poolOnly}
+                  onChange={(e) => {
+                    const value = e.target.checked;
+                    guard(() => {
+                      setPoolOnly(value);
+                      setOffset(0);
+                    });
+                  }}
+                />
+                {t("library.selectedSources")}
+              </label>
+              <label>
+                {t("library.quality")}
+                <select value={quality} onChange={(e) => filter(setQuality, e.target.value)}>
+                  {["all", "ready", "missing"].map((value) => (
+                    <option key={value} value={value}>
+                      {t(`library.quality.${value}` as "library.quality.all")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                {t("library.activation")}
+
+                <select
+                  value={activation}
+                  onChange={(event) => filter(setActivation, event.target.value)}
+                >
+                  {["all", "active", "disabled"].map((value) => (
+                    <option value={value} key={value}>
+                      {t(`library.${value}` as "library.all")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                {t("library.tags")}
+
+                <select value={tag} onChange={(event) => filter(setTag, event.target.value)}>
+                  <option value="">{t("library.all")}</option>
+
+                  {result?.tags?.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                {t("library.linkedTo")}
+
+                <select
+                  value={linkedTo}
+                  onChange={(event) => filter(setLinkedTo, event.target.value)}
+                >
+                  <option value="">{t("library.all")}</option>
+
+                  {result?.linked_to?.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                {t("library.bridge")}
+
+                <select value={bridge} onChange={(e) => filter(setBridge, e.target.value)}>
+                  <option value="">{t("library.all")}</option>
+
+                  {library?.bridges.map((b) => (
+                    <option key={b.bridge_id} value={b.bridge_id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                {t("library.folder")}
+
+                <input
+                  value={folder}
+                  maxLength={1024}
+                  onChange={(e) => filter(setFolder, e.target.value)}
+                />
+              </label>
+
+              <label>
+                {t("library.type")}
+
+                <select value={ext} onChange={(e) => filter(setExt, e.target.value)}>
+                  <option value="">{t("library.all")}</option>
+
+                  {[
+                    ".mp3",
+
+                    ".flac",
+
+                    ".wav",
+
+                    ".m4a",
+
+                    ".aac",
+
+                    ".ogg",
+
+                    ".oga",
+
+                    ".opus",
+
+                    ".aiff",
+
+                    ".aif",
+
+                    ".wma",
+
+                    ".mp4",
+
+                    ".mov",
+
+                    ".m4v",
+
+                    ".3gp",
+
+                    ".mkv",
+
+                    ".mka",
+
+                    ".webm",
+
+                    ".avi",
+
+                    ".wmv",
+
+                    ".asf",
+                  ].map((e) => (
+                    <option key={e}>{e}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                {t("library.availability")}
+
+                <select
+                  value={availability}
+                  onChange={(e) => filter(setAvailability, e.target.value)}
+                >
+                  {[
+                    "all",
+
+                    "available",
+
+                    "unavailable",
+
+                    "online",
+
+                    "offline",
+
+                    "fresh",
+
+                    "used",
+
+                    "reserved",
+                  ].map((value) => (
+                    <option value={value} key={value}>
+                      {t(`library.${value}` as "library.all")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </details>
+
           {loading && <p role="status">{t("app.loading")}</p>}
 
           {error && (
@@ -1009,31 +1035,33 @@ export function LibraryManager({
             </p>
           )}
 
-          {result && <p role="status">{t("library.results", { count: result.total })}</p>}
-          {(view.phase === "LOBBY" || view.phase === "FINAL_RESULTS") && (
-            <Button
-              kind="primary"
-              disabled={
-                loading ||
-                mutating ||
-                editorSaving ||
-                !result?.total ||
-                [yearMin, yearMax].some(
-                  (v) =>
-                    v !== "" &&
-                    (!Number.isInteger(Number(v)) || Number(v) < 1000 || Number(v) > 9999),
-                ) ||
-                (yearMin !== "" && yearMax !== "" && Number(yearMin) > Number(yearMax))
-              }
-              onClick={useTheme}
-            >
-              {t("theme.useLibrary")}
-            </Button>
-          )}
+          <div className="row library-result-actions">
+            {result && <p role="status">{t("library.results", { count: result.total })}</p>}
+            {(view.phase === "LOBBY" || view.phase === "FINAL_RESULTS") && (
+              <Button
+                kind="primary"
+                disabled={
+                  loading ||
+                  mutating ||
+                  editorSaving ||
+                  !result?.total ||
+                  [yearMin, yearMax].some(
+                    (v) =>
+                      v !== "" &&
+                      (!Number.isInteger(Number(v)) || Number(v) < 1000 || Number(v) > 9999),
+                  ) ||
+                  (yearMin !== "" && yearMax !== "" && Number(yearMin) > Number(yearMax))
+                }
+                onClick={useTheme}
+              >
+                {t("theme.useLibrary")}
+              </Button>
+            )}
+          </div>
 
           {!loading && result?.total === 0 && <p>{t("library.empty")}</p>}
 
-          <details className="disclosure library-bulk">
+          <details className="disclosure library-bulk" hidden={selectedTracks.size === 0}>
             <summary>
               {t("library.bulk")} ({selectedTracks.size})
             </summary>
@@ -1742,7 +1770,13 @@ function MetadataEditor({
     onBusy(busy);
   }, [draft, busy, onDirty, onBusy]);
 
-  useEffect(() => () => onDirty(false), [onDirty]);
+  useEffect(
+    () => () => {
+      onDirty(false);
+      onBusy(false);
+    },
+    [onDirty, onBusy],
+  );
 
   return (
     <form

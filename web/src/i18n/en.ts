@@ -2,6 +2,7 @@
 import type { MessageKey } from "./fr";
 
 export const en: { readonly [K in MessageKey]: string } = {
+  "library.moreFilters": "Filters and themes ({count} active)",
   "repair.scoringRound": "Round {number} · Award points",
   "repair.missingHint":
     "Some references are missing. Complete them, or exclude those criteria for everyone. A missing reference is not a wrong answer.",

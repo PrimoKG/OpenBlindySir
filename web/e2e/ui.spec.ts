@@ -64,6 +64,36 @@ const myAnswer = { status: "DRAFT" as const, text: null, draft_text: "Exemple de
 const roundId = "r_example1";
 
 for (const language of ["fr", "en"] as const) {
+  test(`library remains usable after saving metadata (${language})`, async ({ page }) => {
+    const { library, track } = manualFixture();
+    await harness(page, hostView(), library);
+    const copy = language === "fr" ? fr : en;
+    if (language === "en") await page.getByRole("button", { name: "English", exact: true }).click();
+    await page.route("**/api/host/library/search**", (route) =>
+      route.fulfill({ json: { total: 1, tracks: [track], tags: [], linked_to: [] } }),
+    );
+    await page.route("**/api/host/metadata", (route) => route.fulfill({ json: { ok: true } }));
+    await page.getByRole("button", { name: copy["library.manage"], exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: copy["library.manage"], exact: true });
+    await dialog.getByRole("button", { name: copy["ux.editTrack"], exact: true }).click();
+    const editor = dialog.locator(".metadata-editor");
+    await editor
+      .getByRole("textbox", { name: copy["review.title"], exact: true })
+      .fill("Updated example");
+    await editor.getByRole("button", { name: copy["hostui.save"], exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(
+      dialog.getByRole("button", { name: copy["library.disable"], exact: true }),
+    ).toBeEnabled();
+    await dialog.locator(".library-extra-filters > summary").click();
+    await dialog.getByRole("button", { name: "Rap", exact: true }).click();
+    await expect(
+      dialog.getByRole("combobox", { name: copy["theme.genres"], exact: true }),
+    ).toHaveValue("Rap");
+    await dialog.getByRole("button", { name: copy["flow.close"], exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+
   test(`library toggle and bulk preserve concurrent changes (${language})`, async ({ page }) => {
     const { view, library, track } = manualFixture();
     const copy = language === "fr" ? fr : en;
@@ -1241,6 +1271,7 @@ test("library search sends filters and gives keyboard access to an empty result"
     .getByRole("button", { name: "Sources et recherche de bibliothèque", exact: true })
     .click();
   await page.getByLabel("Rechercher un morceau", { exact: true }).fill("Été");
+  await page.locator(".library-extra-filters > summary").click();
   await page.getByRole("combobox", { name: "Format source", exact: true }).selectOption(".mp4");
   await expect
     .poll(() =>
@@ -1254,7 +1285,7 @@ test("library search sends filters and gives keyboard access to an empty result"
     page.getByText("Aucun morceau ne correspond aux filtres.", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Rechercher un morceau", { exact: true }).press("Tab");
-  await expect(page.getByRole("combobox", { name: "Bridge", exact: true })).toBeFocused();
+  await expect(page.getByRole("combobox", { name: "Trier par", exact: true })).toBeFocused();
 });
 
 test("source edits wait for a completed scan before allowing another folder change", async ({
@@ -4248,6 +4279,7 @@ for (const language of ["fr", "en"] as const) {
     await page.getByRole("button", { name: copy["library.manage"], exact: true }).click();
     const dialog = page.getByRole("dialog", { name: copy["library.manage"], exact: true });
     await expect(dialog.locator(".library-tracks > li")).toHaveCount(1);
+    await dialog.locator(".library-extra-filters > summary").click();
     await dialog.getByRole("button", { name: "Rap", exact: true }).click();
     await dialog.getByRole("button", { name: copy["theme.french"], exact: true }).click();
     await dialog.getByRole("button", { name: "2012", exact: true }).click();
@@ -4559,3 +4591,56 @@ test("finale activity changes language without repeating a score update", async 
   );
   await expect(page.locator(".score-updated")).toHaveCount(0);
 });
+
+for (const language of ["fr", "en"] as const) {
+  test(`library opens on tracks and clears every filter (${language})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const { library, track } = manualFixture();
+    await harness(page, hostView(), library);
+    const copy = language === "fr" ? fr : en;
+    if (language === "en") await page.getByRole("button", { name: "English", exact: true }).click();
+    const queries: URLSearchParams[] = [];
+    await page.route("**/api/host/library/search**", (route) => {
+      queries.push(new URL(route.request().url()).searchParams);
+      return route.fulfill({ json: { total: 1, tracks: [track], tags: [], linked_to: [] } });
+    });
+    await page.getByRole("button", { name: copy["library.manage"], exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: copy["library.manage"], exact: true });
+    await expect(dialog.locator(".library-tracks > li")).toBeInViewport({ ratio: 0.5 });
+    await expect(dialog.locator(".library-extra-filters")).not.toHaveAttribute("open", "");
+    await dialog.locator(".library-extra-filters > summary").click();
+    await dialog
+      .getByRole("combobox", { name: copy["library.activation"], exact: true })
+      .selectOption("disabled");
+    await dialog
+      .getByRole("combobox", { name: copy["library.type"], exact: true })
+      .selectOption(".mp4");
+    await dialog
+      .getByRole("combobox", { name: copy["library.quality"], exact: true })
+      .selectOption("missing");
+    await dialog
+      .getByRole("checkbox", { name: copy["library.selectedSources"], exact: true })
+      .check();
+    await dialog.getByLabel(copy["library.search"], { exact: true }).fill("test");
+    await expect.poll(() => queries.at(-1)?.get("q")).toBe("test");
+    await dialog.getByRole("button", { name: copy["theme.clear"], exact: true }).click();
+    await expect
+      .poll(() => Object.fromEntries(queries.at(-1) ?? []))
+      .toMatchObject({
+        q: "",
+        bridge: "",
+        folder: "",
+        ext: "",
+        availability: "all",
+        activation: "all",
+        quality: "all",
+        pool_only: "false",
+        tag: "",
+        linked_to: "",
+        genre: "",
+        language: "",
+        offset: "0",
+      });
+    await expect(dialog.locator(".library-extra-filters > summary")).toContainText("0");
+  });
+}

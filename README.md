@@ -266,6 +266,12 @@ Precompiled offline validation pack: [French guide](docs/offline-pack.md) / [Eng
 
 ### Latest correction pass — 10 October 2026
 
+The [complete requirements check (FR)](docs/audits/2026-10-10-conversation-check.md)
+and [English report](docs/audits/2026-10-10-conversation-check.en.md) distinguish
+verified features from remaining release limitations. This follow-up fixes the
+offline pack's protocol check and keeps library tracks visible on small laptops,
+with collapsible detailed filters and a complete filter reset.
+
 Background musical references, ready-only automatic games, per-criterion corrections
 and a simpler finale are documented in the [English scoring guide](docs/automatic-scoring.en.md)
 and [French guide](docs/notation-automatique.md). Protocol 14 / snapshot 11;

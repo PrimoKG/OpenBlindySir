@@ -67,12 +67,10 @@ Voir [le format des métadonnées](media-and-metadata.md).
 
 ## Mise à jour
 
-Cette évolution utilise le protocole **12** et le snapshot **9**. Mettez à jour
-serveur, Bridge et interface ensemble, après sauvegarde, puis rechargez les
-onglets existants. Les snapshots 1 à 8 sont migrés. Pour revenir au protocole 10,
-restaurez sa sauvegarde au format 8 ; une ancienne image ne peut pas lire le format 9.
-Pour revenir au protocole 11, restaurez également sa sauvegarde : ses filtres
-limités à 128 caractères ne peuvent pas relire les nouveaux libellés plus longs.
+La version actuelle utilise le protocole **14** et le snapshot **11**. Mettez à
+jour serveur, Bridge et interface ensemble, après sauvegarde, puis rechargez les
+onglets existants. Les snapshots 1 à 10 sont migrés. Pour revenir à une version
+antérieure, restaurez la sauvegarde compatible réalisée avant la mise à jour.
 
 Les chemins des fichiers déterminent leur identité. Pour organiser une soirée,
 privilégiez les tags et les métadonnées de l’app : déplacer ou renommer les

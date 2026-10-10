@@ -9,6 +9,7 @@ function New-DockerBuildContext([string]$Root, [string]$Parent) {
             'protocol/LICENSE', 'server/LICENSE', 'bridge/LICENSE', 'bridge/README.md',
             'tools/host_pc.py', 'tools/docker_config.py', 'tools/docker_bridge.py', 'tools/build_audio_ffmpeg.sh',
             'tools/check_audio_runtime.py',
+            'deploy/proxy/go.mod', 'deploy/proxy/go.sum',
             'web/package.json', 'web/package-lock.json', 'web/index.html', 'web/vite.config.ts')
         $files += @(Get-ChildItem -LiteralPath (Join-Path $Root 'web') -Filter 'tsconfig*.json' -File |
             ForEach-Object { 'web/' + $_.Name })

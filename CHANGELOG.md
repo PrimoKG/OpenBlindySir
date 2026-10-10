@@ -8,6 +8,19 @@ the version is 0.x, the API and protocol may change between minor versions.
 
 ## [Unreleased]
 
+- Rebuild Caddy 2.11.7 with pinned Go 1.26.9 and x/net 0.60.0 security fixes,
+  retaining standard modules, TLS configuration and local CA storage. Include
+  the proxy lockfiles in the isolated Windows Docker build context.
+
+- Release the library's busy state when its metadata editor closes after saving;
+  filtering, activation and closing the library continue to work without a reload.
+
+- Fix offline pack generation for the current protocol; include compatibility,
+  current bilingual user guides and requirements audit in the pack.
+- Put library search and sorting first, collapse detailed filters with an active
+  count, prevent pagination from covering tracks on small laptops, and reset all
+  filter criteria with Clear filters (FR/EN).
+
 - 2026-10-10: protocol 14 / snapshot 11 / history 3. Background local tag discovery
   includes album, year and featuring before play; opt-in ready-only selection.
 - Per-criterion manual protections during regrading, explicit missing-criterion

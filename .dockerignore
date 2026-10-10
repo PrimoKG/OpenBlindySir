@@ -5,6 +5,12 @@
 !uv.lock
 !VERSION
 !LICENSE
+!deploy/
+deploy/**
+!deploy/proxy/
+deploy/proxy/**
+!deploy/proxy/go.mod
+!deploy/proxy/go.sum
 !protocol/
 protocol/**
 !protocol/pyproject.toml

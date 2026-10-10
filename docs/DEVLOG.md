@@ -2250,3 +2250,24 @@ historique 3. Hashes des images et du bundle servi vérifiés, TLS valide via CA
 locale, Bridge connecté. Quatre joueurs, 15 archives, 300 morceaux, scores,
 métadonnées manuelles, cookies et montages conservés. Rapports :
 [FR](audits/2026-10-10-video-fixes.md), [EN](audits/2026-10-10-video-fixes.en.md).
+
+## 2026-10-10 — Vérification de toutes les demandes et livraison corrigée
+
+Matrice bilingue des exigences de la conversation. Bibliothèque compacte sur
+petit portable, filtres avancés repliés, effacement complet, pagination sans
+chevauchement. Computer Use a révélé un état occupé bloqué après sauvegarde :
+nettoyage au démontage et régressions FR/EN ajoutés, parcours manuel revérifié.
+Pack : protocole lu depuis l'image et comparé au serveur courant, documentation
+publique complète incluse. Proxy reconstruit avec Go 1.26.9 et x/net 0.60.0,
+verrous de dépendances conservés : 18 alertes Go supprimées du scan final.
+
+1 217 tests Python, 11 intégrations, 55 tests unitaires web, 121 scénarios UI
+finaux et cinq jeux Chrome réussis. Six tests ciblés pack/contexte Docker réussis
+après ajout des verrous Go. Contrôles statiques et build réussis. Partie Linux
+AAC puis HTTPS/WSS avec CA vérifiée, deux manches et trois joueurs simulés.
+Déploiement des images exactes, bundle servi et données conservées vérifiés.
+
+Les alertes système restantes ne sont pas déclarées résolues ; pas de transfert
+d'inventaire à Docker Scout. Audio iOS/Android physiques et installateur natif
+signé non validés/livrés. Voir le [rapport complet](audits/2026-10-10-conversation-check.md)
+et sa [version anglaise](audits/2026-10-10-conversation-check.en.md).

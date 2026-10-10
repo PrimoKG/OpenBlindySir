@@ -60,11 +60,10 @@ preview without losing criteria. See [metadata format](media-and-metadata.md).
 
 ## Updating
 
-This change uses protocol **12** and snapshot **9**. Back up state, update the
-server, Bridge and web UI together, then reload existing browser tabs. Snapshots
-1–8 migrate. To return to protocol 10, restore its format-8 backup; older images
-cannot read format 9. To return to protocol 11, restore its backup too: its
-128-character filters cannot restore longer labels accepted by protocol 12.
+The current version uses protocol **14** and snapshot **11**. Back up state,
+update the server, Bridge and web UI together, then reload existing tabs.
+Snapshots 1–10 migrate. Returning to an older version requires restoring its
+compatible pre-upgrade backup.
 
 File paths determine track identity. Prefer app tags and metadata for organizing
 themes: moving or renaming files requires a rescan and reassociating metadata.

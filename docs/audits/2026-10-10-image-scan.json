@@ -1,0 +1,78 @@
+{
+  "scanner": "anchore/grype@sha256:5c88961f4130e830542d441c7ed6c78baa28e799163abac53d2be4923fb5ab7d",
+  "images": {
+    "app": {
+      "reference": "openblindysir-server:conversation-20261010",
+      "image_id": "sha256:2c14aac3ae5ec3ea55d5b58682b7137125c1a9e8565b499649e92cf1e3dfe992",
+      "config_id": "sha256:3a3fd8978ca6108129a6db917894d032d6cd092e79a2e0942a5a1cdea82b289e",
+      "scan_sha256": "718259f5cf0cbffad72d561bf7b8e0503bb6d8e8bf414bf3e60cae42c15c6f16",
+      "counts": {
+        "High": 55,
+        "Medium": 50,
+        "Negligible": 46,
+        "Low": 10
+      },
+      "db": {
+        "schemaVersion": "v6.1.10",
+        "from": "https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-10-09T00:35:49Z_1791527552.tar.zst?checksum=sha256%3A10771a4ded5ec61df357f3bdc3d92807aedf23a717bcd2395c9decfdee20524f",
+        "built": "2026-10-09T06:32:32Z",
+        "path": "/cache/6/vulnerability.db",
+        "valid": true
+      }
+    },
+    "bridge": {
+      "reference": "openblindysir-bridge:repair-20261010",
+      "image_id": "sha256:7ad31ac1c79bd4e5fc3727a45d337dab8be8fc651d62d2d19bddbf862263a083",
+      "config_id": "sha256:4b6a4e0b1bb4485d78319ccdc80e84e56eb8972c156e0e4bfe9dc0ccc689c638",
+      "scan_sha256": "22cbb40748264f742b818c320c010ce885d95f9383c0276fd012410398b8fc11",
+      "counts": {
+        "High": 55,
+        "Medium": 50,
+        "Negligible": 46,
+        "Low": 10
+      },
+      "db": {
+        "schemaVersion": "v6.1.10",
+        "from": "https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-10-09T00:35:49Z_1791527552.tar.zst?checksum=sha256%3A10771a4ded5ec61df357f3bdc3d92807aedf23a717bcd2395c9decfdee20524f",
+        "built": "2026-10-09T06:32:32Z",
+        "path": "/cache/6/vulnerability.db",
+        "valid": true
+      }
+    },
+    "caddy": {
+      "reference": "openblindysir-caddy:conversation-20261010",
+      "image_id": "sha256:ef592848af939a06c37c0afb18f34f3747046ffcdaaa2d6e940583b772ac66e3",
+      "config_id": "sha256:d6f8a1c1622d5de11f0ca37c956a410a2b579859a398f7ae3cec3dcd27606ad2",
+      "scan_sha256": "cfb4132bd91c43a2e77155776ad8a9f393a6025ad40be2211a44d3d198259900",
+      "counts": {
+        "High": 8,
+        "Medium": 14,
+        "Low": 8
+      },
+      "db": {
+        "schemaVersion": "v6.1.10",
+        "from": "https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-10-09T00:35:49Z_1791527552.tar.zst?checksum=sha256%3A10771a4ded5ec61df357f3bdc3d92807aedf23a717bcd2395c9decfdee20524f",
+        "built": "2026-10-09T06:32:32Z",
+        "path": "/cache/6/vulnerability.db",
+        "valid": true
+      }
+    }
+  },
+  "compiled_ffmpeg": {
+    "image_id": "sha256:7ad31ac1c79bd4e5fc3727a45d337dab8be8fc651d62d2d19bddbf862263a083",
+    "verified_component": {
+      "version": "9.0.2",
+      "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
+    },
+    "sbom_sha256": "f908fc12e1f3b218a7dd6527369bba5bb7bc89ee8146f9103ac27ab5054ebe87",
+    "counts": {}
+  },
+  "proxy_security_update": {
+    "caddy": "2.11.7",
+    "binary_version": "v2.11.7-openblindysir.1",
+    "go": "1.26.9",
+    "x_net": "0.60.0",
+    "prior_go_findings": 18,
+    "remaining_go_findings": 0
+  }
+}

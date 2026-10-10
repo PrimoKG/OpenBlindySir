@@ -42,6 +42,9 @@
 .final-table {
   min-width: 0;
 }
+.library-result-actions > p {
+  margin: 0;
+}
 .library-list-region {
   container-type: inline-size;
   min-width: 0;
@@ -624,5 +627,34 @@ html:has(.is-finale) {
   }
   .with-host .finale-pace {
     margin: 0;
+  }
+}
+
+.library-primary-search {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 0.5rem 1rem;
+  align-items: end;
+}
+.library-primary-search .folder-option {
+  min-height: 44px;
+  margin: 0;
+}
+.library-workspace {
+  gap: 0.6rem;
+}
+.library-result-actions {
+  justify-content: space-between;
+}
+.library-pagination {
+  position: static;
+}
+.library-extra-filters > summary {
+  min-height: 44px;
+  padding-block: 0.65rem;
+}
+@media (max-width: 600px) {
+  .library-primary-search {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

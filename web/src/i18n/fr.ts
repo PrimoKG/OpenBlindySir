@@ -1,5 +1,6 @@
 // French dictionary and canonical message keys for the bilingual interface.
 export const fr = {
+  "library.moreFilters": "Filtres et thèmes ({count} actifs)",
   "repair.scoringRound": "Manche {number} · Attribution des points",
   "repair.missingHint":
     "Certaines références manquent. Complète-les, ou neutralise ces critères pour tous. Une référence absente n’est pas une erreur du joueur.",

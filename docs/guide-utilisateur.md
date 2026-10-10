@@ -122,6 +122,13 @@ Le verrou peut être retiré depuis le panneau hôte, quelle que soit la phase.
 
 ## Gérer les sources et rechercher
 
+La recherche et le tri restent visibles à l'ouverture. Dépliez **Filtres et thèmes**
+pour retrouver les raccourcis Génériques/Pop/Rap/2012, les langues et tous les
+critères détaillés. Le compteur indique les filtres actifs. **Effacer les filtres**
+réinitialise aussi la source, le dossier, le format, la disponibilité, l'activation,
+la qualité et la restriction aux sources sélectionnées ; l'ordre de tri est conservé.
+La pagination reste sous les morceaux et ne recouvre pas leurs commandes.
+
 Trois choix distincts :
 
 1. **Dossier accessible** : racine locale autorisée au Bridge, ou montage Docker.

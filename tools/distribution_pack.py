@@ -8,11 +8,37 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from openblindysir_protocol.compatibility import Compatibility
+from openblindysir_protocol.version import PROTOCOL_VERSION
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def run(*args: str) -> str:
     return subprocess.check_output(["docker", *args], text=True).strip()
+
+
+def image_protocol(reference: str) -> int:
+    """Read the actual packaged protocol, never a release-specific literal."""
+    actual = run(
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges:true",
+        "--entrypoint",
+        "python",
+        reference,
+        "-c",
+        "from openblindysir_protocol.version import PROTOCOL_VERSION; print(PROTOCOL_VERSION)",
+    )
+    if actual != str(PROTOCOL_VERSION):
+        raise ValueError(f"Incompatible image protocol: expected {PROTOCOL_VERSION}, got {actual}")
+    return PROTOCOL_VERSION
 
 
 def main() -> None:
@@ -34,7 +60,14 @@ def main() -> None:
     if not target.is_relative_to(ROOT / ".local") or target.exists():
         parser.error("Output must be a fresh directory inside .local")
     target.mkdir(parents=True)
-    manifest = {"version": args.version, "signed": False, "images": {}}
+    manifest = {
+        "version": args.version,
+        "signed": False,
+        "compatibility": Compatibility(
+            server_version=(ROOT / "VERSION").read_text().strip()
+        ).model_dump(),
+        "images": {},
+    }
     for service, reference in [
         ("app", args.server),
         ("bridge", args.bridge),
@@ -42,23 +75,7 @@ def main() -> None:
     ]:
         info = json.loads(run("image", "inspect", reference))[0]
         if service != "caddy":
-            protocol = run(
-                "run",
-                "--rm",
-                "--network",
-                "none",
-                "--read-only",
-                "--cap-drop",
-                "ALL",
-                "--entrypoint",
-                "python",
-                reference,
-                "-c",
-                "from openblindysir_protocol.version import PROTOCOL_VERSION; "
-                "print(PROTOCOL_VERSION)",
-            )
-            if protocol != "13":
-                raise ValueError("Incompatible image protocol")
+            image_protocol(reference)
         manifest["images"][service] = {
             "reference": reference,
             "id": info["Id"],
@@ -105,11 +122,38 @@ def main() -> None:
         "docs/audits/2026-10-08-theme-autofix.en.md",
         "docs/themed-nights.md",
         "docs/themed-nights.en.md",
+        "docs/guide-utilisateur.md",
+        "docs/user-guide.en.md",
+        "docs/notation-automatique.md",
+        "docs/automatic-scoring.en.md",
+        "docs/media-and-metadata.md",
+        "docs/audits/2026-10-10-video-fixes.md",
+        "docs/audits/2026-10-10-video-fixes.en.md",
+        "docs/audits/2026-10-10-conversation-check.md",
+        "docs/audits/2026-10-10-conversation-check.en.md",
+        "docs/audits/2026-10-10-image-scan.json",
+        "docs/audits/assets/2026-10-10-player-podium-en.png",
+        "docs/audits/assets/2026-10-10-host-editor-fr.png",
+        "docs/audits/assets/2026-10-10-library-1280-fr.png",
         "LICENSE",
     ]:
         destination = target / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / relative, destination)
+    # Keep links between the public guides usable offline. Include only tracked
+    # documentation, never local reports, state, secrets or the user's media.
+    public_docs = (
+        subprocess.check_output(["git", "ls-files", "-z", "--", "docs"], cwd=ROOT)
+        .decode("utf-8")
+        .split("\0")
+    )
+    for relative in filter(None, public_docs):
+        source = ROOT / relative
+        if source.is_symlink() or not source.resolve().is_relative_to(ROOT / "docs"):
+            raise ValueError("Public documentation must remain inside docs")
+        destination = target / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
     compose = compose.replace("image: openblindysir-server:local", f"image: {args.server}")
     compose = compose.replace("image: openblindysir-bridge:local", f"image: {args.bridge}")
@@ -130,9 +174,12 @@ def main() -> None:
         "# OpenBlindySir — local candidate / candidat local\n\n"
         "Unsigned Linux/amd64 pack. Open security findings remain; read the audit first.\n\n"
         "Pack Linux/amd64 non signé. Alertes de sécurité restantes : lire le rapport.\n\n"
-        "- [Audit FR](docs/audits/2026-10-08-theme-autofix.md) / "
-        "[Audit EN](docs/audits/2026-10-08-theme-autofix.en.md)\n"
+        "- [Audit FR](docs/audits/2026-10-10-conversation-check.md) / "
+        "[Audit EN](docs/audits/2026-10-10-conversation-check.en.md)\n"
         "- [Installation FR](docs/offline-pack.md) / [Installation EN](docs/offline-pack.en.md)\n\n"
+        "- [Utilisation FR](docs/guide-utilisateur.md) / [User guide EN](docs/user-guide.en.md)\n"
+        "- [Vérification complète FR](docs/audits/2026-10-10-conversation-check.md) / "
+        "[Complete check EN](docs/audits/2026-10-10-conversation-check.en.md)\n\n"
         "- [Soirées à thème FR](docs/themed-nights.md) / "
         "[Themed nights EN](docs/themed-nights.en.md)\n\n"
         "Windows: `powershell -File .\\tools\\load-pack.ps1`, then / puis "
