@@ -1,5 +1,12 @@
 // French dictionary and canonical message keys for the bilingual interface.
 export const fr = {
+  "friendly.options": "Options du final",
+  "friendly.answers": "Les réponses · Manche {number}",
+  "friendly.details": "Détails",
+  "friendly.criteria": "Noter chaque élément",
+  "friendly.editPoints": "Modifier les points",
+  "friendly.scrollOptions": "Navigation des réponses",
+  "friendly.missing": "Information manquante : complète-la pour aider la notation.",
   "library.moreFilters": "Filtres et thèmes ({count} actifs)",
   "repair.scoringRound": "Manche {number} · Attribution des points",
   "repair.missingHint":
@@ -21,7 +28,7 @@ export const fr = {
   "repair.saveFuture": "Enregistrer sans recalculer les points",
   "repair.readyOnly": "Jouer uniquement les morceaux prêts pour ces critères",
   "repair.referencePreparation":
-    "Les tags du fichier et tes corrections servent de références. Un nom de fichier est une suggestion : confirme-le dans la bibliothèque avant de jouer. Actualise après l’analyse des fichiers.",
+    "Tes corrections et les tags du fichier sont prioritaires. Si le titre ou les artistes manquent, ils sont extraits du nom du fichier quand c’est possible. Vérifie les noms ambigus dans la bibliothèque.",
   "repair.scrollPaused": "Avance automatique en pause",
   "repair.referenceOptions": "Options de référence",
   "repair.privateNavigation": "Corriger une autre manche en privé",

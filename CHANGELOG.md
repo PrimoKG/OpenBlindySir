@@ -8,6 +8,14 @@ the version is 0.x, the API and protocol may change between minor versions.
 
 ## [Unreleased]
 
+- Simplify finale scoring: one contextual primary action, two quick choices per
+  pending answer, compact reviewed cards, and collapsed advanced tools (FR/EN).
+  Finish-scoring navigation stays on the selected round before visiting others.
+- Infer missing title, artist and featuring locally from structured filenames,
+  preserving tag/import/manual priority and explicit clears. Strip marketing
+  labels, retain meaningful versions, reject generic identifiers, and never
+  guess album/year or silently regrade past rounds.
+
 - Rebuild Caddy 2.11.7 with pinned Go 1.26.9 and x/net 0.60.0 security fixes,
   retaining standard modules, TLS configuration and local CA storage. Include
   the proxy lockfiles in the isolated Windows Docker build context.

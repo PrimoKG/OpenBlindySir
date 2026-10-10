@@ -2271,3 +2271,19 @@ Les alertes système restantes ne sont pas déclarées résolues ; pas de transf
 d'inventaire à Docker Scout. Audio iOS/Android physiques et installateur natif
 signé non validés/livrés. Voir le [rapport complet](audits/2026-10-10-conversation-check.md)
 et sa [version anglaise](audits/2026-10-10-conversation-check.en.md).
+
+
+## 2026-10-10 — Final simplifié et références depuis les noms de fichiers
+
+Réponses et points au premier plan, deux choix rapides, une action contextuelle
+dans la barre, outils secondaires et preuves repliés. Navigation vers la réponse
+incomplète de la manche sélectionnée corrigée. Extraction locale titre/artiste/
+featuring en dernier recours, sans inventer album/année ni modifier les fichiers,
+avec priorité des tags/corrections et respect des suppressions explicites.
+FR/EN et guides actualisés. Python 1 238 réussis/2 ignorés/11 hors sélection,
+55 tests frontend, 127 UI et 5 parcours réels Chrome réussis ; Ruff/Biome/Pyright,
+build et contrat généré vérifiés. Deux parcours complets relancés après correction
+d’un test qui refermait un menu ouvert. Computer Use hôte FR/joueur EN jusqu’aux
+résultats sur une bibliothèque synthétique sans tags. Image app testée en HTTPS
+puis déployée avec sauvegarde ; 4 joueurs, 16 archives et 300 morceaux conservés.
+Détails, captures et limites dans le [rapport](audits/2026-10-10-finale-simplification.md).

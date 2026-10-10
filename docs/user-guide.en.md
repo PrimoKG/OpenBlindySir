@@ -198,6 +198,22 @@ addition/activation changes, retaining existing labels and reporting success cou
 
 ## The grand finale
 
+The bottom bar offers one action for the current step: present, finish scoring the
+selected round, move to the next, then start the podium. **Finale options** holds
+fast pacing, stopping and early publication. **All rounds** contains private
+round selection and search.
+
+Pending answers offer **Found / Missed** for one criterion or **All correct /
+All incorrect** for several. Expand **Score each item** for partial credit.
+Reviewed cards show points; **Edit points** reopens the controls. Automatic
+matching evidence, timings and manual totals are available under **Details**.
+
+Without metadata, `Travis Scott - FE!N (feat. Playboi Carti).mp3` supplies title,
+artist and featuring. A title alone supplies no invented artist. Corrections,
+imports and embedded tags take priority; album and year are never guessed.
+Previously played rounds retain their frozen references: correct them and use
+**Save and regrade** if needed.
+
 Desktop scoring and standings use the available width. Names and answers remain
 readable with five criteria; detailed automatic evidence can be expanded when
 needed. **Test my audio** stays in the header throughout the finale, including
@@ -219,7 +235,7 @@ actions come before detailed standings.
 The last round opens **The grand finale** for everyone. Ending early can finish
 with the current awards and open the replay/end-session menu; see
 [Stop and restore](#stop-and-restore). During the finale, the
-host privately selects a played round, then uses **Present round N** to present its
+host privately selects a played round under **All rounds**, then uses **Present round N** to present its
 track and closed answers. Players follow confirmed point changes and provisional
 rankings live. Private navigation never changes the public scene.
 

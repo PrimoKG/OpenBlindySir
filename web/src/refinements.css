@@ -658,3 +658,140 @@ html:has(.is-finale) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.scroll-options > summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Keep scoring focused on the answer; diagnostics and occasional actions are opt-in. */
+.finale-host-controls {
+  gap: 0.75rem;
+}
+.finale-present-controls {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.finale-options {
+  padding: 0.6rem 0.8rem;
+}
+.finale-options > summary,
+.round-browser > summary {
+  font-weight: 600;
+}
+.finale-options .finale-pace {
+  margin-block: 0.75rem;
+}
+.final-review .finale-action-bar {
+  justify-content: space-between;
+  max-width: 960px;
+}
+.final-review .finale-action-bar > .btn {
+  flex: 0 1 auto;
+}
+.review-section .review-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.review-section .review-heading > h2,
+.review-section .review-heading > .track-artist {
+  flex-basis: 100%;
+}
+.review-section .phase-band {
+  justify-content: space-between;
+}
+.review-section .answer-card {
+  padding: 1rem;
+  gap: 0.75rem;
+  border-radius: 18px;
+}
+.review-section .answer-text {
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+.review-section .answer-award {
+  color: var(--accent);
+  white-space: nowrap;
+}
+.review-section .answer-status {
+  display: block;
+  font-size: 0.8rem;
+}
+.review-section .answer-player {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.review-section .review-status {
+  margin-left: auto;
+}
+.review-section .answer-details {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border, #dedbd1);
+  padding-top: 0.6rem;
+}
+.review-section :is(.answer-details, .score-edit) > summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.review-section .score-controls {
+  gap: 0.65rem;
+}
+.review-section .score-controls > .criterion {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.review-section .criterion > span {
+  flex: 1 1 6rem;
+}
+.review-section .criterion-options > summary {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.review-section .criterion-options[open] > .criterion {
+  margin-block: 0.5rem;
+}
+.review-section .answer-card:not(.reviewed) .score-edit[open] > summary {
+  display: none;
+}
+.review-section .criterion-options[open]:has(> .criterion:only-of-type) > summary {
+  display: none;
+}
+.review-section .draft-proposal {
+  padding: 0.6rem;
+}
+.review-section .draft-proposal strong {
+  font-size: 0.85rem;
+}
+.review-section .auto-assessment {
+  max-height: none;
+  overflow: visible;
+}
+.scroll-options {
+  margin-bottom: 0.5rem;
+}
+.reference-options {
+  flex-basis: 100%;
+  font-size: 0.85rem;
+}
+@media (max-width: 700px) {
+  .final-review .finale-action-bar {
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    padding: 0.65rem;
+  }
+  .final-review .finale-action-bar > .btn {
+    max-width: 65%;
+    font-size: 0.85rem;
+  }
+  .final-review .finale-action-bar .action-progress {
+    min-width: 0;
+    font-size: 0.75rem;
+  }
+  .review-section .answer-card {
+    padding: 0.85rem;
+  }
+}

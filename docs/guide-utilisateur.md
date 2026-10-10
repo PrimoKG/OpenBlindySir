@@ -214,6 +214,23 @@ Les joueurs et l'hôte joueur ne reçoivent pas ces informations avant le reveal
 
 ## Le grand final
 
+La barre du bas propose une seule action selon l’étape : présenter, terminer la
+notation de la manche affichée, passer à la suivante, puis lancer le podium.
+**Options du final** regroupe le rythme rapide, l’arrêt et la publication anticipée.
+**Toutes les manches** contient la sélection privée et la recherche.
+
+Pour une réponse à noter, deux choix suffisent : **Trouvé / Manqué** s’il y a un
+seul critère, **Tout bon / Tout faux** sinon. Dépliez **Noter chaque élément** pour
+une réponse partielle. Une fois notée, la carte affiche les points ; **Modifier les
+points** permet de revenir sur la décision. Les preuves automatiques, horaires
+et points manuels sont accessibles dans **Détails**.
+
+Sans métadonnées, un nom comme `Travis Scott - FE!N (feat. Playboi Carti).mp3`
+fournit le titre, l’artiste et le featuring. Un titre seul reste utilisable sans
+inventer un artiste. Les corrections, imports et tags ont priorité ; album et
+année ne sont jamais déduits du nom. Les références des manches déjà jouées
+restent figées : corrigez puis utilisez **Enregistrer et renoter** si nécessaire.
+
 Sur ordinateur, la notation et le classement utilisent la largeur disponible. Les
 cartes gardent le pseudo et la réponse lisibles même avec cinq critères ; les
 justifications automatiques détaillées se déplient à la demande. Le bouton
@@ -235,7 +252,7 @@ victoire. Après le podium, les actions de nouvelle partie et de fin de session
 précèdent les classements détaillés.
 
 La dernière manche ouvre **Le grand final**, partagé avec
-les joueurs. L’hôte utilise **Corriger une autre manche en privé** pour sa préparation privée, puis
+les joueurs. Dans **Toutes les manches**, l’hôte utilise **Corriger une autre manche en privé** pour sa préparation privée, puis
 **Présenter la manche N** dans la barre d’action persistante. Tous voient alors le morceau, les réponses et leur
 notation en direct. Naviguer seul ne change pas la scène publique.
 

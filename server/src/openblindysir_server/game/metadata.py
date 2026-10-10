@@ -4,6 +4,7 @@ import re
 from copy import deepcopy
 from dataclasses import replace
 
+from openblindysir_server.game.filename_metadata import filename_metadata
 from openblindysir_server.game.state import AssetRecord, Metadata, SessionState, TrackRef
 from openblindysir_server.game.themes import GENRE_LABELS, LANGUAGES, search_key
 
@@ -21,21 +22,24 @@ def measured_tracks(s: SessionState) -> dict[TrackRef, AssetRecord]:
 def selection_metadata(s: SessionState, ref: TrackRef, asset: AssetRecord | None) -> Metadata:
     """Resolve search/selection titles without overriding corrections or explicit clears."""
     meta = musical_metadata(s, ref)
-    if asset is None:
-        return meta
+    catalog = s.catalogs.get(ref.bridge_id)
+    entry = catalog.entries.get(ref.track_id) if catalog else None
+    inferred = filename_metadata(entry.relpath) if entry else Metadata()
     return replace(
         meta,
         **{
             key: None
             if key in (meta.cleared_fields or [])
-            else getattr(meta, key) or getattr(asset, key)
+            else getattr(meta, key)
+            or (getattr(asset, key) if asset else None)
+            or getattr(inferred, key)
             for key in ("title", "artist", "album", "year", "featuring")
         },
     )
 
 
 def scoring_metadata(s: SessionState, ref: TrackRef, asset: AssetRecord | None) -> Metadata:
-    """Shared by draft preflight and grading; filenames are never scoring references."""
+    """Shared preflight/grading resolution, including missing-field filename hints."""
     meta = musical_metadata(s, ref)
     resolved = selection_metadata(s, ref, asset)
     title, artist = clean_metadata(resolved.title, resolved.artist, "")

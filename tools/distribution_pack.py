@@ -131,6 +131,10 @@ def main() -> None:
         "docs/audits/2026-10-10-video-fixes.en.md",
         "docs/audits/2026-10-10-conversation-check.md",
         "docs/audits/2026-10-10-conversation-check.en.md",
+        "docs/audits/2026-10-10-finale-simplification.md",
+        "docs/audits/2026-10-10-finale-simplification.en.md",
+        "docs/audits/assets/2026-10-10-finale-friendly-fr.png",
+        "docs/audits/assets/2026-10-10-finale-player-en.png",
         "docs/audits/2026-10-10-image-scan.json",
         "docs/audits/assets/2026-10-10-player-podium-en.png",
         "docs/audits/assets/2026-10-10-host-editor-fr.png",
@@ -180,6 +184,8 @@ def main() -> None:
         "- [Utilisation FR](docs/guide-utilisateur.md) / [User guide EN](docs/user-guide.en.md)\n"
         "- [Vérification complète FR](docs/audits/2026-10-10-conversation-check.md) / "
         "[Complete check EN](docs/audits/2026-10-10-conversation-check.en.md)\n\n"
+        "- [Final simplifié FR](docs/audits/2026-10-10-finale-simplification.md) / "
+        "[Simplified finale EN](docs/audits/2026-10-10-finale-simplification.en.md)\n\n"
         "- [Soirées à thème FR](docs/themed-nights.md) / "
         "[Themed nights EN](docs/themed-nights.en.md)\n\n"
         "Windows: `powershell -File .\\tools\\load-pack.ps1`, then / puis "

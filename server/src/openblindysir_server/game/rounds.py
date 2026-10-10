@@ -34,7 +34,12 @@ from openblindysir_server.game import assets, auto_scoring, library, selection
 from openblindysir_server.game.answers import capture_drafts
 from openblindysir_server.game.clock import Instant
 from openblindysir_server.game.effects import EffectSink, Play, SendPlay, SendStop
-from openblindysir_server.game.metadata import clean_metadata, musical_metadata, scoring_metadata
+from openblindysir_server.game.metadata import (
+    clean_metadata,
+    musical_metadata,
+    scoring_metadata,
+    selection_metadata,
+)
 from openblindysir_server.game.permissions import rule_ok
 from openblindysir_server.game.readiness import expected_ready, ready_ids
 from openblindysir_server.game.rejections import require
@@ -281,7 +286,7 @@ def decode_failure(s: SessionState, r: Round, fx: EffectSink) -> None:
 
 
 def build_auto_reference(s: SessionState, r: Round) -> Metadata:
-    """Only metadata/tags are scoring references, never the display filename fallback."""
+    """Freeze resolved tags, host corrections and missing-field filename hints."""
     assert r.slot.track_ref is not None
     return scoring_metadata(s, r.slot.track_ref, s.assets.get(r.slot.asset_id or ""))
 
@@ -294,6 +299,7 @@ def build_reveal(s: SessionState, r: Round) -> RevealInfo:
     title = asset.title if asset is not None else None
     artist = asset.artist if asset is not None else None
     metadata = musical_metadata(s, ref)
+    resolved = selection_metadata(s, ref, asset)
     catalog = s.catalogs.get(ref.bridge_id)
     entry = r.track_entry or (catalog.entries.get(ref.track_id) if catalog is not None else None)
     bridge_name = r.bridge_name or (catalog.bridge_name if catalog is not None else "")
@@ -305,7 +311,7 @@ def build_reveal(s: SessionState, r: Round) -> RevealInfo:
         display = library.file_display_name(entry)
     else:
         display = "?"
-    title, artist = clean_metadata(title, artist, display)
+    title, artist = clean_metadata(resolved.title, resolved.artist, display)
     title, artist = metadata.title or title, metadata.artist or artist
     if "title" in (metadata.cleared_fields or []):
         title = None
@@ -320,9 +326,9 @@ def build_reveal(s: SessionState, r: Round) -> RevealInfo:
         folder=folder,
         title=title,
         artist=artist,
-        featuring=metadata.featuring if metadata else None,
-        album=metadata.album if metadata else None,
-        year=metadata.year if metadata else None,
+        featuring=resolved.featuring,
+        album=resolved.album,
+        year=resolved.year,
         aliases=metadata.aliases,
         cleared_fields=metadata.cleared_fields,
     )

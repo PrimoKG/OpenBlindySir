@@ -26,6 +26,108 @@ import type {
   StandingRow,
 } from "../src/protocol";
 
+for (const language of ["fr", "en"] as const) {
+  for (const width of [390, 1093, 1280]) {
+    test(`friendly scoring keeps one action and hides diagnostics (${language}, ${width})`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 720 });
+      const ui = await harness(page, hostView());
+      const copy = language === "fr" ? fr : en;
+      if (language === "en")
+        await page.getByRole("button", { name: "English", exact: true }).click();
+      const review = globalReview(
+        hostView(),
+        [
+          {
+            player_id: players[0].id,
+            text: "Réseaux Niska",
+            status: "CAPTURED",
+            points_draft: 0,
+            reviewed: false,
+            score_revision: 0,
+            judgement: "criteria",
+            title_correct: null,
+            artist_correct: null,
+            album_correct: null,
+            year_correct: null,
+            featuring_correct: null,
+            custom_correct: null,
+            order: null,
+            near_tie: false,
+            elapsed_ms: null,
+            late_start_ms: null,
+            received_at_wall_ms: null,
+            score_before: 0,
+            auto_overridden: false,
+            auto_evidence: [],
+          },
+        ],
+        {
+          title: "Réseaux",
+          artist: "Niska",
+          display_name: "Niska - Réseaux.mp3",
+          folder: "Demo",
+          featuring: null,
+          album: null,
+          year: null,
+          aliases: null,
+          cleared_fields: [],
+        },
+      );
+      ui.show(review);
+      const card = page.locator(".answer-card");
+      await expect(card).toContainText("Réseaux Niska");
+      await expect(card.locator("button:visible")).toHaveCount(2);
+      await expect(page.locator(".finale-action-bar > button")).toHaveCount(1);
+      await expect(page.locator(".answer-details")).not.toHaveAttribute("open", "");
+      await expect(page.locator(".finale-options")).not.toHaveAttribute("open", "");
+      await expect(page.locator(".round-browser")).not.toHaveAttribute("open", "");
+      await expect(
+        page.getByRole("button", { name: copy["final.validate"], exact: true }),
+      ).toHaveCount(0);
+      await card.getByRole("button", { name: copy["flow.allGood"], exact: true }).click();
+      await expect
+        .poll(() =>
+          ui.sent
+            .map((raw) => JSON.parse(raw))
+            .some(
+              (message) =>
+                message.cmd === "score_draft" &&
+                message.args.title_correct &&
+                message.args.artist_correct,
+            ),
+        )
+        .toBe(true);
+      ui.show({
+        ...review,
+        host: {
+          ...review.host,
+          review_rounds: review.host.review_rounds.map((round) => ({
+            ...round,
+            answers: round.answers.map((answer) => ({
+              ...answer,
+              reviewed: true,
+              score_revision: 1,
+              points_draft: 2,
+              title_correct: true,
+              artist_correct: true,
+            })),
+          })),
+        },
+      });
+      await expect(card.locator(".answer-award")).toContainText("2");
+      await expect(card.locator("button:visible")).toHaveCount(0);
+      await card.locator(".score-edit > summary").click();
+      await expect(
+        card.getByRole("button", { name: copy["flow.allWrong"], exact: true }),
+      ).toBeVisible();
+      await layout(page);
+      await page.screenshot({ path: info.outputPath("friendly-final.png"), fullPage: true });
+    });
+  }
+}
+
 const players = [
   {
     id: "p_example1",
@@ -984,15 +1086,17 @@ test("local score editing waits for acknowledgement and confirms unchecked answe
   ui.show(review);
   await expect(
     page
-      .locator(".review-heading")
+      .locator(".finale-track")
       .getByRole("heading", { name: "Titre privé exemple", exact: true }),
   ).toBeVisible();
   const input = page.getByLabel(`Points pour ${players[0].nickname}`, { exact: true });
+  await page.locator(".answer-details > summary").first().click();
   await page.locator(".manual-score > summary").first().click();
   await input.fill("-");
   ui.show(review); // unrelated STATE must preserve incomplete local typing
   await expect(input).toHaveValue("-");
   expect(ui.sent.some((raw) => JSON.parse(raw).cmd === "score_draft")).toBe(false);
+  await page.locator(".finale-options > summary").click();
   await expect(page.getByRole("button", { name: "Lancer le podium", exact: true })).toBeDisabled();
   await input.fill("12");
   await input.press("Enter");
@@ -1684,9 +1788,11 @@ for (const width of [320, 390, 1280]) {
       received_at_wall_ms: null,
     }));
     ui.show(globalReview(base, answers));
-    await expect(page.getByText("3 participants sur cette manche", { exact: true })).toBeVisible();
+    await expect(page.locator(".phase-band")).toContainText("0/3 réponses vérifiées");
+    await page.locator(".answer-details > summary").nth(1).click();
     await page.locator(".answer-time > summary").nth(1).click();
     await expect(page.locator(".review")).toContainText("⚠ audio +2,3 s");
+    await page.locator(".answer-details > summary").first().click();
     await page.locator(".manual-score > summary").first().click();
     await page.getByLabel(`Points pour ${players[0].nickname}`, { exact: true }).fill("-2");
     await page.getByLabel(`Points pour ${players[0].nickname}`, { exact: true }).press("Enter");
@@ -2126,6 +2232,7 @@ test("equal score acknowledgements still retain distinct title and artist decisi
     [row],
   );
   ui.show(review);
+  await page.locator(".criterion-options > summary").click();
   const title = page.locator(".criterion").first();
   const artist = page.locator(".criterion").last();
   await title.getByRole("button", { name: "Trouvé", exact: true }).click();
@@ -2157,6 +2264,7 @@ test("equal score acknowledgements still retain distinct title and artist decisi
     auto_overridden: false,
     score_revision: 2,
   });
+  await page.locator(".score-edit > summary").click();
   await expect(artist.getByRole("button", { name: "Manqué", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -2543,6 +2651,7 @@ test("host preparation stays separate from the presented round and shared replay
     host: { ...review.host, review_rounds: [...review.host.review_rounds, second] },
   };
   ui.show(state);
+  await page.locator(".round-browser > summary").click();
   await page.getByLabel("Corriger une autre manche en privé").selectOption(second.round_id);
   await expect(page.locator(".finale-track h2")).toHaveText("La kiffance");
   await expect(page.locator(".review-heading > h2")).toHaveText("Aïcha");
@@ -2920,9 +3029,12 @@ test("absent answers stay compact and zero waits for the revision acknowledgemen
   ui.show(state);
   await expect(page.locator(".answer-card")).toHaveCount(0);
   await expect(page.locator(".absent-answer")).toHaveCount(2);
-  await expect(page.getByText("2 participants sur cette manche", { exact: true })).toBeVisible(); // late/non-participating third player is not an absent answer
+  await expect(page.locator(".phase-band")).toContainText("0/2 réponses vérifiées"); // late/non-participating third player is not an absent answer
   await expect(page.locator(".expected-answer")).toContainText("Référence manquante : à vérifier");
-  await page.locator(".expected-answer").getByRole("button").click();
+  await page
+    .locator(".expected-answer")
+    .getByRole("button", { name: fr["ux.editTrack"], exact: true })
+    .click();
   await expect(page.getByRole("dialog", { name: fr["ux.editTrack"], exact: true })).toBeVisible();
   await page
     .locator(".metadata-editor")
@@ -2931,6 +3043,7 @@ test("absent answers stay compact and zero waits for the revision acknowledgemen
   const row = page.locator(".absent-answer").first();
   await row.getByRole("button", { name: "Confirmer 0 point", exact: true }).click();
   await expect(row.getByRole("button", { name: "Confirmer 0 point", exact: true })).toBeDisabled();
+  await page.locator(".finale-options > summary").click();
   await expect(page.getByRole("button", { name: "Lancer le podium", exact: true })).toBeDisabled();
   ui.show(state); // zero in an old state is not its acknowledgement
   await expect(row.getByRole("button", { name: "Confirmer 0 point", exact: true })).toBeDisabled();
@@ -3577,6 +3690,7 @@ test("last two finale rounds can be presented again after navigating backward", 
     finale: { ...seeded.finale, round: null, revealed_round_ids: [], rounds_total: 3 },
   };
   ui.show(live);
+  await page.locator(".round-browser > summary").click();
   const visited = new Set<string>();
   for (const number of [2, 3, 1, 2, 3]) {
     const id = `r_revisit${number}`;
@@ -4044,6 +4158,7 @@ for (const language of ["fr", "en"] as const) {
     await expect(page.locator(".expected-answer")).toContainText("2015");
     await expect(page.locator(".score-controls .criterion")).toHaveCount(4);
     const analysis = page.locator(".auto-assessment");
+    await page.locator(".answer-details > summary").click();
     await analysis.locator("summary").click();
     await expect(analysis).toContainText(
       language === "en" ? "93.8% / threshold 90%" : "93,8 % / seuil 90 %",
@@ -4368,6 +4483,7 @@ for (const size of [
     await expect(card.locator(".criterion")).toHaveCount(5);
     await expect(card.locator(".review-status")).toContainText("0 / 5");
     // Opening explanations creates a genuinely oversized card, unlike the old absence-only fixture.
+    await card.locator(".answer-details > summary").click();
     await card.locator(".auto-assessment > summary").click();
     expect(await card.evaluate((el) => el.clientHeight)).toBeGreaterThan(
       await pane.evaluate((el) => el.clientHeight),

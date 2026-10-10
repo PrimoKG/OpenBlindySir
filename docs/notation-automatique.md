@@ -83,13 +83,18 @@ morceaux prêts, les champs manquants et des exemples. Corrigez la bibliothèque
 acceptez explicitement de noter les références manquantes à la main avant de lancer.
 Changer les critères ou la sélection demande une nouvelle vérification ; les
 réglages peuvent être enregistrés sans lancer. Les tags du fichier peuvent encore
-être enrichis lors de la préparation audio. Un nom de fichier seul ne constitue
-pas une référence de titre fiable ; une donnée absente n'est jamais inventée.
+être enrichis lors de la préparation audio. Si le titre ou les artistes manquent,
+le serveur tente de les extraire du nom du fichier : `Niska - Réseaux.mp3` donne
+« Réseaux » et « Niska », et `feat.`/`ft.` identifie les invités. Un nom seul comme
+`FE!N.mp3` fournit le titre, sans inventer l’artiste, l’album ou l’année. Ces
+références servent aussi à la notation automatique. Vérifiez les noms ambigus ;
+les tags, imports et corrections de l’hôte restent prioritaires. Un champ
+explicitement effacé ne reçoit pas de repli.
 
 Les règles, le seuil, les références et les variantes sont figés au premier lancement
 de la manche. Modifier la bibliothèque ne change pas silencieusement sa notation.
-Dans le final, modifier les références puis cocher **Recalculer cette manche avec
-les nouvelles références** permet un recalcul explicite. Seule cette manche est
+Dans le final, modifier les références puis choisir **Enregistrer et recalculer
+cette manche** permet un recalcul explicite. Seule cette manche est
 recalculée ; les corrections manuelles sont conservées. Des points déjà montrés
 peuvent alors changer. Le détail de reconnaissance conserve les références réellement
 utilisées, le fragment détecté, le pourcentage et le seuil. Une ancienne analyse
@@ -160,3 +165,19 @@ signal. Cette confirmation ne prouve pas que le haut-parleur de l'appareil est a
 Compatibilité : protocole 14, snapshot 11, historique 3. Mettre à jour ensemble
 serveur, interface et Bridge. Sauvegarder les volumes à l'arrêt avant mise à jour ;
 un retour à une ancienne image exige de restaurer sa sauvegarde compatible.
+
+## Un final centré sur les réponses
+
+La barre du bas propose une seule étape : présenter, terminer la notation de la
+manche affichée, passer à la suivante, puis lancer le podium. **Toutes les manches**
+permet de revenir en arrière en privé. **Options du final** contient le rythme
+rapide, l’arrêt et la publication anticipée.
+
+Chaque carte montre la réponse et les points. Pour plusieurs critères, **Tout bon**
+ou **Tout faux** suffit ; **Noter chaque élément** permet une attribution partielle.
+Une réponse déjà notée se modifie avec **Modifier les points**. Les pourcentages,
+le temps de réponse et les ajustements numériques restent accessibles dans
+**Détails**. Les réglages de défilement apparaissent seulement si la liste déborde.
+Les références des manches déjà lancées restent figées : après une mise à jour,
+utilisez l’éditeur et **Enregistrer et recalculer cette manche** pour appliquer
+les nouvelles informations à une ancienne manche.

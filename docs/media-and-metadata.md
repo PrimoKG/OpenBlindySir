@@ -80,15 +80,18 @@ inconnue, doublon, ambiguïté NFC ou valeur invalide. Le premier doublon valide
 connu est retenu. Les fichiers ambigus doivent être renommés et rescannés.
 
 Priorité **par champ** : correction manuelle non vide → import → tags titre/artiste
-du morceau préparé → nom de fichier nettoyé pour le titre. Featuring/album/année
-proviennent de l'import ou de la correction. Effacer une correction manuelle rend
-son repli actif. Les données persistent dans le snapshot privé de session ;
+du morceau préparé → titre/artistes/featuring extraits du nom du fichier. Les
+marqueurs `feat.`/`ft.` et les séparateurs artiste - titre sont reconnus ; les
+décorations « Official Video », « Lyrics » et extensions sont retirées. Album et
+année ne sont pas devinés. Ces replis alimentent bibliothèque, précontrôle,
+notation automatique et révélation. Un nom ambigu peut être corrigé par l’hôte. Rétablir l’héritage d’une correction rend son repli actif ; effacer explicitement
+un champ bloque aussi les tags et le repli du nom de fichier. Les données persistent dans le snapshot privé de session ;
 **Fin de session** les conserve avec les archives ; les joueurs et la partie sont réinitialisés. L'export fusionne import et corrections pour les
 entrées encore connues, sans exporter les pistes, tags binaires ou pochettes.
 
 La recherche utilise nom de fichier, titre et artiste importés/corrigés, tags
-et œuvres liées. Les filtres combinent ces catégories, les sources et l’activation. Le scan
-ne sonde pas tous les tags de la bibliothèque. Les joueurs reçoivent les
+et œuvres liées. Les filtres combinent ces catégories, les sources et l’activation. Le Bridge
+lit les tags locaux en amont avec un nombre limité de sondages simultanés et un cache. Les joueurs reçoivent les
 métadonnées des morceaux à mesure que l’hôte les dévoile au grand final.
 
 ## Préécoute privée de la bibliothèque

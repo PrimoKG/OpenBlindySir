@@ -2,6 +2,13 @@
 import type { MessageKey } from "./fr";
 
 export const en: { readonly [K in MessageKey]: string } = {
+  "friendly.options": "Finale options",
+  "friendly.answers": "The answers · Round {number}",
+  "friendly.details": "Details",
+  "friendly.criteria": "Score each item",
+  "friendly.editPoints": "Edit points",
+  "friendly.scrollOptions": "Answer navigation",
+  "friendly.missing": "Missing information: complete it to help scoring.",
   "library.moreFilters": "Filters and themes ({count} active)",
   "repair.scoringRound": "Round {number} · Award points",
   "repair.missingHint":
@@ -23,7 +30,7 @@ export const en: { readonly [K in MessageKey]: string } = {
   "repair.saveFuture": "Save without recalculating scores",
   "repair.readyOnly": "Only play tracks ready for these criteria",
   "repair.referencePreparation":
-    "File tags and your corrections provide references. A filename is a suggestion: confirm it in the library before playing. Refresh after files have been analyzed.",
+    "Your corrections and file tags take priority. Missing titles and artists are extracted from the filename when possible. Check ambiguous names in the library.",
   "repair.scrollPaused": "Automatic advance paused",
   "repair.referenceOptions": "Reference options",
   "repair.privateNavigation": "Review another round privately",

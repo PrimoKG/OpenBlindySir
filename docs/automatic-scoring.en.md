@@ -67,8 +67,12 @@ criteria, folders, filters and repeat policy. It shows ready tracks, missing fie
 and examples. Correct the library or explicitly accept manual scoring of missing
 references before starting. Changing the criteria or selection requires a fresh
 check; saving settings remains possible without starting. File tags may be enriched
-during audio preparation. A filename alone is not a trusted title reference; absent
-data is never invented.
+during audio preparation. When titles or artists are missing, the server tries
+to extract them from the filename: `Niska - Réseaux.mp3` supplies both; `feat.`
+or `ft.` supplies guests. A bare `FE!N.mp3` supplies only the title, without
+inventing an artist, album or year. These references also support automatic
+scoring. Check ambiguous names; tags, imports and host corrections take priority.
+An explicitly cleared field blocks fallback.
 
 Rules, weights, threshold, references and aliases freeze when playback first starts.
 Library edits do not silently regrade a round. In the finale, edit references and
@@ -153,3 +157,17 @@ were audible.
 Compatibility: protocol 14, snapshot 11, history 3. Update server, web and Bridge
 together. Back up stopped volumes before deployment; rollback to an older image
 requires restoring its compatible backup.
+
+## A finale focused on answers
+
+The bottom bar offers one next step: present, finish scoring the displayed round,
+go to the next round, then launch the podium. **All rounds** provides private
+navigation. **Finale options** holds fast pace, stop and early publication.
+
+Each card shows the answer and awarded points. For multiple criteria, **All correct**
+or **All incorrect** handles the whole answer; **Score each item** allows partial
+credit. Confirmed answers offer **Edit points**. Percentages, answer timing and
+numeric adjustments remain in **Details**. Scrolling controls only appear when
+needed. References of started rounds stay frozen: after updating, use the editor
+and **Save and recalculate this round** to apply newly resolved information to an
+older round.

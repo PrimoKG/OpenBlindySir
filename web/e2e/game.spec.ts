@@ -150,8 +150,13 @@ function reviewRow(host: Page, name: string): Locator {
 
 async function score(host: Page, name: string, points: number): Promise<void> {
   const row = reviewRow(host, name);
+  if (await row.locator(".answer-details > summary").count())
+    await row.locator(".answer-details > summary").click();
   await row.locator(".manual-score > summary").click();
-  if (points === 2 && (await row.getByRole("button", { name: "Tout bon", exact: true }).count()))
+  if (
+    points === 2 &&
+    (await row.getByRole("button", { name: "Tout bon", exact: true }).isVisible())
+  )
     await row.getByRole("button", { name: "Tout bon", exact: true }).click();
   else {
     const input = row.getByRole("textbox");
@@ -323,6 +328,8 @@ for (const viewport of [
       [1, { Alice: 2, Bob: 1, Hote: 0 }],
       [2, { Alice: 1, Bob: 0, Hote: 3 }],
     ] as const) {
+      if ((await h.locator(".round-browser").getAttribute("open")) === null)
+        await h.locator(".round-browser > summary").click();
       await h.getByLabel("Corriger une autre manche en privé").selectOption({ index: number - 1 });
       await h.getByRole("button", { name: `Présenter la manche ${number}`, exact: true }).click();
       await expect(alice.page.locator(".finale-track .eyebrow")).toContainText(`Manche ${number}`);

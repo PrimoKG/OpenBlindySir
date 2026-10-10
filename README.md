@@ -4,8 +4,8 @@
 Current step: **V0.5** (`0.5.0.dev0`, protocol **14**, snapshots **11**).
 
 Latest finale fixes, validation evidence and remaining device/release checks:
-[October 10 delivery report](docs/audits/2026-10-10-video-fixes.en.md)
-([français](docs/audits/2026-10-10-video-fixes.md)).
+[October 10 finale simplification report](docs/audits/2026-10-10-finale-simplification.en.md)
+([français](docs/audits/2026-10-10-finale-simplification.md)).
 Separate Bridge credentials, private history and recovery/accessibility checks
 are implemented in source. [V0.5 EN](docs/v0.5.en.md) / [V0.5 FR](docs/v0.5.md).
 This development version does not freeze the protocol or announce a release.

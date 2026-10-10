@@ -179,12 +179,12 @@ export function ReviewRound({
       <div className="review-context stack">
         <div className="review-heading">
           <p className="eyebrow">
-            {t(presented ? "repair.scoringRound" : "experience.preparing", {
+            {t(presented ? "friendly.answers" : "experience.preparing", {
               number: round.number,
             })}
           </p>
-          <h2 dir="auto">{trackTitle(round.track)}</h2>
-          {round.track?.artist && (
+          {!presented && <h2 dir="auto">{trackTitle(round.track)}</h2>}
+          {!presented && round.track?.artist && (
             <p className="track-artist" dir="auto">
               {round.track.artist}
             </p>
@@ -192,6 +192,12 @@ export function ReviewRound({
           <details className="track-options" open={editTrack || undefined}>
             <summary>{t("finale.trackOptions")}</summary>
             <p className="muted">{t("flow.metadataScope")}</p>
+            {view.rules?.scoring_mode === "auto" && (
+              <p className="muted">
+                {t(round.reference_changed ? "auto.referenceChanged" : "auto.frozenReference")}
+              </p>
+            )}
+
             <Button disabled={trackBusy} onClick={() => setEditTrack(!editTrack)}>
               {t("ux.editTrack")}
             </Button>
@@ -265,28 +271,27 @@ export function ReviewRound({
                   : round.track?.[key]),
             ) && (
               <div className="metadata-check">
-                <p className="notice">{t("repair.missingHint")}</p>
-                {view.rules?.scoring_mode === "auto" &&
-                  missing.length > 0 &&
-                  !round.reference_changed && (
-                    <Button
-                      disabled={neutralPending !== null || trackBusy}
-                      onClick={() => setNeutralConfirm(true)}
-                    >
-                      {t("repair.neutralize")}
-                    </Button>
-                  )}
+                <p className="notice">{t("friendly.missing")}</p>
                 <Button disabled={trackBusy} onClick={() => setEditTrack(true)}>
                   {t("ux.editTrack")}
                 </Button>
+                <details className="reference-options">
+                  <summary>{t("repair.referenceOptions")}</summary>
+                  <p className="muted">{t("repair.missingHint")}</p>
+                  {view.rules?.scoring_mode === "auto" &&
+                    missing.length > 0 &&
+                    !round.reference_changed && (
+                      <Button
+                        disabled={neutralPending !== null || trackBusy}
+                        onClick={() => setNeutralConfirm(true)}
+                      >
+                        {t("repair.neutralize")}
+                      </Button>
+                    )}
+                </details>
               </div>
             )}
         </section>
-        {view.rules?.scoring_mode === "auto" && (
-          <p className="muted">
-            {t(round.reference_changed ? "auto.referenceChanged" : "auto.frozenReference")}
-          </p>
-        )}
       </div>
       <ConfirmDialog
         open={neutralConfirm}
@@ -351,12 +356,10 @@ export function ReviewRound({
           {t("flow.markAbsent")}
         </Button>
       )}
-      <p className="eligible-count muted">
-        {t("experience.eligible", { count: round.answers.length })}
-      </p>
       <ScoreScroll
         scope={round.round_id}
         controls
+        compactControls
         rows={round.answers.map((row) => ({
           id: row.player_id,
           reviewed: row.reviewed,
@@ -426,6 +429,11 @@ export function ReviewRound({
                           total: fields.length,
                         })}
                   </small>
+                  {row.reviewed && (
+                    <strong className="answer-award">
+                      {t("standings.points", { score: row.points_draft })}
+                    </strong>
+                  )}
                 </div>
                 <div className="answer-text" dir="auto">
                   {row.text ?? t("round.noAnswer")}
@@ -437,22 +445,6 @@ export function ReviewRound({
                         : ""}
                   </small>
                 </div>
-                <details className="answer-time">
-                  <summary>{t("finale.answerDetails")}</summary>
-                  <span>{formatRank(row.order, row.near_tie)} · </span>
-                  {row.elapsed_ms !== null ? formatSeconds(row.elapsed_ms) : "—"}
-                  {row.received_at_wall_ms != null && (
-                    <time
-                      className="muted"
-                      dateTime={new Date(row.received_at_wall_ms).toISOString()}
-                    >
-                      {new Date(row.received_at_wall_ms).toLocaleTimeString(getLanguage())}
-                    </time>
-                  )}
-                  {formatLate(row.late_start_ms) && (
-                    <span className="late-notice">{formatLate(row.late_start_ms)}</span>
-                  )}
-                </details>
                 <div className="score-cell">
                   {row.status === "CAPTURED" &&
                     view.rules?.captured_policy === "manual" &&
@@ -507,122 +499,148 @@ export function ReviewRound({
                         </Button>
                       </div>
                     )}
-                  {!!row.auto_evidence?.length && (
-                    <p className="auto-reasons">
-                      {row.auto_overridden
-                        ? t("auto.overridden")
-                        : row.status === "CAPTURED" && view.rules?.captured_policy === "manual"
-                          ? t("auto.draftSuggestion")
-                          : row.reviewed
-                            ? t("repair.scoringComplete")
-                            : row.auto_evidence.some(
-                                  (item) =>
-                                    item.status !== "matched" && item.status !== "neutralized",
+                  <details
+                    className="score-edit"
+                    open={
+                      (!row.reviewed &&
+                        !(
+                          row.status === "CAPTURED" &&
+                          view.rules?.captured_policy === "manual" &&
+                          !row.auto_overridden &&
+                          row.auto_evidence?.some((item) => item.status === "matched")
+                        )) ||
+                      undefined
+                    }
+                  >
+                    <summary>{t("friendly.editPoints")}</summary>
+                    <div className="score-controls">
+                      {fields.length > 1 && (
+                        <div className="row">
+                          {[true, false].map((value) => (
+                            <Button
+                              key={String(value)}
+                              disabled={
+                                !round.included ||
+                                busy.has(row.player_id) ||
+                                pending.has(row.player_id) ||
+                                (capturedZero && value)
+                              }
+                              onClick={() =>
+                                score(
+                                  row.player_id,
+                                  value ? fields.reduce((sum, key) => sum + weights[key], 0) : 0,
+                                  Object.fromEntries(fields.map((key) => [key, value])),
                                 )
-                              ? t("polish.autoSummary", {
-                                  count: row.auto_evidence.filter(
-                                    (item) => item.status === "matched",
-                                  ).length,
-                                  total: row.auto_evidence.filter(
-                                    (item) => item.status !== "neutralized",
-                                  ).length,
-                                })
-                              : t(row.auto_overridden ? "auto.overridden" : "auto.confirmed")}
-                    </p>
-                  )}
-                  <div className="score-controls">
-                    {fields.map((field) => (
-                      <div key={field} className="criterion row">
-                        <span>
-                          {criterionLabel(field.replace("_correct", "") as Criterion)} ·{" "}
-                          {weights[field]}
-                        </span>
-                        {[true, false].map((value) => (
-                          <Button
-                            key={String(value)}
-                            aria-pressed={row.judgement === "criteria" && row[field] === value}
-                            kind={
-                              row.judgement === "criteria" && row[field] === value
-                                ? "primary"
-                                : "secondary"
-                            }
-                            disabled={
-                              !round.included ||
-                              busy.has(row.player_id) ||
-                              pending.has(row.player_id) ||
-                              (capturedZero && value)
-                            }
-                            onClick={() => {
-                              const criteria = Object.fromEntries(
-                                fields.map((key) => [
-                                  key,
-                                  key === field
-                                    ? value
-                                    : row.judgement === "criteria"
-                                      ? (row[key] ?? null)
-                                      : null,
-                                ]),
-                              );
-                              const points = fields.reduce(
-                                (sum, key) => sum + (criteria[key] === true ? weights[key] : 0),
-                                0,
-                              );
-                              score(row.player_id, points, criteria);
-                            }}
-                          >
-                            {t(value ? "flow.true" : "flow.false")}
-                          </Button>
+                              }
+                            >
+                              {t(value ? "flow.allGood" : "flow.allWrong")}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                      <details
+                        className="criterion-options"
+                        open={fields.length === 1 || undefined}
+                      >
+                        <summary>{t("friendly.criteria")}</summary>
+                        {fields.map((field) => (
+                          <div key={field} className="criterion row">
+                            <span>
+                              {criterionLabel(field.replace("_correct", "") as Criterion)} ·{" "}
+                              {weights[field]}
+                            </span>
+                            {[true, false].map((value) => (
+                              <Button
+                                key={String(value)}
+                                aria-pressed={row.judgement === "criteria" && row[field] === value}
+                                kind={
+                                  row.judgement === "criteria" && row[field] === value
+                                    ? "primary"
+                                    : "secondary"
+                                }
+                                disabled={
+                                  !round.included ||
+                                  busy.has(row.player_id) ||
+                                  pending.has(row.player_id) ||
+                                  (capturedZero && value)
+                                }
+                                onClick={() => {
+                                  const criteria = Object.fromEntries(
+                                    fields.map((key) => [
+                                      key,
+                                      key === field
+                                        ? value
+                                        : row.judgement === "criteria"
+                                          ? (row[key] ?? null)
+                                          : null,
+                                    ]),
+                                  );
+                                  const points = fields.reduce(
+                                    (sum, key) => sum + (criteria[key] === true ? weights[key] : 0),
+                                    0,
+                                  );
+                                  score(row.player_id, points, criteria);
+                                }}
+                              >
+                                {t(value ? "flow.true" : "flow.false")}
+                              </Button>
+                            ))}
+                          </div>
                         ))}
-                      </div>
-                    ))}
-                    {fields.length > 1 && (
-                      <div className="row">
-                        {[true, false].map((value) => (
+                      </details>
+                      {!row.reviewed &&
+                        row.judgement === "criteria" &&
+                        fields.some((field) => row[field] != null) &&
+                        fields.some((field) => row[field] == null) && (
                           <Button
-                            key={String(value)}
                             disabled={
                               !round.included ||
                               busy.has(row.player_id) ||
-                              pending.has(row.player_id) ||
-                              (capturedZero && value)
+                              pending.has(row.player_id)
                             }
                             onClick={() =>
                               score(
                                 row.player_id,
-                                value ? fields.reduce((sum, key) => sum + weights[key], 0) : 0,
-                                Object.fromEntries(fields.map((key) => [key, value])),
+                                fields.reduce(
+                                  (sum, field) => sum + (row[field] === true ? weights[field] : 0),
+                                  0,
+                                ),
+                                Object.fromEntries(
+                                  fields.map((field) => [field, row[field] ?? false]),
+                                ),
                               )
                             }
                           >
-                            {t(value ? "flow.allGood" : "flow.allWrong")}
+                            {t("polish.remainingWrong")}
                           </Button>
-                        ))}
-                      </div>
+                        )}
+                    </div>
+                  </details>
+                  <details className="answer-details">
+                    <summary>{t("friendly.details")}</summary>
+                    {!!row.auto_evidence?.length && (
+                      <p className="auto-reasons">
+                        {row.auto_overridden
+                          ? t("auto.overridden")
+                          : row.status === "CAPTURED" && view.rules?.captured_policy === "manual"
+                            ? t("auto.draftSuggestion")
+                            : row.reviewed
+                              ? t("repair.scoringComplete")
+                              : row.auto_evidence.some(
+                                    (item) =>
+                                      item.status !== "matched" && item.status !== "neutralized",
+                                  )
+                                ? t("polish.autoSummary", {
+                                    count: row.auto_evidence.filter(
+                                      (item) => item.status === "matched",
+                                    ).length,
+                                    total: row.auto_evidence.filter(
+                                      (item) => item.status !== "neutralized",
+                                    ).length,
+                                  })
+                                : t(row.auto_overridden ? "auto.overridden" : "auto.confirmed")}
+                      </p>
                     )}
-                    {!row.reviewed &&
-                      row.judgement === "criteria" &&
-                      fields.some((field) => row[field] != null) &&
-                      fields.some((field) => row[field] == null) && (
-                        <Button
-                          disabled={
-                            !round.included || busy.has(row.player_id) || pending.has(row.player_id)
-                          }
-                          onClick={() =>
-                            score(
-                              row.player_id,
-                              fields.reduce(
-                                (sum, field) => sum + (row[field] === true ? weights[field] : 0),
-                                0,
-                              ),
-                              Object.fromEntries(
-                                fields.map((field) => [field, row[field] ?? false]),
-                              ),
-                            )
-                          }
-                        >
-                          {t("polish.remainingWrong")}
-                        </Button>
-                      )}
                     <details className="manual-score">
                       <summary>{t("finale.manualPoints")}</summary>
                       <NumericDraft
@@ -633,41 +651,57 @@ export function ReviewRound({
                         onCommit={(value) => score(row.player_id, value)}
                       />
                     </details>
-                  </div>
-                  {!!row.auto_evidence?.length && (
-                    <details className="auto-assessment">
-                      <summary>
-                        {t(row.auto_overridden ? "auto.overridden" : "auto.assessment")}
-                      </summary>
-                      {row.auto_evidence.map((item) => (
-                        <div key={item.criterion} className="auto-match">
-                          <strong>
-                            {t("auto.evidence", {
-                              field: criterionLabel(item.criterion as Criterion),
-                              score: item.similarity.toLocaleString(getLanguage(), {
-                                maximumFractionDigits: 1,
-                              }),
-                              threshold: item.threshold,
-                            })}
-                          </strong>
-                          <span>{t(`auto.${item.status}` as "auto.matched")}</span>
-                          <small dir="auto">
-                            {item.fragment ?? "—"} → {item.reference ?? "—"}
-                          </small>
-                        </div>
-                      ))}
+                    {!!row.auto_evidence?.length && (
+                      <details className="auto-assessment">
+                        <summary>
+                          {t(row.auto_overridden ? "auto.overridden" : "auto.assessment")}
+                        </summary>
+                        {row.auto_evidence.map((item) => (
+                          <div key={item.criterion} className="auto-match">
+                            <strong>
+                              {t("auto.evidence", {
+                                field: criterionLabel(item.criterion as Criterion),
+                                score: item.similarity.toLocaleString(getLanguage(), {
+                                  maximumFractionDigits: 1,
+                                }),
+                                threshold: item.threshold,
+                              })}
+                            </strong>
+                            <span>{t(`auto.${item.status}` as "auto.matched")}</span>
+                            <small dir="auto">
+                              {item.fragment ?? "—"} → {item.reference ?? "—"}
+                            </small>
+                          </div>
+                        ))}
+                      </details>
+                    )}
+                    {row.reviewed && row.judgement !== "criteria" && (
+                      <small>{t("flow.manual")}</small>
+                    )}
+                    <small className="score-preview">
+                      {t("ux.scorePreview", {
+                        before: row.score_before ?? 0,
+                        delta: formatDelta(row.points_draft),
+                        after: (row.score_before ?? 0) + row.points_draft,
+                      })}
+                    </small>
+                    <details className="answer-time">
+                      <summary>{t("finale.answerDetails")}</summary>
+                      <span>{formatRank(row.order, row.near_tie)} · </span>
+                      {row.elapsed_ms !== null ? formatSeconds(row.elapsed_ms) : "—"}
+                      {row.received_at_wall_ms != null && (
+                        <time
+                          className="muted"
+                          dateTime={new Date(row.received_at_wall_ms).toISOString()}
+                        >
+                          {new Date(row.received_at_wall_ms).toLocaleTimeString(getLanguage())}
+                        </time>
+                      )}
+                      {formatLate(row.late_start_ms) && (
+                        <span className="late-notice">{formatLate(row.late_start_ms)}</span>
+                      )}
                     </details>
-                  )}
-                  {row.reviewed && row.judgement !== "criteria" && (
-                    <small>{t("flow.manual")}</small>
-                  )}
-                  <small className="score-preview">
-                    {t("ux.scorePreview", {
-                      before: row.score_before ?? 0,
-                      delta: formatDelta(row.points_draft),
-                      after: (row.score_before ?? 0) + row.points_draft,
-                    })}
-                  </small>
+                  </details>
                 </div>
               </article>
             );

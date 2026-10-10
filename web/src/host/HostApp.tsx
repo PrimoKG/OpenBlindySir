@@ -622,8 +622,13 @@ function FinalReview(props: { readonly view: HostView }) {
   const played = rounds.filter((r) => r.played);
   const unshown = played.filter((r) => !view.finale?.revealed_round_ids.includes(r.round_id));
   const isPresented = !!active && active.round_id === view.finale?.round?.round_id;
-  const focusPending = () => {
-    const next = rounds.find((r) => r.included && r.answers.some((answer) => !answer.reviewed));
+  const focusPending = (roundId?: string) => {
+    const next = rounds.find(
+      (r) =>
+        (!roundId || r.round_id === roundId) &&
+        r.included &&
+        r.answers.some((answer) => !answer.reviewed),
+    );
     if (!next) return;
     choose(next.round_id);
     const playerId = next.answers.find((answer) => !answer.reviewed)?.player_id;
@@ -648,29 +653,6 @@ function FinalReview(props: { readonly view: HostView }) {
     <section className="stack final-review">
       <FinaleStage view={view}>
         <div className="stack finale-host-controls">
-          <label className="folder-option finale-pace">
-            <input
-              type="checkbox"
-              checked={fastFinale}
-              onChange={(e) => {
-                setFastFinale(e.target.checked);
-                writeLocal("fastFinale", String(e.target.checked));
-              }}
-            />
-            {t("finale.fastPace")}
-          </label>
-          <nav className="row wrap finale-shortcuts" aria-label={t("finale.guide")}>
-            <Button disabled={saving || !unchecked} onClick={focusPending}>
-              {t("polish.reviewPending", { count: unchecked })}
-            </Button>
-            <Button
-              onClick={() =>
-                document.querySelector(".finale-scoreboard")?.scrollIntoView({ block: "center" })
-              }
-            >
-              {t("finale.step.ranking")}
-            </Button>
-          </nav>
           <div className="row finale-present-controls">
             <p className="scene-context" role="status">
               {t(view.finale?.round ? "experience.publicRound" : "experience.publicWaiting", {
@@ -678,16 +660,8 @@ function FinalReview(props: { readonly view: HostView }) {
               })}
             </p>
             {isPresented && (
-              <>
-                <span className="on-stage-label">{t("finale.onStage")}</span>
-                <Button disabled={listenBusy || saving} onClick={() => void listen()}>
-                  {t(listenBusy ? "finale.preparingAudio" : "finale.listen")}
-                </Button>
-              </>
-            )}
-            {isPresented && view.finale?.round?.awards_pending && (
-              <Button onClick={() => send(cmd.finaleReveal(active.round_id, true))}>
-                {t("auto.fastForward")}
+              <Button disabled={listenBusy || saving} onClick={() => void listen()}>
+                {t(listenBusy ? "finale.preparingAudio" : "finale.listen")}
               </Button>
             )}
             {(view.play || listenBusy) && (
@@ -708,10 +682,61 @@ function FinalReview(props: { readonly view: HostView }) {
               {t("finale.audioError")}
             </p>
           )}
+          <details className="finale-options disclosure">
+            <summary>{t("friendly.options")}</summary>
+            <label className="folder-option finale-pace">
+              <input
+                type="checkbox"
+                checked={fastFinale}
+                onChange={(e) => {
+                  setFastFinale(e.target.checked);
+                  writeLocal("fastFinale", String(e.target.checked));
+                }}
+              />
+              {t("finale.fastPace")}
+            </label>
+            <div className="row wrap">
+              {isPresented &&
+                view.finale?.round?.awards_pending &&
+                (unshown.length > 0 || unchecked > 0) && (
+                  <Button onClick={() => send(cmd.finaleReveal(active.round_id, true))}>
+                    {t("auto.fastForward")}
+                  </Button>
+                )}
+              <Button disabled={saving || !unchecked} onClick={() => focusPending()}>
+                {t("polish.reviewPending", { count: unchecked })}
+              </Button>
+              <FinishGameButton view={view} disabled={saving} />
+              {(unshown.length > 0 || unchecked > 0) && (
+                <Button
+                  disabled={saving || unshown.length > 0 || !!view.finale?.round?.awards_pending}
+                  onClick={() => setConfirm(true)}
+                >
+                  {t("final.validate")}
+                </Button>
+              )}
+            </div>
+          </details>
           <div className="global-review-layout">
             <nav className="review-navigation" aria-label={t("review.rounds")}>
               <details className="round-browser">
                 <summary>{t("experience.reviewAll")}</summary>
+                <div className="preparation-choice">
+                  <label htmlFor="prepare-round">{t("repair.privateNavigation")}</label>
+                  <select
+                    id="prepare-round"
+                    value={active?.round_id ?? ""}
+                    disabled={roundBusy}
+                    onChange={(event) => choose(event.target.value)}
+                  >
+                    {rounds.map((r) => (
+                      <option key={r.round_id} value={r.round_id}>
+                        {r.number}. {trackTitle(r.track)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <details className="review-search">
                   <summary>{t("finale.browse")}</summary>
                   <label>
@@ -780,22 +805,7 @@ function FinalReview(props: { readonly view: HostView }) {
               </details>
             </nav>
             <div className="stack">
-              <div className="preparation-choice">
-                <label htmlFor="prepare-round">{t("repair.privateNavigation")}</label>
-                <select
-                  id="prepare-round"
-                  value={active?.round_id ?? ""}
-                  disabled={roundBusy}
-                  onChange={(event) => choose(event.target.value)}
-                >
-                  {rounds.map((r) => (
-                    <option key={r.round_id} value={r.round_id}>
-                      {r.number}. {trackTitle(r.track)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {active && (
+              {active && !isPresented && (
                 <p className="review-target" role="status">
                   {t("polish.reviewTarget", { number: active.number })} ·{" "}
                   {t(view.finale?.round ? "experience.publicRound" : "experience.publicWaiting", {
@@ -945,7 +955,6 @@ function FinalReview(props: { readonly view: HostView }) {
         </p>
       )}
       <div className="row finale-action-bar" ref={actionBar}>
-        <FinishGameButton view={view} disabled={saving} />
         <span role="status" className="action-progress">
           {active && <strong>{t("polish.reviewTarget", { number: active.number })}</strong>}
           <small>
@@ -958,54 +967,38 @@ function FinalReview(props: { readonly view: HostView }) {
                   : t("experience.readyPodium")}
           </small>
         </span>
-        {active && !isPresented && active.played ? (
-          <Button kind="primary" disabled={saving} onClick={() => present(active.round_id)}>
-            {t(
-              view.finale?.revealed_round_ids.includes(active.round_id)
-                ? "polish.presentAgain"
-                : "finale.reveal",
-              { number: active.number },
-            )}
-          </Button>
-        ) : unshown.length > 0 ? (
-          <Button
-            kind="primary"
-            disabled={saving}
-            onClick={() => {
-              if (active?.answers.some((answer) => !answer.reviewed)) {
-                focusPending();
-                return;
-              }
-              const next = unshown[0];
-              if (next) {
-                choose(next.round_id);
-                present(next.round_id);
-              }
-            }}
-          >
-            {t(
-              active?.answers.some((answer) => !answer.reviewed)
-                ? "repair.finishRoundFirst"
-                : "repair.nextRound",
-              { number: unshown[0]?.number ?? 1 },
-            )}
-          </Button>
-        ) : null}
-        {unchecked > 0 && (
-          <Button
-            kind={unshown.length ? "secondary" : "primary"}
-            disabled={saving}
-            onClick={focusPending}
-          >
-            {t("polish.reviewPending", { count: unchecked })}
-          </Button>
-        )}
         <Button
-          kind={unshown.length || unchecked ? "secondary" : "primary"}
-          disabled={saving || unshown.length > 0 || !!view.finale?.round?.awards_pending}
-          onClick={() => setConfirm(true)}
+          kind="primary"
+          disabled={saving}
+          onClick={() => {
+            if (active && !isPresented && active.played) present(active.round_id);
+            else if (active?.answers.some((answer) => !answer.reviewed))
+              focusPending(active.round_id);
+            else if (unshown[0]) {
+              choose(unshown[0].round_id);
+              present(unshown[0].round_id);
+            } else if (unchecked) focusPending();
+            else if (view.finale?.round?.awards_pending && active)
+              send(cmd.finaleReveal(active.round_id, true));
+            else setConfirm(true);
+          }}
         >
-          {t("final.validate")}
+          {active && !isPresented && active.played
+            ? t(
+                view.finale?.revealed_round_ids.includes(active.round_id)
+                  ? "polish.presentAgain"
+                  : "finale.reveal",
+                { number: active.number },
+              )
+            : active?.answers.some((answer) => !answer.reviewed)
+              ? t("repair.finishRoundFirst")
+              : unshown[0]
+                ? t("repair.nextRound", { number: unshown[0].number })
+                : unchecked
+                  ? t("polish.reviewPending", { count: unchecked })
+                  : view.finale?.round?.awards_pending
+                    ? t("auto.fastForward")
+                    : t("final.validate")}
         </Button>
       </div>
       <ConfirmDialog

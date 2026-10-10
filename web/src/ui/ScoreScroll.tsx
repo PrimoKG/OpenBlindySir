@@ -16,12 +16,14 @@ export function ScoreScroll({
   children,
   ranking = false,
   controls = false,
+  compactControls = false,
 }: {
   readonly rows: readonly ScrollRow[];
   readonly scope: string;
   readonly children: ReactNode;
   readonly ranking?: boolean;
   readonly controls?: boolean;
+  readonly compactControls?: boolean;
 }) {
   const pane = useRef<HTMLElement>(null);
   const visible = useRef<string[]>([]);
@@ -29,6 +31,7 @@ export function ScoreScroll({
   const previous = useRef<{ scope: string; rows: readonly ScrollRow[] }>({ scope, rows });
   const [auto, setAuto] = useState(() => readLocal("autoScoreScroll") !== "false");
   const [manual, setManual] = useState(false);
+  const [overflow, setOverflow] = useState(false);
   const activeRow = useRef<string | null>(null);
   const rowNodes = useCallback(
     () => Array.from(pane.current?.querySelectorAll<HTMLElement>("[data-scroll-id]") ?? []),
@@ -112,7 +115,7 @@ export function ScoreScroll({
               padding +
               (nodes.length <= 5 ? 2 : 0)
             : 620;
-        const signature = `${height}:${container.clientWidth}:${cap}:${reserve}:${nodes.length}`;
+        const signature = `${height}:${container.clientWidth}:${cap}:${reserve}:${nodes.length}:${container.scrollHeight}`;
         if (signature === measured) return;
         measured = signature;
         // This is a document section, not a fixed panel. Its position below the fold
@@ -127,6 +130,7 @@ export function ScoreScroll({
             ? nodes.length > 5 || cap > room + 1
             : container.scrollHeight > container.clientHeight + 1,
         );
+        setOverflow(container.dataset.overflow === "true");
         remember();
       });
     };
@@ -192,36 +196,41 @@ export function ScoreScroll({
   });
   return (
     <section className={`score-scroll-section ${ranking ? "ranking-scroll-section" : ""}`}>
-      {controls && (
-        <div className="row wrap score-scroll-tools">
-          <label className="folder-option">
-            <input
-              type="checkbox"
-              checked={auto}
-              onChange={(event) => {
-                setAuto(event.target.checked);
+      {controls && (!compactControls || overflow) && (
+        <details className="scroll-options" open={!compactControls || undefined}>
+          <summary>{t("friendly.scrollOptions")}</summary>
+          <div className="row wrap score-scroll-tools">
+            <label className="folder-option">
+              <input
+                type="checkbox"
+                checked={auto}
+                onChange={(event) => {
+                  setAuto(event.target.checked);
+                  setManual(false);
+                  writeLocal("autoScoreScroll", String(event.target.checked));
+                }}
+              />
+              {t(auto && manual ? "repair.scrollPaused" : "scroll.auto")}
+            </label>
+            {auto && manual && (
+              <Button onClick={() => setManual(false)}>{t("scroll.resume")}</Button>
+            )}
+            <Button
+              onClick={() => {
+                const currentId = activeRow.current ?? visible.current[0];
+                const index = rows.findIndex((item) => item.id === currentId);
+                const row = [...rows.slice(index + 1), ...rows.slice(0, index + 1)].find(
+                  (item) => !item.reviewed,
+                );
+                if (row) move(row.id, true);
                 setManual(false);
-                writeLocal("autoScoreScroll", String(event.target.checked));
               }}
-            />
-            {t(auto && manual ? "repair.scrollPaused" : "scroll.auto")}
-          </label>
-          {auto && manual && <Button onClick={() => setManual(false)}>{t("scroll.resume")}</Button>}
-          <Button
-            onClick={() => {
-              const currentId = activeRow.current ?? visible.current[0];
-              const index = rows.findIndex((item) => item.id === currentId);
-              const row = [...rows.slice(index + 1), ...rows.slice(0, index + 1)].find(
-                (item) => !item.reviewed,
-              );
-              if (row) move(row.id, true);
-              setManual(false);
-            }}
-            disabled={rows.every((row) => row.reviewed)}
-          >
-            {t("scroll.pending")}
-          </Button>
-        </div>
+              disabled={rows.every((row) => row.reviewed)}
+            >
+              {t("scroll.pending")}
+            </Button>
+          </div>
+        </details>
       )}
       <section
         className="score-scroll"
