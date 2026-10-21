@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12, <3.15"
 
 [manifest]
@@ -724,7 +724,7 @@ requires-dist = [
     { name = "openblindysir-protocol", editable = "protocol" },
     { name = "pydantic", specifier = ">=2.9,<3" },
     { name = "rapidfuzz", specifier = ">=3.14,<4" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
 ]
 
 [[package]]
