@@ -20,16 +20,16 @@ dev = [
   "openblindysir-protocol",
   "openblindysir-server",
   "openblindysir-bridge",
-  "pytest>=8.3",
-  "hypothesis>=6.112",
-  "ruff>=0.7",
+  "pytest>=9.2.0",
+  "hypothesis>=6.170.13",
+  "ruff>=0.17.3",
   "pyright>=1.1.385",
 ]
 distribution = [
   "build==1.6.1",
-  "hatchling==1.32.4",
+  "hatchling==1.33.0",
   "pyinstaller==6.22.3",
-  "pyinstaller-hooks-contrib==2026.8",
+  "pyinstaller-hooks-contrib==2026.9",
   "twine==7.0.0",
 ]
 

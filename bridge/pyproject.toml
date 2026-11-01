@@ -22,7 +22,7 @@ openblindysir-protocol = { workspace = true }
 cache-keys = [{ file = "pyproject.toml" }, { file = "src/openblindysir_bridge/_version.py" }, { file = "README.md" }]
 
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = ["hatchling>=1.33.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
