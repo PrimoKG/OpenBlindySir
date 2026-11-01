@@ -1,5 +1,5 @@
 # Base images are fixed by multi-platform digest; application dependencies use lockfiles.
-FROM golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 AS proxy-build
+FROM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS proxy-build
 ENV CGO_ENABLED=0 GOTOOLCHAIN=local
 WORKDIR /proxy
 # Keep the upstream Caddy release while applying the Go and x/net security fixes.
@@ -13,15 +13,15 @@ FROM caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f
 RUN apk add --no-cache zlib=1.3.2-r1
 COPY --from=proxy-build /caddy /usr/bin/caddy
 
-FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS web-build
+FROM node:26-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9 AS web-build
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM ghcr.io/astral-sh/uv@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc AS uv
-FROM python:3.13-slim-trixie@sha256:3dd7cc108ec1493442514f5c2a871af6af0ec31d768ff6e378a93340c3b3db5f AS python-build
+FROM ghcr.io/astral-sh/uv@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
+FROM python:3.15-slim-trixie@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913 AS python-build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 WORKDIR /workspace
@@ -38,7 +38,7 @@ RUN uv sync --locked --no-dev --no-editable --package openblindysir-bridge
 
 # The distribution FFmpeg pulls in image/XML/device/network libraries unused by the Bridge.
 # Build a pinned upstream release with only our local containers and audio operations.
-FROM python:3.13-slim-trixie@sha256:3dd7cc108ec1493442514f5c2a871af6af0ec31d768ff6e378a93340c3b3db5f AS audio-build
+FROM python:3.15-slim-trixie@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913 AS audio-build
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential nasm pkg-config libopus-dev xz-utils gnupg gpgv \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /sources
@@ -52,7 +52,7 @@ RUN gpg --batch --with-colons --import-options show-only --import ffmpeg-devel.a
     && gpgv --keyring /sources/ffmpeg.gpg ffmpeg.tar.xz.asc ffmpeg.tar.xz \
     && tar -xf ffmpeg.tar.xz && cd ffmpeg-9.0.2 && sh /sources/build_audio_ffmpeg.sh
 
-FROM python:3.13-slim-trixie@sha256:3dd7cc108ec1493442514f5c2a871af6af0ec31d768ff6e378a93340c3b3db5f AS runtime
+FROM python:3.15-slim-trixie@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913 AS runtime
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 # Do not import a potentially oversized DHCP/VPN search domain into glibc's resolver.
